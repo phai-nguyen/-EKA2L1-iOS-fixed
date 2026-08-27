@@ -53,6 +53,7 @@
 #include <lunasvg.h>
 
 #include <algorithm>
+#include <cctype>
 
 namespace eka2l1::ios {
     launcher::launcher(eka2l1::system *sys)
@@ -289,6 +290,112 @@ namespace eka2l1::ios {
             }
         });
         kern->unlock();
+    }
+
+    static std::string phone_v4_ascii_lower(std::string value) {
+        std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        return value;
+    }
+
+    int launcher::prepare_system_ui_services() {
+        if (!alserv) {
+            return 0;
+        }
+
+        // S60/Avkon support processes that are normally alive before Home/Menu asks
+        // for themed icons, status-pane graphics and UI settings.
+        //
+        // Firmware variants differ: some expose these components through AppArc and
+        // some start them only from Starter. We activate every matching AppArc
+        // registration available on this ROM and safely skip the ones that aren't.
+        struct service_hint {
+            std::uint32_t uid;
+            const char *name;
+        };
+
+        static constexpr service_hint known[] = {
+            { 0x10207114u, "AknSkinServer" },
+            { 0x1020735Bu, "AknIconSrv" },
+            { 0x10207218u, "akncapserver" },
+            { 0x10281EF2u, "aknnfysrv" },
+            { 0x10207839u, "UISettingsSrv" },
+            { 0x100058F3u, "SysAp" }
+        };
+
+        std::vector<std::uint32_t> activated;
+
+        auto already_activated = [&activated](std::uint32_t uid) {
+            return std::find(activated.begin(), activated.end(), uid) != activated.end();
+        };
+
+        auto activate = [&](apa_app_registry &reg, const char *reason) {
+            const std::uint32_t uid = reg.mandatory_info.uid;
+            if (already_activated(uid)) {
+                return;
+            }
+
+            epoc::apa::command_line cmdline;
+            cmdline.launch_cmd_ = epoc::apa::command_run;
+
+            const std::string caption =
+                common::ucs2_to_utf8(reg.mandatory_info.long_caption.to_std_string(nullptr));
+            const std::string path =
+                common::ucs2_to_utf8(reg.mandatory_info.app_path.to_std_string(nullptr));
+
+            LOG_INFO(FRONTEND_CMDLINE,
+                "EKA2L1 Phone Mode V4: preparing UI service {} (0x{:08X}) path='{}' [{}]",
+                caption.empty() ? std::string(reason) : caption, uid, path, reason);
+
+            kern->lock();
+            alserv->launch_app(reg, cmdline, nullptr, nullptr);
+            kern->unlock();
+
+            activated.push_back(uid);
+        };
+
+        // Prefer exact known UIDs first.
+        for (const auto &hint : known) {
+            if (apa_app_registry *reg = alserv->get_registration(hint.uid)) {
+                activate(*reg, hint.name);
+            }
+        }
+
+        // Firmware builds sometimes move/re-UID support components. Match by path/caption too.
+        std::vector<apa_app_registry> &registrations = alserv->get_registerations();
+        for (auto &reg : registrations) {
+            if (already_activated(reg.mandatory_info.uid)) {
+                continue;
+            }
+
+            std::string probe =
+                common::ucs2_to_utf8(reg.mandatory_info.long_caption.to_std_string(nullptr));
+            probe.push_back(' ');
+            probe += common::ucs2_to_utf8(reg.mandatory_info.short_caption.to_std_string(nullptr));
+            probe.push_back(' ');
+            probe += common::ucs2_to_utf8(reg.mandatory_info.app_path.to_std_string(nullptr));
+            probe = phone_v4_ascii_lower(std::move(probe));
+
+            const bool support_service =
+                (probe.find("akniconsrv") != std::string::npos) ||
+                (probe.find("akniconserver") != std::string::npos) ||
+                (probe.find("aknskinsrv") != std::string::npos) ||
+                (probe.find("aknskinserver") != std::string::npos) ||
+                (probe.find("akncapserver") != std::string::npos) ||
+                (probe.find("aknnfysrv") != std::string::npos) ||
+                (probe.find("uisettingssrv") != std::string::npos);
+
+            if (support_service) {
+                activate(reg, "name/path match");
+            }
+        }
+
+        LOG_INFO(FRONTEND_CMDLINE,
+            "EKA2L1 Phone Mode V4: prepared {} AppArc UI service registration(s)",
+            activated.size());
+
+        return static_cast<int>(activated.size());
     }
 
     void launcher::launch_system_ui(std::uint32_t uid) {
