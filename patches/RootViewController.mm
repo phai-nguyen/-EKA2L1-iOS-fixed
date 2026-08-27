@@ -533,7 +533,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
         return;
     }
 
-    std::vector<eka2l1::ios::bridge::app_entry> all = eka2l1::ios::bridge::get_apps();
+    std::vector<eka2l1::ios::bridge::app_entry> all = eka2l1::ios::bridge::get_all_apps();
     NSMutableArray<NSDictionary *> *candidates = [NSMutableArray array];
     NSMutableSet<NSNumber *> *seen = [NSMutableSet set];
 
@@ -1243,6 +1243,8 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         eka2l1::ios::bridge::exit_game();   // reboots the emulator instance
         dispatch_async(dispatch_get_main_queue(), ^{
+            self.emuView.userInteractionEnabled = YES;
+            self.controlsView.userInteractionEnabled = YES;
             [self updateChrome];
             [self pollForAppsWithAttemptsLeft:20];
         });

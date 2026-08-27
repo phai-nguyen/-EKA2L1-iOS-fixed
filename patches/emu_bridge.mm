@@ -251,14 +251,23 @@ namespace eka2l1::ios::bridge {
     }
 
     void touch(int x, int y, touch_action action, int pointer_id) {
-        std::lock_guard<std::mutex> guard(g_mutex);
+        // Input must never block UIKit while the emulator is rebooting/shutting down.
+        // Dropping a touch during that short window is safer than waiting on g_mutex,
+        // which can trigger iOS watchdog termination (0x8BADF00D).
+        std::unique_lock<std::mutex> guard(g_mutex, std::try_to_lock);
+        if (!guard.owns_lock()) {
+            return;
+        }
         if (g_state && g_running) {
             eka2l1::ios::touch_screen(*g_state, x, y, 0, static_cast<int>(action), pointer_id);
         }
     }
 
     void key(int scancode, bool down) {
-        std::lock_guard<std::mutex> guard(g_mutex);
+        std::unique_lock<std::mutex> guard(g_mutex, std::try_to_lock);
+        if (!guard.owns_lock()) {
+            return;
+        }
         if (g_state && g_running) {
             // key_state: pressed = 0, released = 1
             eka2l1::ios::press_key(*g_state, scancode, down ? 0 : 1);
