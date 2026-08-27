@@ -524,7 +524,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 
 
 // ---- Symbian Phone Mode ---------------------------------------------------
-// Phone Mode V3: delayed UIKit transition + dedicated system-ui lifecycle.
+// Phone Mode V4: delayed UIKit transition + Avkon UI-service bootstrap + dedicated system-ui lifecycle.
 // Experimental full-device mode: launch the firmware's own idle/home/menu application
 // instead of the native iOS app list. This lets EKA2L1 render and receive touch for the
 // original Symbian UI whenever that system application is supported by the core.
@@ -638,13 +638,35 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
     [self.view layoutIfNeeded];
     [self becomeFirstResponder];
 
-    NSLog(@"EKA2L1 Phone Mode V3: command_run %@ (0x%08X)", name, uid);
+    NSLog(@"EKA2L1 Phone Mode V4: preparing Avkon services before command_run %@ (0x%08X)", name, uid);
 
-    // System Home/Menu must not use the game lifecycle. command_run mirrors Symbian
-    // AppArc activation, and the launcher omits the normal app-exit callback.
-    eka2l1::ios::bridge::launch_system_ui(uid);
+    // Manager-mode icons already prove this build can decode the firmware's MIF/MBM
+    // resources. The blank Home/Menu path is different: real S60 normally has
+    // AknIconSrv/AknSkinSrv/etc. alive before it asks FBS/Window Server for those assets.
+    // Prepare every support component this ROM exposes through AppArc, give them a short
+    // moment to register servers/shared bitmaps, then activate Home/Menu.
+    NSString *launchName = [name copy];
 
-    // Do not change screen gravity while a UIKit alert is being dismantled. Keep the
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        const int prepared = eka2l1::ios::bridge::prepare_system_ui_services();
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSLog(@"EKA2L1 Phone Mode V4: %d UI service registration(s) prepared", prepared);
+
+            const NSTimeInterval warmup = (prepared > 0) ? 1.20 : 0.35;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(warmup * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                if (!self.phoneMode) {
+                    return;
+                }
+
+                NSLog(@"EKA2L1 Phone Mode V4: command_run %@ (0x%08X)", launchName, uid);
+                eka2l1::ios::bridge::launch_system_ui(uid);
+            });
+        });
+    });
+
+    // Do not change screen gravity while UIKit/system UI is transitioning. Keep the
     // firmware/device's current gravity; the framebuffer will be laid out by normal redraws.
 }
 
@@ -822,7 +844,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 
 - (void)onAppExited {
     if (self.phoneMode) {
-        NSLog(@"EKA2L1 Phone Mode V3: ignoring normal game-exit callback for system UI");
+        NSLog(@"EKA2L1 Phone Mode V4: ignoring normal game-exit callback for system UI");
         return;
     }
     // The guest app ended on its own — either a clean quit or, commonly, a KERN-EXEC panic on
