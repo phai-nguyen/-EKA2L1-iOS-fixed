@@ -291,6 +291,29 @@ namespace eka2l1::ios {
         kern->unlock();
     }
 
+    void launcher::launch_system_ui(std::uint32_t uid) {
+        if (!alserv) {
+            return;
+        }
+
+        apa_app_registry *reg = alserv->get_registration(uid);
+        if (!reg) {
+            return;
+        }
+
+        // command_line defaults to command_run. Be explicit: Home/Standby/Menu are
+        // firmware UI components, not a new document/game created by the iOS frontend.
+        epoc::apa::command_line cmdline;
+        cmdline.launch_cmd_ = epoc::apa::command_run;
+
+        kern->lock();
+        // IMPORTANT: no game-exit callback here. A system UI task may hand off to an
+        // already-running server/process or briefly exit during activation; that must not
+        // cause the iOS frontend to reboot the whole emulator as if a game had quit.
+        alserv->launch_app(*reg, cmdline, nullptr, nullptr);
+        kern->unlock();
+    }
+
     package::installation_result launcher::install_app(std::string &path) {
         std::u16string upath = common::utf8_to_ucs2(path);
         drive_number install_drive = drive_number::drive_e;
