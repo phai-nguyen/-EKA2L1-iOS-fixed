@@ -1,34 +1,13 @@
-# EKA2L1 iOS Fixed – iPhone-only cloud build
+# EKA2L1 iOS Phone Mode V2
 
-This tiny repository builds the patched EKA2L1 iOS app on GitHub's macOS runner.
-No Mac is required locally.
+V2 fixes the first Phone Mode build so the compiled iOS core really receives `get_all_apps()`.
 
-## Fixes included
+Key fixes:
+- restores `RootViewController.mm` to call `bridge::get_all_apps()`;
+- copies launcher/bridge files to the real CMake source paths (`include/ios` and `src`);
+- verifies those APIs before compiling;
+- makes touch/key input non-blocking while the emulator is shutting down/rebooting to avoid the iOS watchdog deadlock;
+- re-enables touch after normal game exit;
+- keeps ROM/RPKG and VPL picker fixes.
 
-- **Device Dump (Recommended)**
-  - picker explicitly accepts `.rom`
-  - validates that the chosen file is a ROM (`SYM.ROM` is supported)
-  - copies the selected file into the app sandbox before native installation
-  - then asks for `.rpkg`
-
-- **VPL Firmware**
-  - keeps the normal **Choose Firmware Folder** option
-  - adds **Select Files in This Folder**
-  - allows selecting multiple extracted firmware files at once
-  - copies those files into an internal firmware folder and passes that folder to the VPL installer
-
-## Build on iPhone
-
-1. Upload the contents of this package to the root of your GitHub repository.
-2. Confirm these paths exist in GitHub:
-   - `.github/workflows/build-ios-fixed.yml`
-   - `patches/RootViewController.mm`
-3. Open **Actions**.
-4. Choose **Build EKA2L1 iOS Fixed IPA**.
-5. Tap **Run workflow** → **Run workflow**.
-6. Wait for a green check mark.
-7. Open the completed run and download artifact **EKA2L1-iOS-fixed-IPA**.
-8. Unzip the artifact. It contains `EKA2L1-iOS-fixed-unsigned.ipa`.
-9. Sign that IPA using your normal iPhone signing/sideloading app.
-
-The GitHub build intentionally produces an unsigned IPA.
+Replace the existing five files in `patches/` and replace `.github/workflows/build-ios-fixed.yml`, then run the workflow.
