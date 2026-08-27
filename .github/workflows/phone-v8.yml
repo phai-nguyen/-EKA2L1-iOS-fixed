@@ -1,0 +1,213 @@
+name: Build EKA2L1 iOS Phone Mode V8 Stability IPA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-ipa:
+    runs-on: macos-15
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout patch repository
+        uses: actions/checkout@v4
+
+      - name: Clone EKA2L1 iOS fork with submodules
+        run: |
+          set -euo pipefail
+          git clone --recursive https://github.com/MuhannadYT/EKA2L1_IOS.git upstream
+
+      - name: Verify Phone Mode V8 Stability patch files
+        run: |
+          set -euo pipefail
+          for f in RootViewController.mm launcher.h launcher.cpp emu_bridge.h emu_bridge.mm; do
+            test -s "patches/$f"
+          done
+          test -s core-patches/phone-v8-core.patch
+          grep -q 'rasterize_nvg_bitmap' core-patches/phone-v8-core.patch
+          grep -q 'NVG_BITMAP_UID_REV2' core-patches/phone-v8-core.patch
+          grep -q 'collector_linked' core-patches/phone-v8-core.patch
+          grep -q 'screen {} has no window-group tree yet' core-patches/phone-v8-core.patch
+          grep -q 'get_all_apps' patches/RootViewController.mm
+          grep -q 'get_all_apps' patches/launcher.h
+          grep -q 'launcher::get_all_apps' patches/launcher.cpp
+          grep -q 'get_all_apps' patches/emu_bridge.h
+          grep -q 'get_all_apps' patches/emu_bridge.mm
+          grep -q 'launch_system_ui' patches/launcher.cpp
+          grep -q 'launch_system_ui' patches/emu_bridge.mm
+          grep -q 'prepare_system_ui_services' patches/launcher.h
+          grep -q 'launcher::prepare_system_ui_services' patches/launcher.cpp
+          grep -q 'prepare_system_ui_services' patches/emu_bridge.h
+          grep -q 'prepare_system_ui_services' patches/emu_bridge.mm
+          grep -q 'AknIconSrv' patches/launcher.cpp
+          grep -q 'spawn_new_process' patches/launcher.cpp
+          grep -q 'starter_ui_seq' README.md || true
+          grep -q 'akncapserver.exe' patches/launcher.cpp
+          grep -q 'aknskinsrv.exe' patches/launcher.cpp
+          echo "Phone Mode V8 Stability patch set verified."
+
+      - name: Apply Phone Mode V8 Stability patches to iOS and kernel source paths
+        run: |
+          set -euo pipefail
+          cp patches/RootViewController.mm upstream/src/emu/ios/app/RootViewController.mm
+          cp patches/launcher.h           upstream/src/emu/ios/include/ios/launcher.h
+          cp patches/launcher.cpp         upstream/src/emu/ios/src/launcher.cpp
+          cp patches/emu_bridge.h         upstream/src/emu/ios/include/ios/emu_bridge.h
+          cp patches/emu_bridge.mm        upstream/src/emu/ios/src/emu_bridge.mm
+
+          # Fail early if a wrong path was used or the API did not land in compiled sources.
+          grep -q 'get_all_apps' upstream/src/emu/ios/include/ios/launcher.h
+          grep -q 'launcher::get_all_apps' upstream/src/emu/ios/src/launcher.cpp
+          grep -q 'get_all_apps' upstream/src/emu/ios/include/ios/emu_bridge.h
+          grep -q 'get_all_apps' upstream/src/emu/ios/src/emu_bridge.mm
+          grep -q 'bridge::get_all_apps' upstream/src/emu/ios/app/RootViewController.mm
+          grep -q 'launch_system_ui' upstream/src/emu/ios/include/ios/launcher.h
+          grep -q 'launcher::launch_system_ui' upstream/src/emu/ios/src/launcher.cpp
+          grep -q 'launch_system_ui' upstream/src/emu/ios/include/ios/emu_bridge.h
+          grep -q 'launch_system_ui' upstream/src/emu/ios/src/emu_bridge.mm
+          grep -q 'prepare_system_ui_services' upstream/src/emu/ios/include/ios/launcher.h
+          grep -q 'launcher::prepare_system_ui_services' upstream/src/emu/ios/src/launcher.cpp
+          grep -q 'prepare_system_ui_services' upstream/src/emu/ios/include/ios/emu_bridge.h
+          grep -q 'prepare_system_ui_services' upstream/src/emu/ios/src/emu_bridge.mm
+          echo "Phone Mode V8 Stability installed into compiled source tree."
+
+      - name: Apply Phone Mode V8 Stability rasterizer core patch
+        run: |
+          set -euo pipefail
+          PATCH="$GITHUB_WORKSPACE/core-patches/phone-v8-core.patch"
+          git -C upstream apply --check "$PATCH"
+          git -C upstream apply "$PATCH"
+
+          grep -Fq 'rasterize_nvg_bitmap' upstream/src/emu/services/include/services/fbs/fbs.h
+          grep -Fq 'is_nvg_bitmap_rasterizable' upstream/src/emu/services/include/services/fbs/bitmap.h
+          grep -Fq 'Phone Mode V8 FBS: rasterized NVG bitmap' upstream/src/emu/services/src/fbs/impls/bitmap.cpp
+          grep -Fq 'server<fbs_server>()->rasterize_nvg_bitmap(bmp)' upstream/src/emu/services/src/fbs/impls/bitmap.cpp
+          echo "Phone Mode V8 comprehensive core patch applied."
+
+      - name: Verify Phone Mode V8 stability fixes in source
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          grep -Fq 'Phone Mode V8: screen {} has no window-group tree yet' src/emu/services/src/window/window.cpp
+          grep -Fq 'collector_linked' src/emu/kernel/src/codedump_collector.cpp
+          grep -Fq 'while (!in_decease_list_.empty())' src/emu/kernel/src/codedump_collector.cpp
+          grep -Fq 'get_codedump_collector().remove(info)' src/emu/kernel/src/codeseg.cpp
+          grep -Fq 'std::try_to_lock' src/emu/ios/src/emu_bridge.mm
+          echo "Phone Mode V8 Window Server, codedump collector and iOS lifecycle fixes verified."
+
+      - name: Apply upstream iOS submodule patches
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          P="$PWD/.github/ios-build/patches"
+          if [ -d "$P" ]; then
+            git -C src/external/cubeb                     apply "$P/cubeb.patch"  || true
+            git -C src/external/fmt                       apply "$P/fmt.patch"    || true
+            git -C src/external/ffmpeg                    apply "$P/ffmpeg.patch" || true
+            git -C src/external/dynarmic/externals/oaknut apply "$P/oaknut.patch" || true
+            if [ -f .github/ios-build/ffmpeg/build-ios-device.sh ]; then
+              cp .github/ios-build/ffmpeg/build-ios-device.sh src/external/ffmpeg/
+              chmod +x src/external/ffmpeg/build-ios-device.sh
+            fi
+          fi
+
+      - name: Select newest installed Xcode
+        run: |
+          set -euo pipefail
+          XC=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1 || true)
+          [ -n "$XC" ] || XC=/Applications/Xcode.app
+          sudo xcode-select -s "$XC/Contents/Developer"
+          echo "DEVELOPER_DIR=$XC/Contents/Developer" >> "$GITHUB_ENV"
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Install Ninja
+        run: brew install ninja
+
+      - name: Install CMake 3.31.6
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/cmake.tar.gz" \
+            https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-macos-universal.tar.gz
+          tar xzf "$RUNNER_TEMP/cmake.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/cmake-3.31.6-macos-universal/CMake.app/Contents/bin" >> "$GITHUB_PATH"
+
+      - name: Build FFmpeg for iPhone if needed
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          if [ ! -f src/external/ffmpeg/macos/arm64-device/lib/libavcodec.a ]; then
+            chmod +x src/external/ffmpeg/build-ios-device.sh
+            (cd src/external/ffmpeg && ./build-ios-device.sh)
+          else
+            echo "Using prebuilt FFmpeg device libraries."
+          fi
+
+      - name: Configure iPhone arm64 build
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          cmake -S . -B build-ios-device -G Ninja \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_SYSROOT=iphoneos \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+      - name: Build EKA2L1 Phone Mode V8 Stability app
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          cmake --build build-ios-device --target eka2l1 -j"$(sysctl -n hw.logicalcpu)"
+
+      - name: Verify built app and Phone Mode strings
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          APP="build-ios-device/src/emu/ios/eka2l1.app"
+          BIN="$APP/eka2l1"
+          test -d "$APP"
+          test -f "$BIN"
+          file "$BIN"
+
+          # Write strings once to a file. This avoids SIGPIPE / "failed to flush output"
+          # from `strings | grep -q` when pipefail is enabled.
+          /usr/bin/strings "$BIN" > "$RUNNER_TEMP/eka2l1-phone-v8-stability.strings"
+
+          grep -Fq 'Phone Mode unavailable' "$RUNNER_TEMP/eka2l1-phone-v8-stability.strings"
+          grep -Fq 'Back to Manager' "$RUNNER_TEMP/eka2l1-phone-v8-stability.strings"
+          grep -Fq 'Home Screen' "$RUNNER_TEMP/eka2l1-phone-v8-stability.strings"
+          grep -Fq 'Phone Mode V8 Stability' "$RUNNER_TEMP/eka2l1-phone-v8-stability.strings"
+          grep -Fq 'AknIconSrv' "$RUNNER_TEMP/eka2l1-phone-v8-stability.strings"
+          grep -Fq 'starting raw system process' "$RUNNER_TEMP/eka2l1-phone-v8-stability.strings"
+          grep -Fq 'RM-612' "$RUNNER_TEMP/eka2l1-phone-v8-stability.strings"
+          grep -Fq 'Phone Mode V8 FBS: rasterized NVG bitmap' "$RUNNER_TEMP/eka2l1-phone-v8-stability.strings"
+          grep -Fq 'Phone Mode V8: screen {} has no window-group tree yet' "$RUNNER_TEMP/eka2l1-phone-v8-stability.strings"
+          grep -Fq 'NVG to SVG conversion failed' "$RUNNER_TEMP/eka2l1-phone-v8-stability.strings"
+          grep -Fq 'prepared' "$RUNNER_TEMP/eka2l1-phone-v8-stability.strings"
+
+          echo "Phone Mode V8 Stability UI and system launch path found in final arm64 binary."
+
+      - name: Package unsigned IPA
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          APP="build-ios-device/src/emu/ios/eka2l1.app"
+          rm -rf ipa-stage
+          rm -f EKA2L1-iOS-PhoneMode-V8-Stability-unsigned.ipa
+          mkdir -p ipa-stage/Payload
+          cp -R "$APP" ipa-stage/Payload/EKA2L1.app
+          rm -rf ipa-stage/Payload/EKA2L1.app/_CodeSignature
+          (cd ipa-stage && /usr/bin/zip -qry ../EKA2L1-iOS-PhoneMode-V8-Stability-unsigned.ipa Payload)
+          ls -lh EKA2L1-iOS-PhoneMode-V8-Stability-unsigned.ipa
+
+      - name: Upload Phone Mode V8 Stability IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EKA2L1-iOS-PhoneMode-V8-Stability-IPA
+          path: upstream/EKA2L1-iOS-PhoneMode-V8-Stability-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
