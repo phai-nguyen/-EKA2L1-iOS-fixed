@@ -1,4 +1,4 @@
-name: Build EKA2L1 iOS Phone Mode IPA
+name: Build EKA2L1 iOS Fixed IPA
 
 on:
   workflow_dispatch:
@@ -20,104 +20,58 @@ jobs:
           set -euo pipefail
           git clone --recursive https://github.com/MuhannadYT/EKA2L1_IOS.git upstream
 
-      - name: Verify patch files
+      - name: Install fixed iOS picker source
         run: |
           set -euo pipefail
           test -f patches/RootViewController.mm
-          test -f patches/launcher.cpp
-          test -f patches/launcher.h
-          test -f patches/emu_bridge.h
-          test -f patches/emu_bridge.mm
-          echo "All Phone Mode patch files found."
-
-      - name: Apply Phone Mode patches
-        run: |
-          set -euo pipefail
-
-          cp patches/RootViewController.mm \
-            upstream/src/emu/ios/app/RootViewController.mm
-
-          cp patches/launcher.cpp \
-            upstream/src/emu/ios/launcher.cpp
-
-          cp patches/launcher.h \
-            upstream/src/emu/ios/launcher.h
-
-          cp patches/emu_bridge.h \
-            upstream/src/emu/ios/emu_bridge.h
-
-          cp patches/emu_bridge.mm \
-            upstream/src/emu/ios/emu_bridge.mm
-
-          echo "Applied Phone Mode + firmware picker + lifecycle fixes."
+          test -f upstream/src/emu/ios/app/RootViewController.mm
+          cp patches/RootViewController.mm upstream/src/emu/ios/app/RootViewController.mm
+          echo "Applied Device Dump + VPL picker fix."
 
       - name: Apply upstream iOS submodule patches
         working-directory: upstream
         run: |
           set -euo pipefail
-
           P="$PWD/.github/ios-build/patches"
-
           if [ -d "$P" ]; then
-            git -C src/external/cubeb apply "$P/cubeb.patch" || true
-            git -C src/external/fmt apply "$P/fmt.patch" || true
-            git -C src/external/ffmpeg apply "$P/ffmpeg.patch" || true
+            git -C src/external/cubeb                     apply "$P/cubeb.patch"  || true
+            git -C src/external/fmt                       apply "$P/fmt.patch"    || true
+            git -C src/external/ffmpeg                    apply "$P/ffmpeg.patch" || true
             git -C src/external/dynarmic/externals/oaknut apply "$P/oaknut.patch" || true
-
             if [ -f .github/ios-build/ffmpeg/build-ios-device.sh ]; then
-              cp .github/ios-build/ffmpeg/build-ios-device.sh \
-                src/external/ffmpeg/
-
-              chmod +x \
-                src/external/ffmpeg/build-ios-device.sh
+              cp .github/ios-build/ffmpeg/build-ios-device.sh src/external/ffmpeg/
+              chmod +x src/external/ffmpeg/build-ios-device.sh
             fi
           fi
 
       - name: Select newest installed Xcode
         run: |
           set -euo pipefail
-
           XC=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1 || true)
-
-          if [ -z "$XC" ]; then
-            XC=/Applications/Xcode.app
-          fi
-
+          [ -n "$XC" ] || XC=/Applications/Xcode.app
           sudo xcode-select -s "$XC/Contents/Developer"
-
           echo "DEVELOPER_DIR=$XC/Contents/Developer" >> "$GITHUB_ENV"
-
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
 
       - name: Install Ninja
-        run: |
-          brew install ninja
+        run: brew install ninja
 
       - name: Install CMake 3.31.6
         run: |
           set -euo pipefail
-
-          curl -fsSL \
-            -o "$RUNNER_TEMP/cmake.tar.gz" \
+          curl -fsSL -o "$RUNNER_TEMP/cmake.tar.gz" \
             https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-macos-universal.tar.gz
-
-          tar xzf \
-            "$RUNNER_TEMP/cmake.tar.gz" \
-            -C "$RUNNER_TEMP"
-
-          echo "$RUNNER_TEMP/cmake-3.31.6-macos-universal/CMake.app/Contents/bin" \
-            >> "$GITHUB_PATH"
+          tar xzf "$RUNNER_TEMP/cmake.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/cmake-3.31.6-macos-universal/CMake.app/Contents/bin" >> "$GITHUB_PATH"
 
       - name: Build FFmpeg for iPhone if needed
         working-directory: upstream
         run: |
           set -euo pipefail
-
           if [ ! -f src/external/ffmpeg/macos/arm64-device/lib/libavcodec.a ]; then
             chmod +x src/external/ffmpeg/build-ios-device.sh
-            cd src/external/ffmpeg
-            ./build-ios-device.sh
+            (cd src/external/ffmpeg && ./build-ios-device.sh)
           else
             echo "Using prebuilt FFmpeg device libraries."
           fi
@@ -126,74 +80,36 @@ jobs:
         working-directory: upstream
         run: |
           set -euo pipefail
-
-          cmake \
-            -S . \
-            -B build-ios-device \
-            -G Ninja \
+          cmake -S . -B build-ios-device -G Ninja \
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_SYSROOT=iphoneos \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
-      - name: Build EKA2L1 Phone Mode app
+      - name: Build EKA2L1 app
         working-directory: upstream
         run: |
           set -euo pipefail
-
-          cmake \
-            --build build-ios-device \
-            --target eka2l1 \
-            -j"$(sysctl -n hw.logicalcpu)"
-
-      - name: Verify built app
-        working-directory: upstream
-        run: |
-          set -euo pipefail
-
-          APP="build-ios-device/src/emu/ios/eka2l1.app"
-
-          test -d "$APP"
-          test -f "$APP/eka2l1"
-
-          file "$APP/eka2l1"
+          cmake --build build-ios-device --target eka2l1 -j"$(sysctl -n hw.logicalcpu)"
 
       - name: Package unsigned IPA
         working-directory: upstream
         run: |
           set -euo pipefail
-
           APP="build-ios-device/src/emu/ios/eka2l1.app"
-
-          rm -rf ipa-stage
-          rm -f EKA2L1-iOS-PhoneMode-unsigned.ipa
-
+          test -d "$APP"
+          rm -rf ipa-stage EKA2L1-iOS-fixed-unsigned.ipa
           mkdir -p ipa-stage/Payload
+          cp -R "$APP" ipa-stage/Payload/EKA2L1.app
+          rm -rf ipa-stage/Payload/EKA2L1.app/_CodeSignature
+          (cd ipa-stage && /usr/bin/zip -qry ../EKA2L1-iOS-fixed-unsigned.ipa Payload)
+          ls -lh EKA2L1-iOS-fixed-unsigned.ipa
 
-          cp -R \
-            "$APP" \
-            ipa-stage/Payload/EKA2L1.app
-
-          rm -rf \
-            ipa-stage/Payload/EKA2L1.app/_CodeSignature
-
-          cd ipa-stage
-
-          /usr/bin/zip \
-            -qry \
-            ../EKA2L1-iOS-PhoneMode-unsigned.ipa \
-            Payload
-
-          cd ..
-
-          ls -lh \
-            EKA2L1-iOS-PhoneMode-unsigned.ipa
-
-      - name: Upload Phone Mode IPA artifact
+      - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EKA2L1-iOS-Phone-IPA
-          path: upstream/EKA2L1-iOS-PhoneMode-unsigned.ipa
+          name: EKA2L1-iOS-fixed-IPA
+          path: upstream/EKA2L1-iOS-fixed-unsigned.ipa
           if-no-files-found: error
           retention-days: 14
