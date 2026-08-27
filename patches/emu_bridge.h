@@ -157,6 +157,8 @@ namespace eka2l1::ios::bridge {
     std::vector<app_entry> get_all_apps();
     icon_image get_app_icon(std::uint32_t uid);
     void launch_app(std::uint32_t uid);
+    // Phone Mode V3 system-shell launch path (AppArc command_run, no game-exit callback).
+    void launch_system_ui(std::uint32_t uid);
 
     // Installed removable packages. get_packages is light (main-thread safe). uninstall_package
     // removes the package's files + registration and reboots the guest in place so the app list
