@@ -111,6 +111,9 @@ namespace eka2l1::ios {
         std::vector<std::string> get_all_apps();
         app_icon get_app_icon(std::uint32_t uid);
         void launch_app(std::uint32_t uid);
+        // Phone Mode V3: launch firmware Home/Menu as a system UI task. Uses
+        // AppArc command_run and deliberately does not install the normal game-exit callback.
+        void launch_system_ui(std::uint32_t uid);
         package::installation_result install_app(std::string &path);
         std::vector<std::string> get_devices();
         std::vector<std::string> get_device_firmware_codes();
