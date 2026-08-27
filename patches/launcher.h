@@ -111,10 +111,9 @@ namespace eka2l1::ios {
         std::vector<std::string> get_all_apps();
         app_icon get_app_icon(std::uint32_t uid);
         void launch_app(std::uint32_t uid);
-        // Phone Mode V4: pre-activate Avkon/S60 UI support components that normally
-        // come up during a real phone boot (icon/skin/capability/notification/settings
-        // services) before Home/Menu is activated. Returns the number of AppArc
-        // registrations that were found and activated.
+        // Phone Mode V5: reproduce the important RM-612 Starter UI-service bootstrap.
+        // It starts the firmware's Z:\\sys\\bin service executables directly and uses
+        // AppArc only as a fallback. Returns the number already running or started.
         int prepare_system_ui_services();
 
         // Launch firmware Home/Menu as a system UI task. Uses AppArc command_run and
