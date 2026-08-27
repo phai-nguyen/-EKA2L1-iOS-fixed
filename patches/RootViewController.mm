@@ -533,7 +533,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
         return;
     }
 
-    std::vector<eka2l1::ios::bridge::app_entry> all = eka2l1::ios::bridge::get_all_apps();
+    std::vector<eka2l1::ios::bridge::app_entry> all = eka2l1::ios::bridge::get_apps();
     NSMutableArray<NSDictionary *> *candidates = [NSMutableArray array];
     NSMutableSet<NSNumber *> *seen = [NSMutableSet set];
 
