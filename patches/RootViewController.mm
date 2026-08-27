@@ -524,6 +524,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 
 
 // ---- Symbian Phone Mode ---------------------------------------------------
+// Phone Mode V3: delayed UIKit transition + dedicated system-ui lifecycle.
 // Experimental full-device mode: launch the firmware's own idle/home/menu application
 // instead of the native iOS app list. This lets EKA2L1 render and receive touch for the
 // original Symbian UI whenever that system application is supported by the core.
@@ -582,7 +583,23 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
         std::uint32_t uid = (std::uint32_t)[entry[@"uid"] unsignedLongValue];
         NSString *title = [NSString stringWithFormat:@"%@  (0x%08X)", name, uid];
         [sheet addAction:[UIAlertAction actionWithTitle:title style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-            [self launchPhoneUid:uid name:name];
+            // UIAlertController is still tearing down while its action handler executes.
+            // Starting the emulator/system UI during that UIKit transition caused an iOS 18
+            // EXC_BAD_ACCESS in _UIVisualEffectFilterEntry/objc_release. Let the sheet fully
+            // disappear first, then enter Phone Mode on the next stable UI state.
+            NSString *launchName = [name copy];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.60 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                if (self.presentedViewController != nil) {
+                    // A system picker/alert is unexpectedly still up; give UIKit one more beat.
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)),
+                                   dispatch_get_main_queue(), ^{
+                        [self launchPhoneUid:uid name:launchName];
+                    });
+                } else {
+                    [self launchPhoneUid:uid name:launchName];
+                }
+            });
         }]];
     }
     [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
@@ -593,6 +610,10 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 }
 
 - (void)launchPhoneUid:(std::uint32_t)uid name:(NSString *)name {
+    if (self.phoneMode) {
+        return;
+    }
+
     self.phoneMode = YES;
     self.currentGameUid = uid;
     self.gameRunning = YES;
@@ -607,15 +628,24 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
     self.controlsView.customLayout = nil;
     self.controlsView.layout = 0;
     self.controlsView.hidden = YES;
+    self.controlsView.userInteractionEnabled = NO;
+    self.emuView.userInteractionEnabled = YES;
     self.inputManager.enabled = YES;
+    self.inputManager.menuShown = NO;
     [self.emuView setRenderScale:0];
     [self updateChrome];
     [self.view setNeedsLayout];
+    [self.view layoutIfNeeded];
     [self becomeFirstResponder];
 
-    NSLog(@"EKA2L1 Phone Mode: launching %@ (0x%08X)", name, uid);
-    eka2l1::ios::bridge::launch_app(uid);
-    eka2l1::ios::bridge::set_screen_gravity(2);
+    NSLog(@"EKA2L1 Phone Mode V3: command_run %@ (0x%08X)", name, uid);
+
+    // System Home/Menu must not use the game lifecycle. command_run mirrors Symbian
+    // AppArc activation, and the launcher omits the normal app-exit callback.
+    eka2l1::ios::bridge::launch_system_ui(uid);
+
+    // Do not change screen gravity while a UIKit alert is being dismantled. Keep the
+    // firmware/device's current gravity; the framebuffer will be laid out by normal redraws.
 }
 
 - (void)leavePhoneMode {
@@ -791,6 +821,10 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 - (void)onShowApps { [self showAppsScreen]; }
 
 - (void)onAppExited {
+    if (self.phoneMode) {
+        NSLog(@"EKA2L1 Phone Mode V3: ignoring normal game-exit callback for system UI");
+        return;
+    }
     // The guest app ended on its own — either a clean quit or, commonly, a KERN-EXEC panic on
     // exit (the kernel kills the faulting process). Android's equivalent callback nukes the whole
     // process (Process.killProcess) so the activity relaunches from scratch; just flipping back to
