@@ -145,7 +145,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
             setvbuf(stderr, NULL, _IONBF, 0);
         }
 
-        fprintf(stderr, "=== EKA2L1 Phone Mode V7 FBS NVG ===\n");
+        fprintf(stderr, "=== EKA2L1 Phone Mode V8 Stability ===\n");
         fprintf(stderr, "Purpose: capture RM-612 Home/Menu Window/FBS/bitmap errors\n");
         fprintf(stderr, "Log path: %s\n", path);
         fflush(stderr);
@@ -589,7 +589,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 
 
 // ---- Symbian Phone Mode ---------------------------------------------------
-// Phone Mode V7 FBS NVG: delayed UIKit transition + Avkon UI-service bootstrap + dedicated system-ui lifecycle.
+// Phone Mode V8 Stability: delayed UIKit transition + Avkon UI-service bootstrap + dedicated system-ui lifecycle.
 // Experimental full-device mode: launch the firmware's own idle/home/menu application
 // instead of the native iOS app list. This lets EKA2L1 render and receive touch for the
 // original Symbian UI whenever that system application is supported by the core.
@@ -703,7 +703,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
     [self.view layoutIfNeeded];
     [self becomeFirstResponder];
 
-    NSLog(@"EKA2L1 Phone Mode V7 FBS NVG: bootstrapping RM-612 Starter UI services before command_run %@ (0x%08X)", name, uid);
+    NSLog(@"EKA2L1 Phone Mode V8 Stability: bootstrapping RM-612 Starter UI services before command_run %@ (0x%08X)", name, uid);
 
     // Manager-mode icons already prove this build can decode the firmware's MIF/MBM
     // resources. The blank Home/Menu path is different: real S60 normally has
@@ -716,7 +716,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
         const int prepared = eka2l1::ios::bridge::prepare_system_ui_services();
 
         dispatch_async(dispatch_get_main_queue(), ^{
-            NSLog(@"EKA2L1 Phone Mode V7 FBS NVG: %d UI service registration(s) prepared", prepared);
+            NSLog(@"EKA2L1 Phone Mode V8 Stability: %d UI service registration(s) prepared", prepared);
 
             const NSTimeInterval warmup = (prepared > 0) ? 1.00 : 0.35;
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(warmup * NSEC_PER_SEC)),
@@ -725,7 +725,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
                     return;
                 }
 
-                NSLog(@"EKA2L1 Phone Mode V7 FBS NVG: command_run %@ (0x%08X)", launchName, uid);
+                NSLog(@"EKA2L1 Phone Mode V8 Stability: command_run %@ (0x%08X)", launchName, uid);
                 eka2l1::ios::bridge::launch_system_ui(uid);
             });
         });
@@ -909,7 +909,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 
 - (void)onAppExited {
     if (self.phoneMode) {
-        NSLog(@"EKA2L1 Phone Mode V7 FBS NVG: ignoring normal game-exit callback for system UI");
+        NSLog(@"EKA2L1 Phone Mode V8 Stability: ignoring normal game-exit callback for system UI");
         return;
     }
     // The guest app ended on its own — either a clean quit or, commonly, a KERN-EXEC panic on
