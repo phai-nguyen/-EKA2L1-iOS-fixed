@@ -553,6 +553,13 @@ namespace eka2l1::ios::bridge {
         }
     }
 
+    void launch_system_ui(std::uint32_t uid) {
+        std::lock_guard<std::mutex> guard(g_mutex);
+        if (g_state && g_running && g_state->launcher_) {
+            g_state->launcher_->launch_system_ui(uid);
+        }
+    }
+
     std::vector<package_entry> get_packages() {
         std::lock_guard<std::mutex> guard(g_mutex);
         std::vector<package_entry> result;
