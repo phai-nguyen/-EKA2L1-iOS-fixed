@@ -54,6 +54,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
+#include <thread>
 
 namespace eka2l1::ios {
     launcher::launcher(eka2l1::system *sys)
@@ -300,102 +302,113 @@ namespace eka2l1::ios {
     }
 
     int launcher::prepare_system_ui_services() {
-        if (!alserv) {
+        if (!kern) {
             return 0;
         }
 
-        // S60/Avkon support processes that are normally alive before Home/Menu asks
-        // for themed icons, status-pane graphics and UI settings.
-        //
-        // Firmware variants differ: some expose these components through AppArc and
-        // some start them only from Starter. We activate every matching AppArc
-        // registration available on this ROM and safely skip the ones that aren't.
-        struct service_hint {
-            std::uint32_t uid;
-            const char *name;
+        // Phone Mode V5 / Nokia C6-00 RM-612:
+        // The firmware contains these as real Z:\sys\bin system executables and
+        // Starter resources (Starter_Arm.rsc, starter_ui_seq.rsc, etc.). They are
+        // not ordinary menu applications, so launching only through AppArc is not
+        // sufficient. Recreate the important UI-service part of the boot sequence.
+        struct raw_service {
+            const char16_t *path;
+            const char *process_name;
+            std::uint32_t app_uid;
         };
 
-        static constexpr service_hint known[] = {
-            { 0x10207114u, "AknSkinServer" },
-            { 0x1020735Bu, "AknIconSrv" },
-            { 0x10207218u, "akncapserver" },
-            { 0x10281EF2u, "aknnfysrv" },
-            { 0x10207839u, "UISettingsSrv" },
-            { 0x100058F3u, "SysAp" }
+        static constexpr raw_service rm612_services[] = {
+            { u"Z:\\sys\\bin\\akncapserver.exe",  "akncapserver",  0x10207218u },
+            { u"Z:\\sys\\bin\\aknnfysrv.exe",     "aknnfysrv",     0x10281EF2u },
+            { u"Z:\\sys\\bin\\UISettingsSrv.exe", "UISettingsSrv", 0x10207839u },
+            { u"Z:\\sys\\bin\\aknskinsrv.exe",    "aknskinsrv",    0x10207114u },
+            { u"Z:\\sys\\bin\\AknIconSrv.exe",    "AknIconSrv",    0x1020735Bu },
+            { u"Z:\\sys\\bin\\SysAp.exe",         "SysAp",         0x100058F3u }
         };
 
-        std::vector<std::uint32_t> activated;
-
-        auto already_activated = [&activated](std::uint32_t uid) {
-            return std::find(activated.begin(), activated.end(), uid) != activated.end();
+        auto lower_ascii = [](std::string value) {
+            std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
+            return value;
         };
 
-        auto activate = [&](apa_app_registry &reg, const char *reason) {
-            const std::uint32_t uid = reg.mandatory_info.uid;
-            if (already_activated(uid)) {
-                return;
+        auto process_running = [&](const char *wanted) {
+            const std::string wanted_lower = lower_ascii(wanted);
+
+            for (auto &obj : kern->get_process_list()) {
+                if (!obj || obj->get_object_type() != kernel::object_type::process) {
+                    continue;
+                }
+
+                auto *proc = reinterpret_cast<kernel::process *>(obj.get());
+                if (lower_ascii(proc->raw_name()) == wanted_lower) {
+                    return true;
+                }
             }
-
-            epoc::apa::command_line cmdline;
-            cmdline.launch_cmd_ = epoc::apa::command_run;
-
-            const std::string caption =
-                common::ucs2_to_utf8(reg.mandatory_info.long_caption.to_std_string(nullptr));
-            const std::string path =
-                common::ucs2_to_utf8(reg.mandatory_info.app_path.to_std_string(nullptr));
-
-            LOG_INFO(FRONTEND_CMDLINE,
-                "EKA2L1 Phone Mode V4: preparing UI service {} (0x{:08X}) path='{}' [{}]",
-                caption.empty() ? std::string(reason) : caption, uid, path, reason);
-
-            kern->lock();
-            alserv->launch_app(reg, cmdline, nullptr, nullptr);
-            kern->unlock();
-
-            activated.push_back(uid);
+            return false;
         };
 
-        // Prefer exact known UIDs first.
-        for (const auto &hint : known) {
-            if (apa_app_registry *reg = alserv->get_registration(hint.uid)) {
-                activate(*reg, hint.name);
-            }
-        }
+        int ready_count = 0;
+        std::vector<std::uint32_t> raw_failed_uids;
 
-        // Firmware builds sometimes move/re-UID support components. Match by path/caption too.
-        std::vector<apa_app_registry> &registrations = alserv->get_registerations();
-        for (auto &reg : registrations) {
-            if (already_activated(reg.mandatory_info.uid)) {
+        for (const auto &svc : rm612_services) {
+            if (process_running(svc.process_name)) {
+                LOG_INFO(FRONTEND_CMDLINE,
+                    "EKA2L1 Phone Mode V5 RM-612: {} already running",
+                    svc.process_name);
+                ++ready_count;
                 continue;
             }
 
-            std::string probe =
-                common::ucs2_to_utf8(reg.mandatory_info.long_caption.to_std_string(nullptr));
-            probe.push_back(' ');
-            probe += common::ucs2_to_utf8(reg.mandatory_info.short_caption.to_std_string(nullptr));
-            probe.push_back(' ');
-            probe += common::ucs2_to_utf8(reg.mandatory_info.app_path.to_std_string(nullptr));
-            probe = phone_v4_ascii_lower(std::move(probe));
+            kernel::process *proc = kern->spawn_new_process(std::u16string(svc.path), u"");
+            if (!proc) {
+                LOG_WARN(FRONTEND_CMDLINE,
+                    "EKA2L1 Phone Mode V5 RM-612: raw spawn failed for {}",
+                    svc.process_name);
+                raw_failed_uids.push_back(svc.app_uid);
+                continue;
+            }
 
-            const bool support_service =
-                (probe.find("akniconsrv") != std::string::npos) ||
-                (probe.find("akniconserver") != std::string::npos) ||
-                (probe.find("aknskinsrv") != std::string::npos) ||
-                (probe.find("aknskinserver") != std::string::npos) ||
-                (probe.find("akncapserver") != std::string::npos) ||
-                (probe.find("aknnfysrv") != std::string::npos) ||
-                (probe.find("uisettingssrv") != std::string::npos);
+            LOG_INFO(FRONTEND_CMDLINE,
+                "EKA2L1 Phone Mode V5 RM-612: starting raw system process {}",
+                svc.process_name);
 
-            if (support_service) {
-                activate(reg, "name/path match");
+            proc->run();
+            ++ready_count;
+
+            // The real Starter launches UI services in stages, not all in one CPU tick.
+            // Give each newly started server a short opportunity to register before
+            // starting the next dependency.
+            std::this_thread::sleep_for(std::chrono::milliseconds(180));
+        }
+
+        // Some firmware variants expose one or more of the same components through
+        // AppArc. Use that only as a fallback when direct Z:\sys\bin spawn failed.
+        if (alserv && !raw_failed_uids.empty()) {
+            for (std::uint32_t uid : raw_failed_uids) {
+                apa_app_registry *reg = alserv->get_registration(uid);
+                if (!reg) {
+                    continue;
+                }
+
+                epoc::apa::command_line cmdline;
+                cmdline.launch_cmd_ = epoc::apa::command_run;
+
+                LOG_INFO(FRONTEND_CMDLINE,
+                    "EKA2L1 Phone Mode V5 RM-612: AppArc fallback for 0x{:08X}", uid);
+
+                alserv->launch_app(*reg, cmdline, nullptr, nullptr);
+                ++ready_count;
+                std::this_thread::sleep_for(std::chrono::milliseconds(180));
             }
         }
 
         LOG_INFO(FRONTEND_CMDLINE,
-            "EKA2L1 Phone Mode V4: prepared {} AppArc UI service registration(s)",
-            activated.size());
+            "EKA2L1 Phone Mode V5 RM-612: {} UI service(s) running/started",
+            ready_count);
 
-        return static_cast<int>(activated.size());
+        return ready_count;
     }
 
     void launcher::launch_system_ui(std::uint32_t uid) {
