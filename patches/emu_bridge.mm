@@ -553,10 +553,25 @@ namespace eka2l1::ios::bridge {
         }
     }
 
+    int prepare_system_ui_services() {
+        std::lock_guard<std::mutex> guard(g_mutex);
+        if (!g_state || !g_running || !g_state->launcher_) {
+            return 0;
+        }
+
+        const int prepared = g_state->launcher_->prepare_system_ui_services();
+
+        // UI services can allocate/change shared bitmaps immediately.
+        // Make the current guest framebuffer pass through the renderer once.
+        redraw_screens_immediately();
+        return prepared;
+    }
+
     void launch_system_ui(std::uint32_t uid) {
         std::lock_guard<std::mutex> guard(g_mutex);
         if (g_state && g_running && g_state->launcher_) {
             g_state->launcher_->launch_system_ui(uid);
+            redraw_screens_immediately();
         }
     }
 
