@@ -35,6 +35,7 @@
 
 #include <string>
 #include <vector>
+#include <stdio.h>
 
 typedef NS_ENUM(NSInteger, PickMode) {
     PickModeDeviceRom,
@@ -94,6 +95,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 @property (nonatomic, assign) BOOL started;
 @property (nonatomic, assign) BOOL gameRunning;
 @property (nonatomic, assign) BOOL phoneMode;
+@property (nonatomic, copy) NSString *phoneDebugLogPath;
 @property (nonatomic, assign) uint32_t currentGameUid;      // uid of the running game (per-game settings)
 @property (nonatomic, assign) BOOL currentGameHideIsland;   // running game's "hide dynamic island" pref
 @property (nonatomic, assign) BOOL currentGameShowStatus;   // running game's "status" (fps/speed) overlay pref
@@ -117,8 +119,71 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 
 @implementation RootViewController
 
+- (void)setupPhoneDebugLog {
+    NSArray<NSURL *> *dirs =
+        [[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory
+                                                inDomains:NSUserDomainMask];
+    NSURL *docs = dirs.firstObject;
+    if (!docs) {
+        return;
+    }
+
+    NSURL *url = [docs URLByAppendingPathComponent:@"eka2l1-phone-v6-debug.log"];
+    self.phoneDebugLogPath = url.path;
+
+    // Start a clean capture for this app launch. EKA2L1's normal console logger writes
+    // through the process stdout/stderr path on the iOS frontend, so redirecting both
+    // streams captures Window/FBS/graphics warnings that do not produce an iOS .ips file.
+    const char *path = [self.phoneDebugLogPath fileSystemRepresentation];
+    if (path) {
+        FILE *out = freopen(path, "w", stdout);
+        FILE *err = freopen(path, "a", stderr);
+        if (out) {
+            setvbuf(stdout, NULL, _IONBF, 0);
+        }
+        if (err) {
+            setvbuf(stderr, NULL, _IONBF, 0);
+        }
+
+        fprintf(stderr, "=== EKA2L1 Phone Mode V6 Debug ===\n");
+        fprintf(stderr, "Purpose: capture RM-612 Home/Menu Window/FBS/bitmap errors\n");
+        fprintf(stderr, "Log path: %s\n", path);
+        fflush(stderr);
+    }
+}
+
+- (void)sharePhoneDebugLog {
+    if (self.phoneDebugLogPath.length == 0) {
+        [self showAlert:@"Debug log unavailable"
+                 message:@"No Phone Mode debug log path was created."];
+        return;
+    }
+
+    fflush(stdout);
+    fflush(stderr);
+
+    NSURL *url = [NSURL fileURLWithPath:self.phoneDebugLogPath];
+    if (![[NSFileManager defaultManager] fileExistsAtPath:url.path]) {
+        [self showAlert:@"Debug log unavailable"
+                 message:@"The Phone Mode debug log has not been created yet."];
+        return;
+    }
+
+    UIActivityViewController *share =
+        [[UIActivityViewController alloc] initWithActivityItems:@[url]
+                                          applicationActivities:nil];
+
+    if (share.popoverPresentationController) {
+        share.popoverPresentationController.sourceView = self.menuButton;
+        share.popoverPresentationController.sourceRect = self.menuButton.bounds;
+    }
+
+    [self presentViewController:share animated:YES completion:nil];
+}
+
 - (void)viewDidLoad {
     [super viewDidLoad];
+    [self setupPhoneDebugLog];
     self.view.backgroundColor = [UIColor blackColor];
     self.keyLayout = 0;
     self.iconCache = [NSMutableDictionary dictionary];
@@ -524,7 +589,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 
 
 // ---- Symbian Phone Mode ---------------------------------------------------
-// Phone Mode V5: delayed UIKit transition + Avkon UI-service bootstrap + dedicated system-ui lifecycle.
+// Phone Mode V6 Debug: delayed UIKit transition + Avkon UI-service bootstrap + dedicated system-ui lifecycle.
 // Experimental full-device mode: launch the firmware's own idle/home/menu application
 // instead of the native iOS app list. This lets EKA2L1 render and receive touch for the
 // original Symbian UI whenever that system application is supported by the core.
@@ -638,7 +703,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
     [self.view layoutIfNeeded];
     [self becomeFirstResponder];
 
-    NSLog(@"EKA2L1 Phone Mode V5: bootstrapping RM-612 Starter UI services before command_run %@ (0x%08X)", name, uid);
+    NSLog(@"EKA2L1 Phone Mode V6 Debug: bootstrapping RM-612 Starter UI services before command_run %@ (0x%08X)", name, uid);
 
     // Manager-mode icons already prove this build can decode the firmware's MIF/MBM
     // resources. The blank Home/Menu path is different: real S60 normally has
@@ -651,7 +716,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
         const int prepared = eka2l1::ios::bridge::prepare_system_ui_services();
 
         dispatch_async(dispatch_get_main_queue(), ^{
-            NSLog(@"EKA2L1 Phone Mode V5: %d UI service registration(s) prepared", prepared);
+            NSLog(@"EKA2L1 Phone Mode V6 Debug: %d UI service registration(s) prepared", prepared);
 
             const NSTimeInterval warmup = (prepared > 0) ? 1.00 : 0.35;
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(warmup * NSEC_PER_SEC)),
@@ -660,7 +725,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
                     return;
                 }
 
-                NSLog(@"EKA2L1 Phone Mode V5: command_run %@ (0x%08X)", launchName, uid);
+                NSLog(@"EKA2L1 Phone Mode V6 Debug: command_run %@ (0x%08X)", launchName, uid);
                 eka2l1::ios::bridge::launch_system_ui(uid);
             });
         });
@@ -844,7 +909,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 
 - (void)onAppExited {
     if (self.phoneMode) {
-        NSLog(@"EKA2L1 Phone Mode V5: ignoring normal game-exit callback for system UI");
+        NSLog(@"EKA2L1 Phone Mode V6 Debug: ignoring normal game-exit callback for system UI");
         return;
     }
     // The guest app ended on its own — either a clean quit or, commonly, a KERN-EXEC panic on
@@ -1180,6 +1245,11 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 - (void)onMenuTouch {
     if (self.phoneMode) {
         UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"Symbian Phone" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+        [sheet addAction:[UIAlertAction actionWithTitle:@"Share Phone Debug Log"
+                                                  style:UIAlertActionStyleDefault
+                                                handler:^(UIAlertAction *a) {
+            [self sharePhoneDebugLog];
+        }]];
         [sheet addAction:[UIAlertAction actionWithTitle:@"Back to Manager" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) { [self leavePhoneMode]; }]];
         [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
         sheet.popoverPresentationController.sourceView = self.menuButton;
