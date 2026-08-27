@@ -1,0 +1,241 @@
+--- a/src/emu/services/include/services/fbs/bitmap.h
++++ b/src/emu/services/include/services/fbs/bitmap.h
+@@ -46,6 +46,24 @@
+ 
+     static const std::size_t SUPPORTED_REV2_UID_COUNT = sizeof(SUPPORTED_REV2_UIDS) / sizeof(std::uint32_t);
+ 
++
++    // Phone Mode V7: emulate the CFbsRasterizer path used by S60/Avkon when
++    // BitGDI reads an NVG extended bitmap produced by AknIconSrv.
++    static constexpr std::size_t NVG_RASTERIZE_MAX_BYTES = 4 * 1024 * 1024;
++
++    static inline bool is_nvg_bitmap_rasterizable(const eka2l1::vec2 &size, const display_mode dpm) {
++        if ((size.x <= 0) || (size.y <= 0)) {
++            return false;
++        }
++
++        const int bpp = get_bpp_from_display_mode(dpm);
++        if ((bpp != 8) && (bpp != 16) && (bpp != 24) && (bpp != 32)) {
++            return false;
++        }
++
++        return (get_byte_width(size.x, bpp) * static_cast<std::size_t>(size.y)) <= NVG_RASTERIZE_MAX_BYTES;
++    }
++
+     enum bitmap_file_compression {
+         bitmap_file_no_compression = 0,
+         bitmap_file_byte_rle_compression = 1,
+--- a/src/emu/services/include/services/fbs/fbs.h
++++ b/src/emu/services/include/services/fbs/fbs.h
+@@ -415,6 +415,14 @@
+         fbsbitmap *create_bitmap(fbs_bitmap_data_info &info, const bool alloc_data = true, const bool support_current_display_mod_flag = true,
+             const bool support_dirty = true);
+ 
++
++        /**
++         * Phone Mode V7: rasterize an AknIconSrv NVG extended bitmap in-place.
++         * This stands in for the phone ROM's CFbsRasterizer so guest BitGDI sees
++         * real pixels rather than compressed NVG commands.
++         */
++        bool rasterize_nvg_bitmap(fbsbitmap *bmp);
++
+         /**
+          * \brief   Free a bitmap object.
+          * 
+--- a/src/emu/services/src/fbs/impls/bitmap.cpp
++++ b/src/emu/services/src/fbs/impls/bitmap.cpp
+@@ -36,10 +36,17 @@
+ #include <kernel/kernel.h>
+ #include <system/epoc.h>
+ #include <utils/err.h>
++#include <utils/guest/akn.h>
+ #include <vfs/vfs.h>
+ 
++#include <common/buffer.h>
++#include <loader/nvg.h>
++#include <lunasvg.h>
++
+ #include <algorithm>
+ #include <cassert>
++#include <cstring>
++#include <vector>
+ 
+ namespace eka2l1 {
+     static epoc::bitmap_color get_bitmap_color_type_from_display_mode(const epoc::display_mode bpp) {
+@@ -536,6 +543,11 @@
+ 
+         bmp = get_clean_bitmap(bmp);
+ 
++        // Phone Mode V7: a second client is picking up an immutable extended
++        // bitmap. On a real phone CFbsRasterizer turns NVG into pixels here;
++        // without it guest BitGDI copies compressed NVG bytes as pixel data.
++        server<fbs_server>()->rasterize_nvg_bitmap(bmp);
++
+         const std::uint32_t handle_ret = obj_table_.add(bmp);
+         const std::uint32_t server_handle = bmp->id;
+         const std::uint32_t off = server<fbs_server>()->host_ptr_to_guest_shared_offset(bmp->bitmap_);
+@@ -742,6 +754,135 @@
+         return epoc::get_byte_width(size.x, epoc::get_bpp_from_display_mode(bpp)) * size.y;
+     }
+ 
++
++    bool fbs_server::rasterize_nvg_bitmap(fbsbitmap *bmp) {
++        if (!bmp || !bmp->bitmap_ || (bmp->bitmap_->uid_ != epoc::NVG_BITMAP_UID_REV2)) {
++            return false;
++        }
++
++        epoc::bitwise_bitmap *bws = bmp->bitmap_;
++        std::uint8_t *data = reinterpret_cast<std::uint8_t *>(bws->data_pointer(this));
++        if (!data) {
++            return false;
++        }
++
++        const int width = bws->header_.size_pixels.x;
++        const int height = bws->header_.size_pixels.y;
++        const epoc::display_mode dpm = bws->settings_.current_display_mode();
++
++        if (!epoc::is_nvg_bitmap_rasterizable(bws->header_.size_pixels, dpm)) {
++            return false;
++        }
++
++        const std::size_t raster_bytes = calculate_aligned_bitmap_bytes(bws->header_.size_pixels, dpm);
++        const std::uint32_t header_len = bws->header_.header_len;
++        if (bws->header_.bitmap_size < header_len) {
++            return false;
++        }
++
++        const std::uint32_t available = bws->header_.bitmap_size - header_len;
++        if ((raster_bytes == 0) || (available < raster_bytes) || (available < sizeof(utils::akn_icon_header))) {
++            return false;
++        }
++
++        utils::akn_icon_header *icon_header = reinterpret_cast<utils::akn_icon_header *>(data);
++        if ((icon_header->header_size_ < sizeof(utils::akn_icon_header)) || (icon_header->header_size_ >= available)) {
++            LOG_WARN(SERVICE_FBS, "Phone Mode V7 FBS: invalid Akn icon header while rasterizing NVG");
++            return false;
++        }
++
++        const std::uint8_t *nvg_data = data + icon_header->header_size_;
++        const std::uint32_t nvg_size = available - icon_header->header_size_;
++        const bool is_mask = icon_header->is_mask_;
++
++        std::vector<std::uint8_t> rgba(static_cast<std::size_t>(width) * height * 4, 0);
++
++        if (!is_mask && (icon_header->icon_color_ & 0xFFFFFF)) {
++            // Some colour planes are supplied as a forced tint while the paired mask
++            // carries the shape. Match the existing Window Server NVG path.
++            const std::uint32_t colour = static_cast<std::uint32_t>(icon_header->icon_color_);
++            for (std::size_t i = 0; i < rgba.size(); i += 4) {
++                rgba[i + 0] = static_cast<std::uint8_t>((colour >> 16) & 0xFF);
++                rgba[i + 1] = static_cast<std::uint8_t>((colour >> 8) & 0xFF);
++                rgba[i + 2] = static_cast<std::uint8_t>(colour & 0xFF);
++                rgba[i + 3] = 0xFF;
++            }
++        } else {
++            common::ro_buf_stream nvg_in(const_cast<std::uint8_t *>(nvg_data), nvg_size);
++            common::wo_growable_buf_stream svg_out;
++            std::vector<loader::nvg_convert_error_description> errors;
++
++            loader::nvg_options opts;
++            opts.width = width;
++            opts.height = height;
++            opts.aspect_ratio_mode_ = static_cast<loader::nvg_aspect_ratio_mode>(icon_header->aspect_ratio_);
++
++            if (!loader::convert_nvg_to_svg(nvg_in, svg_out, errors, &opts)) {
++                LOG_WARN(SERVICE_FBS, "Phone Mode V7 FBS: NVG to SVG conversion failed");
++                return false;
++            }
++
++            auto doc = lunasvg::Document::loadFromData(svg_out.content());
++            if (!doc) {
++                LOG_WARN(SERVICE_FBS, "Phone Mode V7 FBS: LunaSVG could not parse converted NVG");
++                return false;
++            }
++
++            lunasvg::Bitmap luna(rgba.data(), width, height, width * 4);
++            doc->render(luna, lunasvg::Matrix{ 1, 0, 0, 1, 0, 0 });
++            luna.convertToRGBA();
++        }
++
++        const int bpp = epoc::get_bpp_from_display_mode(dpm);
++        const int byte_width = bws->byte_width_;
++        std::memset(data, 0, raster_bytes);
++
++        for (int y = 0; y < height; y++) {
++            for (int x = 0; x < width; x++) {
++                const std::uint8_t *src = rgba.data() + (static_cast<std::size_t>(y) * width + x) * 4;
++                std::uint8_t *dst = data + static_cast<std::size_t>(y) * byte_width;
++
++                switch (bpp) {
++                case 8:
++                    // For EGray256 masks the rendered coverage belongs in the byte.
++                    dst[x] = epoc::is_display_mode_mono(dpm) ? src[3] : src[0];
++                    break;
++
++                case 16: {
++                    const std::uint16_t px = static_cast<std::uint16_t>(((src[0] >> 3) << 11)
++                        | ((src[1] >> 2) << 5) | (src[2] >> 3));
++                    *reinterpret_cast<std::uint16_t *>(dst + x * 2) = px;
++                    break;
++                }
++
++                case 24:
++                    dst[x * 3 + 0] = src[2];
++                    dst[x * 3 + 1] = src[1];
++                    dst[x * 3 + 2] = src[0];
++                    break;
++
++                case 32:
++                    dst[x * 4 + 0] = src[2];
++                    dst[x * 4 + 1] = src[1];
++                    dst[x * 4 + 2] = src[0];
++                    dst[x * 4 + 3] = epoc::is_display_mode_alpha(dpm) ? src[3] : 0xFF;
++                    break;
++
++                default:
++                    return false;
++                }
++            }
++        }
++
++        bws->header_.bitmap_size = static_cast<std::uint32_t>(raster_bytes) + header_len;
++        bws->header_.compression = epoc::bitmap_file_no_compression;
++        bws->compressed_in_ram_ = false;
++        bws->uid_ = epoc::BITWISE_BITMAP_UID;
++
++        LOG_INFO(SERVICE_FBS, "Phone Mode V7 FBS: rasterized NVG bitmap {}x{} bpp {}", width, height, bpp);
++        return true;
++    }
++
+     static std::uint32_t calculate_reserved_each_side(const std::uint32_t height) {
+         // Reserve some space in left and right. Observed shows some apps outwrite their
+         // available data region, a little bit, hopefully.
+@@ -928,6 +1069,15 @@
+ 
+         fbs_server *fbss = server<fbs_server>();
+ 
++        // Phone Mode V7: AknIconSrv initially asks for only enough bytes to hold
++        // compressed NVG. Reserve the larger raster form now so the emulated
++        // CFbsRasterizer can expand it in-place later.
++        const std::uint32_t vector_size = force_size;
++        if ((assign_uid == epoc::NVG_BITMAP_UID_REV2) && epoc::is_nvg_bitmap_rasterizable(specs.size, specs.bpp)) {
++            force_size = common::max(force_size,
++                static_cast<std::uint32_t>(calculate_aligned_bitmap_bytes(specs.size, specs.bpp)));
++        }
++
+         fbs_bitmap_data_info info;
+         info.size_ = specs.size;
+         info.dpm_ = specs.bpp;
+@@ -940,6 +1090,12 @@
+             return;
+         }
+ 
++        if ((force_size > vector_size) && bmp->bitmap_) {
++            if (std::uint8_t *data = reinterpret_cast<std::uint8_t *>(bmp->bitmap_->data_pointer(fbss))) {
++                std::memset(data + vector_size, 0, force_size - vector_size);
++            }
++        }
++
+         if (use_bmp_handles_writeback) {
+             // For maximum compability, in normal situation even if the app requested special bitmap type through UID
+             // We still assign standard bitmap type UID to the bitmap
