@@ -306,7 +306,7 @@ namespace eka2l1::ios {
             return 0;
         }
 
-        // Phone Mode V10 RAMCODE / Nokia C6-00 RM-612:
+        // Phone Mode V11 WINDOW / Nokia C6-00 RM-612:
         // The firmware contains these as real Z:\sys\bin system executables and
         // Starter resources (Starter_Arm.rsc, starter_ui_seq.rsc, etc.). They are
         // not ordinary menu applications, so launching only through AppArc is not
@@ -355,7 +355,7 @@ namespace eka2l1::ios {
         for (const auto &svc : rm612_services) {
             if (process_running(svc.process_name)) {
                 LOG_INFO(FRONTEND_CMDLINE,
-                    "EKA2L1 Phone Mode V10 RAMCODE RM-612: {} already running",
+                    "EKA2L1 Phone Mode V11 WINDOW RM-612: {} already running",
                     svc.process_name);
                 ++ready_count;
                 continue;
@@ -364,14 +364,14 @@ namespace eka2l1::ios {
             kernel::process *proc = kern->spawn_new_process(std::u16string(svc.path), u"");
             if (!proc) {
                 LOG_WARN(FRONTEND_CMDLINE,
-                    "EKA2L1 Phone Mode V10 RAMCODE RM-612: raw spawn failed for {}",
+                    "EKA2L1 Phone Mode V11 WINDOW RM-612: raw spawn failed for {}",
                     svc.process_name);
                 raw_failed_uids.push_back(svc.app_uid);
                 continue;
             }
 
             LOG_INFO(FRONTEND_CMDLINE,
-                "EKA2L1 Phone Mode V10 RAMCODE RM-612: starting raw system process {}",
+                "EKA2L1 Phone Mode V11 WINDOW RM-612: starting raw system process {}",
                 svc.process_name);
 
             proc->run();
@@ -396,7 +396,7 @@ namespace eka2l1::ios {
                 cmdline.launch_cmd_ = epoc::apa::command_run;
 
                 LOG_INFO(FRONTEND_CMDLINE,
-                    "EKA2L1 Phone Mode V10 RAMCODE RM-612: AppArc fallback for 0x{:08X}", uid);
+                    "EKA2L1 Phone Mode V11 WINDOW RM-612: AppArc fallback for 0x{:08X}", uid);
 
                 alserv->launch_app(*reg, cmdline, nullptr, nullptr);
                 ++ready_count;
@@ -405,7 +405,7 @@ namespace eka2l1::ios {
         }
 
         LOG_INFO(FRONTEND_CMDLINE,
-            "EKA2L1 Phone Mode V10 RAMCODE RM-612: {} UI service(s) running/started",
+            "EKA2L1 Phone Mode V11 WINDOW RM-612: {} UI service(s) running/started",
             ready_count);
 
         return ready_count;
