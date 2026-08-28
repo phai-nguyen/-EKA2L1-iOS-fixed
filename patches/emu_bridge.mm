@@ -210,7 +210,7 @@ namespace eka2l1::ios::bridge {
     }
 
     void pause() {
-        // Phone Mode V9: UIApplication lifecycle callbacks run on the main thread.
+        // Phone Mode V10 RAMCODE: UIApplication lifecycle callbacks run on the main thread.
         // Never block UIKit waiting for a busy emulator mutex or iOS watchdog may
         // terminate the app with 0x8BADF00D.
         std::unique_lock<std::mutex> guard(g_mutex, std::try_to_lock);
