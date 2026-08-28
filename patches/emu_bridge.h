@@ -157,7 +157,7 @@ namespace eka2l1::ios::bridge {
     std::vector<app_entry> get_all_apps();
     icon_image get_app_icon(std::uint32_t uid);
     void launch_app(std::uint32_t uid);
-    // Phone Mode V10 RAMCODE: activate available Avkon/S60 UI support registrations before
+    // Phone Mode V11 WINDOW: activate available Avkon/S60 UI support registrations before
     // launching Home/Menu. Returns how many matching AppArc registrations were found.
     int prepare_system_ui_services();
 
