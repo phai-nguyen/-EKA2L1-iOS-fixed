@@ -1,0 +1,285 @@
+diff --git a/src/emu/kernel/include/kernel/chunk.h b/src/emu/kernel/include/kernel/chunk.h
+index e45a649..3ce2721 100644
+--- a/src/emu/kernel/include/kernel/chunk.h
++++ b/src/emu/kernel/include/kernel/chunk.h
+@@ -2,6 +2,7 @@
+ 
+             // Phone Mode V10 RAMCODE: rebuild flexible shared-code page-table entries in-place.
+             bool refresh_mapping();
++            bool runtime_mapping_matches(address addr, const void *host);
+ 
+             /*! \brief Get the base of the chunk. */
+             ptr<uint8_t> base(process *pr);
+diff --git a/src/emu/kernel/src/chunk.cpp b/src/emu/kernel/src/chunk.cpp
+index 7a58ba1..2e01f74 100644
+--- a/src/emu/kernel/src/chunk.cpp
++++ b/src/emu/kernel/src/chunk.cpp
+@@ -2,6 +2,10 @@
+             return mmc_impl_ && mmc_impl_->refresh_mapping();
+         }
+ 
++        bool chunk::runtime_mapping_matches(const address addr, const void *host) {
++            return mmc_impl_ && mmc_impl_->runtime_mapping_matches(addr, host);
++        }
++
+         ptr<uint8_t> chunk::base(process *pr) {
+             return mmc_impl_->base(pr ? pr->get_mem_model() : nullptr);
+         }
+diff --git a/src/emu/kernel/src/codeseg.cpp b/src/emu/kernel/src/codeseg.cpp
+index 2a9a3ad..4b0b360 100644
+--- a/src/emu/kernel/src/codeseg.cpp
++++ b/src/emu/kernel/src/codeseg.cpp
+@@ -9,27 +9,36 @@
+         const bool watched = (run_addr == 0x78C00000) || (run_addr == 0x7A700000) ||
+             (run_addr == 0x7B500000) || (run_addr == 0x7CC00000);
+ 
+-        if (mapped_before) {
++        const bool owner_matches_before = mapped_before && target->runtime_mapping_matches(run_addr, mapped_before);
++        if (owner_matches_before) {
+             if (watched) {
+                 LOG_INFO(KERNEL,
+-                    "Phone Mode V12 RAMLIFE: watched mapping alive for {} process={} base=0x{:08X} size=0x{:X} page-host={} chunk-host={} phase={}",
++                    "Phone Mode V13 OWNERGEN: watched mapping verified for {} process={} base=0x{:08X} size=0x{:X} page-host={} chunk-host={} phase={}",
+                     name(), pr ? pr->name() : "<shared>", run_addr, target->max_size(), mapped_before,
+                     target->host_base(), phase);
+             }
+             return true;
+         }
+ 
+-        LOG_WARN(KERNEL,
+-            "Phone Mode V12 RAMLIFE: missing mapping for {} process={} base=0x{:08X} size=0x{:X} page-host={} chunk-host={} phase={}; refreshing now",
+-            name(), pr ? pr->name() : "<shared>", run_addr, target->max_size(), mapped_before,
+-            target->host_base(), phase);
++        if (mapped_before) {
++            LOG_ERROR(KERNEL,
++                "Phone Mode V13 OWNERGEN: OWNER MISMATCH for {} process={} base=0x{:08X} size=0x{:X} page-host={} expected-chunk-host={} phase={}; refreshing now",
++                name(), pr ? pr->name() : "<shared>", run_addr, target->max_size(), mapped_before,
++                target->host_base(), phase);
++        } else {
++            LOG_WARN(KERNEL,
++                "Phone Mode V12 RAMLIFE: missing mapping for {} process={} base=0x{:08X} size=0x{:X} page-host={} chunk-host={} phase={}; refreshing now",
++                name(), pr ? pr->name() : "<shared>", run_addr, target->max_size(), mapped_before,
++                target->host_base(), phase);
++        }
+ 
+         const bool refreshed = target->refresh_mapping();
+         void *mapped_after = mem->get_real_pointer(run_addr);
+ 
+-        if (!refreshed || !mapped_after) {
++        const bool owner_matches_after = mapped_after && target->runtime_mapping_matches(run_addr, mapped_after);
++        if (!refreshed || !owner_matches_after) {
+             LOG_ERROR(KERNEL,
+-                "Phone Mode V12 RAMLIFE: LATE REPAIR FAILED for {} process={} base=0x{:08X} size=0x{:X} page-host={} chunk-host={} phase={}",
++                "Phone Mode V13 OWNERGEN: LATE REPAIR FAILED ownership check for {} process={} base=0x{:08X} size=0x{:X} page-host={} chunk-host={} phase={}",
+                 name(), pr ? pr->name() : "<shared>", run_addr, target->max_size(), mapped_after,
+                 target->host_base(), phase);
+             return false;
+diff --git a/src/emu/mem/include/mem/chunk.h b/src/emu/mem/include/mem/chunk.h
+index 574b734..7929899 100644
+--- a/src/emu/mem/include/mem/chunk.h
++++ b/src/emu/mem/include/mem/chunk.h
+@@ -10,5 +10,9 @@
+             return true;
+         }
+ 
++        virtual bool runtime_mapping_matches(const vm_address, const void *) {
++            return true;
++        }
++
+         /**
+          * \brief Unmap the committed chunk region from the CPU.
+diff --git a/src/emu/mem/include/mem/model/flexible/chunk.h b/src/emu/mem/include/mem/model/flexible/chunk.h
+index 2162004..e852929 100644
+--- a/src/emu/mem/include/mem/model/flexible/chunk.h
++++ b/src/emu/mem/include/mem/model/flexible/chunk.h
+@@ -1,5 +1,6 @@
+         const vm_address base(mem_model_process *process) override;
+         void *host_base() override;
+         bool refresh_mapping() override;
++        bool runtime_mapping_matches(const vm_address addr, const void *host) override;
+ 
+         const std::size_t committed() const override {
+diff --git a/src/emu/mem/include/mem/model/flexible/mapping.h b/src/emu/mem/include/mem/model/flexible/mapping.h
+index ea9d509..646126e 100644
+--- a/src/emu/mem/include/mem/model/flexible/mapping.h
++++ b/src/emu/mem/include/mem/model/flexible/mapping.h
+@@ -1,6 +1,7 @@
+ #pragma once
+ #include <common/types.h>
+ #include <mem/common.h>
++#include <cstdint>
+ 
+ namespace eka2l1::mem::flexible {
+     struct memory_object;
+@@ -12,6 +13,9 @@ namespace eka2l1::mem::flexible {
+         std::size_t occupied_;
+         std::uint32_t region_flags_;
+         int off_start_in_page_quantity_;
++        void *backing_host_;
++        std::uint64_t generation_;
++        bool stale_unmap_blocked_;
+ 
+     public:
+         explicit mapping(address_space *owner);
+diff --git a/src/emu/mem/src/model/flexible/chunk.cpp b/src/emu/mem/src/model/flexible/chunk.cpp
+index 0b0f4f5..f7b935b 100644
+--- a/src/emu/mem/src/model/flexible/chunk.cpp
++++ b/src/emu/mem/src/model/flexible/chunk.cpp
+@@ -26,4 +26,15 @@
+             fixed_mapping_->base_, max_size_);
+         return true;
+     }
++
++    bool flexible_mem_model_chunk::runtime_mapping_matches(const vm_address addr, const void *host) {
++        if (!is_addr_shared_ || !fixed_mapping_ || !mem_obj_ || !host) {
++            return !is_addr_shared_;
++        }
++        if (addr < fixed_mapping_->base_ || addr >= fixed_mapping_->base_ + max_size_) {
++            return false;
++        }
++        const void *expected = reinterpret_cast<std::uint8_t *>(mem_obj_->ptr()) + (addr - fixed_mapping_->base_);
++        return host == expected;
++    }
+ }
+diff --git a/src/emu/mem/src/model/flexible/mapping.cpp b/src/emu/mem/src/model/flexible/mapping.cpp
+index e5b55af..0a8136c 100644
+--- a/src/emu/mem/src/model/flexible/mapping.cpp
++++ b/src/emu/mem/src/model/flexible/mapping.cpp
+@@ -5,21 +5,60 @@
+ #include <mem/model/flexible/pagearray.h>
+ #include <common/log.h>
+ #include <common/algorithm.h>
++#include <atomic>
++#include <cstdint>
++#include <mutex>
++#include <unordered_map>
+ 
+ namespace eka2l1::mem::flexible {
++    namespace {
++        struct mapping_owner_key {
++            address_space *owner;
++            vm_address page;
++
++            bool operator==(const mapping_owner_key &rhs) const noexcept {
++                return owner == rhs.owner && page == rhs.page;
++            }
++        };
++
++        struct mapping_owner_key_hash {
++            std::size_t operator()(const mapping_owner_key &key) const noexcept {
++                return (reinterpret_cast<std::uintptr_t>(key.owner) >> 4) ^
++                    (static_cast<std::size_t>(key.page) << 1);
++            }
++        };
++
++        struct mapping_owner_entry {
++            std::uint64_t generation;
++            void *host;
++        };
++
++        std::atomic<std::uint64_t> mapping_generation_seed{1};
++        std::mutex mapping_owner_lock;
++        std::unordered_map<mapping_owner_key, mapping_owner_entry, mapping_owner_key_hash> mapping_owners;
++    }
++
+     mapping::mapping(address_space *owner)
+         : owner_(owner)
++        , occupied_(0)
+         , region_flags_(0)
+-        , off_start_in_page_quantity_(0) {
++        , off_start_in_page_quantity_(0)
++        , backing_host_(nullptr)
++        , generation_(mapping_generation_seed.fetch_add(1, std::memory_order_relaxed))
++        , stale_unmap_blocked_(false) {
+     }
+ 
+     mapping::~mapping() {
+-        // Unmap all memory mapped
++        // Unmap all memory mapped. V13 records whether a newer mapping generation
++        // already owns any page in this virtual range.
+         unmap(0, occupied_);
+-        // Free allocated region
+         linear_section *sect = owner_->section(region_flags_);
+-        if (sect) {
++        if (sect && !stale_unmap_blocked_) {
+             sect->alloc_.deallocate(static_cast<std::uint32_t>(off_start_in_page_quantity_), occupied_);
++        } else if (sect) {
++            LOG_WARN(MEMORY,
++                "Phone Mode V13 OWNERGEN: STALE DEALLOC BLOCKED base=0x{:08X} pages={} generation={}",
++                base_, occupied_, generation_);
+         }
+     }
+ 
+@@ -28,6 +67,15 @@ namespace eka2l1::mem::flexible {
+             return false;
+         }
+ 
++        if (!backing_host_) {
++            backing_host_ = obj->ptr();
++        } else if (backing_host_ != obj->ptr()) {
++            LOG_ERROR(MEMORY,
++                "Phone Mode V13 OWNERGEN: mapping generation={} base=0x{:08X} attempted to change backing host {} -> {}; refusing",
++                generation_, base_, backing_host_, obj->ptr());
++            return false;
++        }
++
+         control_base *control = owner_->control_;
+         const std::uint32_t start_offset = +(index << control->page_size_bits_);
+         vm_address start_addr = base_ + start_offset;
+@@ -51,6 +99,18 @@ namespace eka2l1::mem::flexible {
+             while (start_page_index < end_page_index) {
+                 page_info *info = tbl->get_page_info(start_page_index & control->page_index_mask_);
+                 if (info) {
++                    const vm_address guest_page = start_page_index << control->page_index_shift_;
++                    {
++                        std::lock_guard<std::mutex> guard(mapping_owner_lock);
++                        const mapping_owner_key key{owner_, guest_page};
++                        auto current = mapping_owners.find(key);
++                        if (current != mapping_owners.end() && current->second.generation != generation_) {
++                            LOG_WARN(MEMORY,
++                                "Phone Mode V13 OWNERGEN: mapping ownership transfer page=0x{:08X} old-generation={} new-generation={} old-host={} new-host={}",
++                                guest_page, current->second.generation, generation_, current->second.host, starting_point_host);
++                        }
++                        mapping_owners[key] = mapping_owner_entry{generation_, starting_point_host};
++                    }
+                     info->host_addr = starting_point_host;
+                     info->perm = permissions;
+                 }
+@@ -82,7 +142,36 @@ namespace eka2l1::mem::flexible {
+                 while (start_page_index < end_page_index) {
+                     page_info *info = tbl->get_page_info(start_page_index & control->page_index_mask_);
+                     if (info) {
+-                        info->host_addr = nullptr;
++                        const vm_address guest_page = start_page_index << control->page_index_shift_;
++                        const void *expected_host = backing_host_
++                            ? reinterpret_cast<std::uint8_t *>(backing_host_) + (guest_page - base_)
++                            : nullptr;
++                        bool stale_generation = false;
++                        std::uint64_t current_generation = 0;
++                        void *current_host = nullptr;
++                        {
++                            std::lock_guard<std::mutex> guard(mapping_owner_lock);
++                            const mapping_owner_key key{owner_, guest_page};
++                            auto current = mapping_owners.find(key);
++                            if (current != mapping_owners.end()) {
++                                current_generation = current->second.generation;
++                                current_host = current->second.host;
++                                if (current_generation != generation_) {
++                                    stale_generation = true;
++                                } else {
++                                    mapping_owners.erase(current);
++                                }
++                            }
++                        }
++
++                        if (stale_generation || (info->host_addr && expected_host && info->host_addr != expected_host)) {
++                            stale_unmap_blocked_ = true;
++                            LOG_WARN(MEMORY,
++                                "Phone Mode V13 OWNERGEN: STALE UNMAP BLOCKED page=0x{:08X} old-generation={} current-generation={} expected-host={} current-host={} page-host={}",
++                                guest_page, generation_, current_generation, expected_host, current_host, info->host_addr);
++                        } else {
++                            info->host_addr = nullptr;
++                        }
+                     }
+                     start_page_index++;
+                 }
