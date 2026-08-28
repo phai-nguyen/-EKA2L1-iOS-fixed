@@ -1,0 +1,1313 @@
+diff --git a/src/emu/kernel/include/kernel/chunk.h b/src/emu/kernel/include/kernel/chunk.h
+index 8b8ae68..a301adb 100644
+--- a/src/emu/kernel/include/kernel/chunk.h
++++ b/src/emu/kernel/include/kernel/chunk.h
+@@ -131,6 +131,9 @@ namespace eka2l1 {
+ 
+             void open_to(process *own) override;
+ 
++            // Phone Mode V10 RAMCODE: rebuild flexible shared-code page-table entries in-place.
++            bool refresh_mapping();
++
+             /*! \brief Get the base of the chunk. */
+             ptr<uint8_t> base(process *pr);
+ 
+diff --git a/src/emu/kernel/include/kernel/codeseg.h b/src/emu/kernel/include/kernel/codeseg.h
+index b450d13..145f27c 100644
+--- a/src/emu/kernel/include/kernel/codeseg.h
++++ b/src/emu/kernel/include/kernel/codeseg.h
+@@ -173,6 +173,8 @@ namespace eka2l1::kernel {
+ 
+         void calculate_hash();
+         void free_attached_data(attached_info &info);
++        void apply_relocations(std::uint8_t *code_base_ptr, std::uint8_t *data_base_ptr,
++            address code_run_addr, address data_run_addr, bool data_only);
+ 
+     public:
+         /*! \brief Create a new codeseg
+diff --git a/src/emu/kernel/src/chunk.cpp b/src/emu/kernel/src/chunk.cpp
+index 662b911..8b2be29 100644
+--- a/src/emu/kernel/src/chunk.cpp
++++ b/src/emu/kernel/src/chunk.cpp
+@@ -179,6 +179,10 @@ namespace eka2l1 {
+                 own->get_mem_model()->attach_chunk(mmc_impl_);
+         }
+ 
++        bool chunk::refresh_mapping() {
++            return mmc_impl_ && mmc_impl_->refresh_mapping();
++        }
++
+         ptr<uint8_t> chunk::base(process *pr) {
+             return mmc_impl_->base(pr ? pr->get_mem_model() : nullptr);
+         }
+diff --git a/src/emu/kernel/src/codedump_collector.cpp b/src/emu/kernel/src/codedump_collector.cpp
+index 2ae102f..26e876d 100644
+--- a/src/emu/kernel/src/codedump_collector.cpp
++++ b/src/emu/kernel/src/codedump_collector.cpp
+@@ -25,6 +25,13 @@
+ #include <common/algorithm.h>
+ 
+ namespace eka2l1::kernel {
++    // double_linked_queue_element::alone() is also true for the sole item in a
++    // roundabout queue (both neighbours are the sentinel).  The codedump
++    // collector needs membership, not "alone" semantics: deque() clears both
++    // pointers to nullptr, while a queued item always has non-null links.
++    static bool collector_linked(const common::double_linked_queue_element &link) {
++        return (link.next != nullptr) || (link.previous != nullptr);
++    }
+     codedump_collector::codedump_collector() {
+         
+     }
+@@ -35,7 +42,7 @@ namespace eka2l1::kernel {
+             info->parent_seg->dump_collected(info);
+         }
+ 
+-        if (!in_decease_list_.empty()) {
++        while (!in_decease_list_.empty()) {
+             kernel::codeseg *csg = E_LOFF(in_decease_list_.first()->deque(), kernel::codeseg, garbage_link);
+             csg->decrease_access_count();
+         }
+@@ -45,7 +52,7 @@ namespace eka2l1::kernel {
+     }
+ 
+     void codedump_collector::add(kernel::codeseg::attached_info &attach_info) {
+-        if (!attach_info.garbage_link.alone()) {
++        if (collector_linked(attach_info.garbage_link)) {
+             return;
+         }
+ 
+@@ -59,7 +66,7 @@ namespace eka2l1::kernel {
+     }
+ 
+     void codedump_collector::remove(kernel::codeseg::attached_info &attach_info) {
+-        if (attach_info.garbage_link.alone()) {
++        if (!collector_linked(attach_info.garbage_link)) {
+             return;
+         }
+ 
+@@ -70,7 +77,7 @@ namespace eka2l1::kernel {
+     }
+ 
+     void codedump_collector::add(kernel::codeseg *seg) {
+-        if (!seg->garbage_link.alone()) {
++        if (collector_linked(seg->garbage_link)) {
+             return;
+         }
+ 
+@@ -85,7 +92,7 @@ namespace eka2l1::kernel {
+     }
+ 
+     void codedump_collector::remove(kernel::codeseg *seg) {
+-        if (seg->garbage_link.alone()) {
++        if (!collector_linked(seg->garbage_link)) {
+             return;
+         }
+ 
+@@ -93,6 +100,9 @@ namespace eka2l1::kernel {
+ 
+         collected_memory_ -= seg->get_used_memory_size();
+         in_list_count_--;
++
++        // Balance the reference acquired by add(codeseg*).
++        seg->decrease_access_count();
+     }
+ 
+     void codedump_collector::cleanup(std::uint64_t upcoming_memory_size) {
+diff --git a/src/emu/kernel/src/codeseg.cpp b/src/emu/kernel/src/codeseg.cpp
+index 31bcc5f..7b1cf65 100644
+--- a/src/emu/kernel/src/codeseg.cpp
++++ b/src/emu/kernel/src/codeseg.cpp
+@@ -102,6 +102,77 @@ namespace eka2l1::kernel {
+         return true;
+     }
+ 
++    void codeseg::apply_relocations(std::uint8_t *code_base_ptr, std::uint8_t *data_base_ptr,
++        const address code_run_addr, const address data_run_addr, const bool data_only) {
++        const std::uint32_t code_delta = code_run_addr - code_base;
++        const std::uint32_t data_delta = data_run_addr - data_base;
++
++        for (const std::uint64_t relocate_info : relocation_list) {
++            const loader::relocation_type rel_type = static_cast<loader::relocation_type>((relocate_info >> 32) & 0xFFFF);
++            const loader::relocate_section sect_type = static_cast<loader::relocate_section>((relocate_info >> 48) & 0xFFFF);
++
++            if (data_only && (sect_type != loader::relocate_section_data)) {
++                continue;
++            }
++
++            const std::uint32_t offset_to_relocate = static_cast<std::uint32_t>(relocate_info);
++            std::uint8_t *base_ptr = nullptr;
++
++            switch (sect_type) {
++            case loader::relocate_section_text:
++                base_ptr = code_base_ptr;
++                break;
++
++            case loader::relocate_section_data:
++                base_ptr = data_base_ptr;
++                break;
++
++            default:
++                continue;
++            }
++
++            if (!base_ptr) {
++                LOG_ERROR(KERNEL, "Phone Mode V10 Codeseg: relocation section has no mapped base for {}", name());
++                continue;
++            }
++
++            address the_delta = 0;
++            switch (rel_type) {
++            case loader::relocation_type::data:
++                the_delta = data_delta;
++                break;
++
++            case loader::relocation_type::text:
++                the_delta = code_delta;
++                break;
++
++            case loader::relocation_type::inferred: {
++                const std::uint32_t val = *reinterpret_cast<std::uint32_t *>(&base_ptr[offset_to_relocate]);
++
++                if ((code_base <= val) && (val <= code_base + code_size)) {
++                    the_delta = code_delta;
++                } else if ((data_base <= val) && (val <= data_base + data_size + bss_size)) {
++                    the_delta = data_delta;
++                } else {
++                    LOG_ERROR(KERNEL, "Phone Mode V10 Codeseg: unable to infer relocation of value 0x{:X} in {}", val, name());
++                }
++
++                break;
++            }
++
++            case loader::relocation_type::reserved:
++                continue;
++
++            default:
++                LOG_ERROR(KERNEL, "Unknown code relocation type {}", static_cast<std::uint32_t>(rel_type));
++                break;
++            }
++
++            std::uint32_t *to_relocate_ptr = reinterpret_cast<std::uint32_t *>(&base_ptr[offset_to_relocate]);
++            *to_relocate_ptr += the_delta;
++        }
++    }
++
+     bool codeseg::attach(kernel::process *new_foe, const bool forcefully) {
+         if (!new_foe && !forcefully) {
+             return false;
+@@ -118,13 +189,12 @@ namespace eka2l1::kernel {
+                         // Clear setting flag from previous use
+                         att->get()->flags = 0;
+ 
+-                        if (!att->get()->garbage_link.alone()) {
+-                            kern->get_codedump_collector().remove(*(att->get()));
+-                        }
+-                        
+-                        if (!att->get()->closing_lib_link.alone()) {
+-                            att->get()->closing_lib_link.deque();
+-                        }
++                        // Phone Mode V10 Codeseg: resurrecting an attachment must cancel both
++                        // deferred destruction paths. remove() has a real membership check;
++                        // deque() is safe for an unqueued closing link and avoids alone(), which
++                        // is also true for the sole item in a roundabout queue.
++                        kern->get_codedump_collector().remove(*(att->get()));
++                        att->get()->closing_lib_link.deque();
+ 
+                         // Redo data and bss if it exists
+                         std::uint32_t add_offset = 0;
+@@ -140,6 +210,13 @@ namespace eka2l1::kernel {
+                         if (data_size != 0) {
+                             std::uint8_t *data_base_ptr = reinterpret_cast<std::uint8_t *>(att->get()->data_chunk->host_base()) + add_offset;
+                             std::copy(constant_data.get(), constant_data.get() + data_size, data_base_ptr); // .data
++
++                            // Phone Mode V10 Codeseg: constant_data is the link-time image.
++                            // A detach/reattach cycle must relocate restored .data again or
++                            // stale absolute pointers can jump into an unmapped old DLL base.
++                            const address data_run_addr = att->get()->data_chunk->base(new_foe).ptr_address() + add_offset;
++                            apply_relocations(nullptr, data_base_ptr, get_code_run_addr(new_foe), data_run_addr, true);
++                            LOG_TRACE(KERNEL, "Phone Mode V10 Codeseg: restored and relocated .data for {}", name());
+                         }
+                     }
+ 
+@@ -172,6 +249,32 @@ namespace eka2l1::kernel {
+         bool code_chunk_for_reuse = eligible_for_codeseg_reuse();
+         bool need_patch_and_reloc = true;
+ 
++        auto ensure_code_mapping = [&](chunk_ptr target, const address run_addr, const char *phase) -> bool {
++            if (!target || !run_addr) {
++                return false;
++            }
++
++            if (mem->get_real_pointer(run_addr)) {
++                return true;
++            }
++
++            LOG_WARN(KERNEL,
++                "Phone Mode V10 RAMCODE: missing code mapping for {} at 0x{:08X} during {}; refreshing shared chunk",
++                name(), run_addr, phase);
++
++            if (!target->refresh_mapping() || !mem->get_real_pointer(run_addr)) {
++                LOG_ERROR(KERNEL,
++                    "Phone Mode V10 RAMCODE: mapping repair FAILED for {} at 0x{:08X} during {}",
++                    name(), run_addr, phase);
++                return false;
++            }
++
++            LOG_INFO(KERNEL,
++                "Phone Mode V10 RAMCODE: mapping repair succeeded for {} at 0x{:08X} during {}",
++                name(), run_addr, phase);
++            return true;
++        };
++
+         unmark();
+         increase_access_count();
+ 
+@@ -183,6 +286,14 @@ namespace eka2l1::kernel {
+ 
+                 code_chunk->open_to(new_foe);
+                 the_addr_of_code_run = code_chunk->base(new_foe).ptr_address();
++
++                // Address-shared flexible-model code chunks do not create a per-process mapping on
++                // open_to(). Refresh the fixed kernel mapping before the new process can execute it.
++                code_chunk->refresh_mapping();
++                if (!ensure_code_mapping(code_chunk, the_addr_of_code_run, "reuse")) {
++                    decrease_access_count();
++                    return false;
++                }
+             } else {
+                 code_chunk = kern->create<kernel::chunk>(mem, code_chunk_for_reuse ? nullptr : new_foe, "", 0, code_size_align, code_size_align, prot_read_write_exec, kernel::chunk_type::normal,
+                     kernel::chunk_access::code, kernel::chunk_attrib::none);
+@@ -197,6 +308,14 @@ namespace eka2l1::kernel {
+                 code_base_ptr = reinterpret_cast<std::uint8_t *>(code_chunk->host_base());
+                 std::copy(code_data.get(), code_data.get() + code_size, code_base_ptr); // .code
+ 
++                // Validate the first executable page immediately. This both repairs an incomplete
++                // fixed mapping and gives the V10 log a definitive mapping-vs-loader signal.
++                code_chunk->refresh_mapping();
++                if (!ensure_code_mapping(code_chunk, the_addr_of_code_run, "create")) {
++                    decrease_access_count();
++                    return false;
++                }
++
+                 if (code_chunk_for_reuse) {
+                     code_chunk_shared = code_chunk;
+                 }
+@@ -253,9 +372,9 @@ namespace eka2l1::kernel {
+         LOG_INFO(KERNEL, "{} (UID3=0x{:X}) runtime data: 0x{:x}", name(), uids[2], the_addr_of_data_run);
+ 
+         if (attaches.empty()) {
+-            if (!garbage_link.alone()) {
+-                kern->get_codedump_collector().remove(this);
+-            }
++            // Phone Mode V10 Codeseg: remove() performs a real linked-state check and balances
++            // the collector reference. We already hold our new attach reference here.
++            kern->get_codedump_collector().remove(this);
+         }
+ 
+         attaches.emplace_back(std::make_unique<attached_info>(this, new_foe, dt_chunk, code_chunk));
+@@ -274,7 +393,10 @@ namespace eka2l1::kernel {
+ 
+                         const address addr = dependency.dep_->lookup(new_foe, ord);
+                         if (!addr) {
+-                            LOG_ERROR(KERNEL, "Invalid ordinal {}, requested from {}", ord, dependency.dep_->name());
++                            LOG_ERROR(KERNEL,
++                                "Phone Mode V10 Codeseg: invalid ordinal {} (of {}), requested from {} by {}, patched at code+0x{:X}",
++                                ord, dependency.dep_->get_export_table_raw().size(), dependency.dep_->name(),
++                                name(), offset_to_apply);
+                         }
+ 
+                         *reinterpret_cast<std::uint32_t *>(&code_base_ptr[offset_to_apply]) = addr + adj;
+@@ -283,71 +405,8 @@ namespace eka2l1::kernel {
+             }
+         }
+ 
+-        if (need_patch_and_reloc) {
+-            if (!relocation_list.empty()) {
+-                const std::uint32_t code_delta = the_addr_of_code_run - code_base;
+-                const std::uint32_t data_delta = the_addr_of_data_run - data_base;
+-
+-                // Relocate the image
+-                for (const std::uint64_t relocate_info : relocation_list) {
+-                    const loader::relocation_type rel_type = static_cast<loader::relocation_type>((relocate_info >> 32) & 0xFFFF);
+-                    const std::uint32_t offset_to_relocate = static_cast<std::uint32_t>(relocate_info);
+-
+-                    loader::relocate_section sect_type = static_cast<loader::relocate_section>((relocate_info >> 48) & 0xFFFF);
+-                    address the_delta = 0;
+-
+-                    std::uint8_t *base_ptr = nullptr;
+-
+-                    switch (sect_type) {
+-                    case loader::relocate_section_text:
+-                        base_ptr = code_base_ptr;
+-                        break;
+-
+-                    case loader::relocate_section_data:
+-                        base_ptr = data_base_ptr;
+-                        break;
+-
+-                    default:
+-                        break;
+-                    }
+-
+-                    std::uint32_t *to_relocate_ptr = reinterpret_cast<std::uint32_t *>(&base_ptr[offset_to_relocate]);
+-
+-                    switch (rel_type) {
+-                    case loader::relocation_type::data:
+-                        the_delta = data_delta;
+-                        break;
+-
+-                    case loader::relocation_type::text:
+-                        the_delta = code_delta;
+-                        break;
+-
+-                    case loader::relocation_type::inferred: {
+-                        // This one is harder
+-                        std::uint32_t val = *to_relocate_ptr;
+-
+-                        if ((code_base <= val) && (val <= code_base + code_size)) {
+-                            the_delta = code_delta;
+-                        } else if ((data_base <= val) && (val <= data_base + data_size + bss_size)) {
+-                            the_delta = data_delta;
+-                        } else {
+-                            LOG_ERROR(KERNEL, "Unable to infer the relocation type of offset 0x{:X}", val);
+-                        }
+-
+-                        break;
+-                    }
+-
+-                    case loader::relocation_type::reserved:
+-                        continue;
+-
+-                    default:
+-                        LOG_ERROR(KERNEL, "Unknown code relocation type {}", static_cast<std::uint32_t>(rel_type));
+-                        break;
+-                    }
+-
+-                    *to_relocate_ptr = *to_relocate_ptr + the_delta;
+-                }
+-            }
++        if (need_patch_and_reloc && !relocation_list.empty()) {
++            apply_relocations(code_base_ptr, data_base_ptr, the_addr_of_code_run, the_addr_of_data_run, false);
+         }
+ 
+         if (new_foe)
+@@ -385,6 +444,9 @@ namespace eka2l1::kernel {
+             kern->destroy(info.code_chunk);
+         }
+ 
++        // Phone Mode V10 Codeseg: unlink queued attach info before erasing it.
++        kern->get_codedump_collector().remove(info);
++
+         info.closing_lib_link.deque();
+         info.process_link.deque();
+ 
+@@ -516,8 +578,15 @@ namespace eka2l1::kernel {
+             return info->attached_process == foe;
+         });
+ 
+-        // if nothing in attach info, or it's in garbage link list, return as detached
+-        if (!attach_info || !attach_info->get()->garbage_link.alone()) {
++        // Phone Mode V10 Codeseg: alone() cannot be used as a queue-membership test:
++        // it is true both when unqueued (nullptr/nullptr) and when this is the sole
++        // element in a roundabout queue (sentinel/sentinel).
++        if (!attach_info) {
++            return codeseg_state_detached;
++        }
++
++        const auto &garbage_link = attach_info->get()->garbage_link;
++        if ((garbage_link.next != nullptr) || (garbage_link.previous != nullptr)) {
+             return codeseg_state_detached;
+         }
+ 
+diff --git a/src/emu/mem/include/mem/chunk.h b/src/emu/mem/include/mem/chunk.h
+index 3518e48..a0a3c72 100644
+--- a/src/emu/mem/include/mem/chunk.h
++++ b/src/emu/mem/include/mem/chunk.h
+@@ -84,6 +84,16 @@ namespace eka2l1::mem {
+ 
+         virtual void *host_base() = 0;
+ 
++        /**
++         * \brief Re-supply the backing pages to an existing virtual mapping.
++         *
++         * Most memory models do not need an explicit refresh, so the default is a no-op.
++         * The flexible model overrides this for address-shared RAM code chunks.
++         */
++        virtual bool refresh_mapping() {
++            return true;
++        }
++
+         /**
+          * \brief Unmap the committed chunk region from the CPU.
+          * 
+diff --git a/src/emu/mem/include/mem/model/flexible/chunk.h b/src/emu/mem/include/mem/model/flexible/chunk.h
+index f9f9302..ff718db 100644
+--- a/src/emu/mem/include/mem/model/flexible/chunk.h
++++ b/src/emu/mem/include/mem/model/flexible/chunk.h
+@@ -39,6 +39,11 @@ namespace eka2l1::mem::flexible {
+ 
+         flexible_mem_model_process *owner_;
+ 
++        // Phone Mode V12 RAMLIFE: processes that currently hold a non-shared mapping
++        // to this chunk. Their attach_info contains a raw pointer back to us, so a chunk
++        // must detach them before the chunk struct or memory_object disappears.
++        std::vector<flexible_mem_model_process *> attachers_;
++
+         std::unique_ptr<memory_object> mem_obj_;
+         std::unique_ptr<common::bitmap_allocator> page_bma_;
+ 
+@@ -46,6 +51,8 @@ namespace eka2l1::mem::flexible {
+         std::unique_ptr<mapping> fixed_mapping_;
+         bool is_addr_shared_;
+ 
++        void remove_attacher(flexible_mem_model_process *process);
++
+     public:
+         explicit flexible_mem_model_chunk(control_base *control, const asid id);
+         ~flexible_mem_model_chunk() override;
+@@ -53,6 +60,7 @@ namespace eka2l1::mem::flexible {
+         const vm_address base(mem_model_process *process) override;
+ 
+         void *host_base() override;
++        bool refresh_mapping() override;
+ 
+         const std::size_t committed() const override {
+             return committed_;
+diff --git a/src/emu/mem/include/mem/model/flexible/memobj.h b/src/emu/mem/include/mem/model/flexible/memobj.h
+index e5a66d4..1b756b7 100644
+--- a/src/emu/mem/include/mem/model/flexible/memobj.h
++++ b/src/emu/mem/include/mem/model/flexible/memobj.h
+@@ -74,6 +74,14 @@ namespace eka2l1::mem::flexible {
+          */
+         bool detach_mapping(mapping *layout);
+ 
++        /**
++         * @brief Re-supply all currently committed pages to an existing mapping.
++         *
++         * This is intentionally non-destructive: it does not recommit host memory, it only
++         * rebuilds page-table entries from page_array's authoritative commit/protection state.
++         */
++        bool refresh_mapping(mapping *layout);
++
+         /**
+          * @brief       Commit pages to the host.
+          * 
+diff --git a/src/emu/mem/src/mmu.cpp b/src/emu/mem/src/mmu.cpp
+index 3b75d96..57a9544 100644
+--- a/src/emu/mem/src/mmu.cpp
++++ b/src/emu/mem/src/mmu.cpp
+@@ -237,14 +237,18 @@ namespace eka2l1::mem {
+     }
+ 
+     bool mmu_base::read_code(const vm_address addr, std::uint32_t *data) {
+-        std::uint32_t *code = reinterpret_cast<std::uint32_t *>(manager_->get_host_pointer(
+-            current_addr_space(), addr));
+-
+-        if (!code) {
++        // Phone Mode V10 RAMCODE: use the same page_info path as data reads and seed the CPU TLB.
++        // This matches newer EKA2L1 behavior and keeps code fetches coherent after a mapping refresh.
++        page_info *inf = manager_->get_page_info(current_addr_space(), addr);
++        if (!inf || !inf->host_addr) {
+             return false;
+         }
+ 
+-        *data = *code;
++        *data = *reinterpret_cast<std::uint32_t *>(
++            reinterpret_cast<std::uint8_t *>(inf->host_addr) + (addr & manager_->offset_mask_));
++
++        cpu_->set_tlb_page(addr & ~manager_->offset_mask_, reinterpret_cast<std::uint8_t *>(inf->host_addr),
++            inf->perm);
+         return true;
+     }
+ }
+diff --git a/src/emu/mem/src/model/flexible/chunk.cpp b/src/emu/mem/src/model/flexible/chunk.cpp
+index 94a7c74..c04e2e7 100644
+--- a/src/emu/mem/src/model/flexible/chunk.cpp
++++ b/src/emu/mem/src/model/flexible/chunk.cpp
+@@ -33,10 +33,24 @@ namespace eka2l1::mem::flexible {
+         , committed_(0)
+         , flags_(0)
+         , fixed_addr_(0)
+-        , owner_(nullptr) {
++        , owner_(nullptr)
++        , is_addr_shared_(false) {
++    }
++
++    void flexible_mem_model_chunk::remove_attacher(flexible_mem_model_process *process) {
++        auto ite = std::find(attachers_.begin(), attachers_.end(), process);
++        if (ite != attachers_.end()) {
++            attachers_.erase(ite);
++        }
+     }
+ 
+     flexible_mem_model_chunk::~flexible_mem_model_chunk() {
++        // Phone Mode V12 RAMLIFE: a chunk can die while another process still has a
++        // non-shared mapping to it. Detach those mappings while mem_obj_ and this struct
++        // are still valid, otherwise their later teardown can unmap a newly reused range.
++        while (!attachers_.empty()) {
++            attachers_.back()->detach_chunk(this);
++        }
+         if (fixed_mapping_ && (flags_ & MEM_MODEL_CHUNK_REGION_USER_CODE)) {
+             control_flexible *control_mm = reinterpret_cast<control_flexible *>(control_);
+             for (auto &mmu : control_mm->mmus_) {
+@@ -45,14 +59,19 @@ namespace eka2l1::mem::flexible {
+             }
+         }
+ 
+-        // For an address-shared chunk, do_create() registers fixed_mapping_.get() in
+-        // mem_obj_->mappings_, and ~memory_object()->decommit() walks that list (dereferencing
+-        // mapping->owner_->id()). fixed_mapping_ is declared AFTER mem_obj_, so the implicit
+-        // member-destruction order would free it FIRST, leaving a dangling mapping in mappings_ →
+-        // crash in decommit. Destroy mem_obj_ now, while fixed_mapping_ is still alive, so the walk
+-        // is valid. (The shutting_down_ fast path in decommit skips the walk, which is why a full
+-        // Exit-Game teardown never hit this — only a process killed during normal play did.)
+-        mem_obj_.reset();
++        // Phone Mode V12 RAMLIFE: detach a shared fixed mapping before the virtual
++        // range can be returned to the allocator. This is stricter than resetting mem_obj_:
++        // it clears page tables/TLBs first, removes the mapping from memory_object::mappings_,
++        // then lets mapping::~mapping release the range. A late stale decommit must never erase
++        // a different code chunk that has already reused the same 0x7xxxxxxx address.
++        if (fixed_mapping_ && mem_obj_) {
++            if (flags_ & MEM_MODEL_CHUNK_REGION_USER_CODE) {
++                LOG_TRACE(MEMORY,
++                    "Phone Mode V12 RAMLIFE: retiring shared code mapping base=0x{:08X} size=0x{:X}",
++                    fixed_mapping_->base_, max_size_);
++            }
++            mem_obj_->detach_mapping(fixed_mapping_.get());
++        }
+     }
+ 
+     int flexible_mem_model_chunk::do_create(const mem_model_chunk_creation_info &create_info) {
+@@ -200,4 +219,26 @@ namespace eka2l1::mem::flexible {
+     void *flexible_mem_model_chunk::host_base() {
+         return mem_obj_->ptr();
+     }
++
++    bool flexible_mem_model_chunk::refresh_mapping() {
++        if (!is_addr_shared_ || !fixed_mapping_ || !mem_obj_) {
++            return true;
++        }
++
++        if (!mem_obj_->refresh_mapping(fixed_mapping_.get())) {
++            return false;
++        }
++
++        // A stale translated block/TLB entry must not survive the page-table repair.
++        if (flags_ & MEM_MODEL_CHUNK_REGION_USER_CODE) {
++            control_flexible *control_mm = reinterpret_cast<control_flexible *>(control_);
++            for (auto &mmu : control_mm->mmus_) {
++                mmu->cpu_->imb_range(fixed_mapping_->base_, max_size_);
++            }
++        }
++
++        LOG_TRACE(MEMORY, "Phone Mode V10 RAMCODE: refreshed shared mapping at 0x{:X} (0x{:X} bytes)",
++            fixed_mapping_->base_, max_size_);
++        return true;
++    }
+ }
+\ No newline at end of file
+diff --git a/src/emu/mem/src/model/flexible/control.cpp b/src/emu/mem/src/model/flexible/control.cpp
+index 7f4825d..3a5726a 100644
+--- a/src/emu/mem/src/model/flexible/control.cpp
++++ b/src/emu/mem/src/model/flexible/control.cpp
+@@ -36,8 +36,10 @@ namespace eka2l1::mem::flexible {
+     }
+ 
+     control_flexible::~control_flexible() {
+-        kern_addr_space_.reset();
++        // Phone Mode V12 RAMLIFE: shared chunk fixed mappings point into the kernel
++        // address space, so chunks must be destroyed while that address space is alive.
+         chunk_mngr_.reset();
++        kern_addr_space_.reset();
+     }
+ 
+     mmu_base *control_flexible::get_or_create_mmu(arm::core *cc) {
+diff --git a/src/emu/mem/src/model/flexible/mapping.cpp b/src/emu/mem/src/model/flexible/mapping.cpp
+index 1893517..6c2987d 100644
+--- a/src/emu/mem/src/model/flexible/mapping.cpp
++++ b/src/emu/mem/src/model/flexible/mapping.cpp
+@@ -29,6 +29,7 @@
+ namespace eka2l1::mem::flexible {
+     mapping::mapping(address_space *owner)
+         : owner_(owner)
++        , occupied_(0)
+         , region_flags_(0)
+         , off_start_in_page_quantity_(0) {
+     }
+diff --git a/src/emu/mem/src/model/flexible/memobj.cpp b/src/emu/mem/src/model/flexible/memobj.cpp
+index 300fac8..484b993 100644
+--- a/src/emu/mem/src/model/flexible/memobj.cpp
++++ b/src/emu/mem/src/model/flexible/memobj.cpp
+@@ -100,6 +100,23 @@ namespace eka2l1::mem::flexible {
+         const std::uint32_t start_offset = page_offset << control_->page_size_bits_;
+         const std::uint32_t size_to_decommit = static_cast<std::uint32_t>(total_pages << control_->page_size_bits_);
+ 
++        control_flexible *ctrl_fx = reinterpret_cast<control_flexible *>(control_);
++
++        // Phone Mode V12 RAMLIFE: clear all page-table mappings and every CPU TLB
++        // before the host backing becomes inaccessible. Invalidating only the current
++        // address space leaves shared RAM-code translations alive on another core.
++        for (auto &mapping : mappings_) {
++            if (!mapping->unmap(page_offset, total_pages)) {
++                LOG_WARN(MEMORY, "Unable to unmap decommitted memory from a mapping!");
++            }
++
++            for (auto &mm : ctrl_fx->mmus_) {
++                mm->unmap_from_cpu(mapping->base_ + start_offset, size_to_decommit);
++            }
++        }
++
++        page_arr_.alter(page_offset, static_cast<std::uint32_t>(total_pages), prot_none, true);
++
+         if (!external_) {
+             const bool deresult = common::decommit(reinterpret_cast<std::uint8_t *>(data_) + start_offset,
+                 size_to_decommit);
+@@ -109,30 +126,7 @@ namespace eka2l1::mem::flexible {
+             }
+         }
+ 
+-        control_flexible *ctrl_fx = reinterpret_cast<control_flexible *>(control_);
+-
+-        // Unmap decomitted memory from all mappings. Skipped during a full kernel teardown: by then
+-        // a process that attached a mapping here may already be gone, so mapping->owner_ would be a
+-        // dangling address_space and mapping->unmap()/owner_->id() would dereference freed memory
+-        // (the shutdown crash on flexible-model devices, e.g. the Nokia N8). The CPU + address
+-        // spaces are being destroyed anyway, so there is nothing meaningful left to unmap.
+-        if (!control_->shutting_down_) {
+-            for (auto &mapping : mappings_) {
+-                if (!mapping->unmap(page_offset, total_pages)) {
+-                    LOG_WARN(MEMORY, "Unable to unmap decommitted memory from a mapping!");
+-                }
+ 
+-                for (auto &mm : ctrl_fx->mmus_) {
+-                    if (mapping->owner_->id() == mm->current_addr_space()) {
+-                        // Unmap from to CPU right away
+-                        mm->unmap_from_cpu(mapping->base_ + start_offset, size_to_decommit);
+-                        break;
+-                    }
+-                }
+-            }
+-        }
+-
+-        page_arr_.alter(page_offset, static_cast<std::uint32_t>(total_pages), prot_none, true);
+         return true;
+     }
+ 
+@@ -153,7 +147,34 @@ namespace eka2l1::mem::flexible {
+             return false;
+         }
+ 
++        // Phone Mode V12 RAMLIFE: erase is not enough. Clear this virtual mapping
++        // first so its page-table entries cannot survive after the backing/range is reused.
++        if (!layout->unmap(0, layout->occupied_)) {
++            LOG_WARN(MEMORY, "Unable to unmap detached memory mapping!");
++        }
++
++        control_flexible *ctrl_fx = reinterpret_cast<control_flexible *>(control_);
++        const std::size_t mapping_size = layout->occupied_ << control_->page_size_bits_;
++        for (auto &mm : ctrl_fx->mmus_) {
++            mm->unmap_from_cpu(layout->base_, mapping_size);
++        }
++
+         mappings_.erase(ite);
+         return true;
+     }
++
++    bool memory_object::refresh_mapping(mapping *layout) {
++        if (!layout) {
++            return false;
++        }
++
++        // Phone Mode V10 RAMCODE: the page array records which pages are actually committed.
++        // Re-supplying it repairs page-table host pointers without reallocating/re-copying code.
++        if (std::find(mappings_.begin(), mappings_.end(), layout) == mappings_.end()) {
++            mappings_.push_back(layout);
++        }
++
++        page_arr_.supply_mapping(this, layout);
++        return true;
++    }
+ }
+\ No newline at end of file
+diff --git a/src/emu/mem/src/model/flexible/pagearray.cpp b/src/emu/mem/src/model/flexible/pagearray.cpp
+index c8b323c..9c905cc 100644
+--- a/src/emu/mem/src/model/flexible/pagearray.cpp
++++ b/src/emu/mem/src/model/flexible/pagearray.cpp
+@@ -108,7 +108,7 @@ namespace eka2l1::mem::flexible {
+             }
+         }
+ 
+-        delete segments_;
++        delete[] segments_;
+     }
+ 
+     void page_array::alter(const std::uint32_t index, const std::uint32_t count, const prot perm, const bool is_clear) {
+diff --git a/src/emu/mem/src/model/flexible/process.cpp b/src/emu/mem/src/model/flexible/process.cpp
+index b5f7658..5ee5e58 100644
+--- a/src/emu/mem/src/model/flexible/process.cpp
++++ b/src/emu/mem/src/model/flexible/process.cpp
+@@ -117,6 +117,7 @@ namespace eka2l1::mem::flexible {
+ 
+         // Ok nice nice nice. Add this to list of attachment
+         attachs_.push_back(std::move(attach_info));
++        fl_chunk->attachers_.push_back(this);
+ 
+         return true;
+     }
+@@ -145,31 +146,30 @@ namespace eka2l1::mem::flexible {
+         fl_chunk->mem_obj_->detach_mapping(chunk_ite->map_.get());
+ 
+         attachs_.erase(chunk_ite);
++        fl_chunk->remove_attacher(this);
+         return true;
+     }
+ 
+     flexible_mem_model_process::~flexible_mem_model_process() {
+-        // During a full kernel teardown (kernel_system::wipeout — e.g. Exit Game / device switch /
+-        // app exit on iOS), the kernel destroys chunks_ BEFORE processes_, so by the time this
+-        // process destructor runs the chunks it attached — and their memory objects — have already
+-        // been freed. Dereferencing attach.chunk_->mem_obj_ would then touch freed memory
+-        // (detach_mapping on a dangling memory_object → the shutdown crash on flexible-model
+-        // devices, e.g. exiting Angry Birds on the Nokia N8), and chunk_mngr_->destroy would run on
+-        // a dangling chunk. The chunk_manager owns every chunk via unique_ptr and frees them all
+-        // when it is destroyed (right after wipeout, in ~system_impl's mem_.reset()), so there is
+-        // nothing to do here during shutdown. Mirrors the shutting_down_ guard in
+-        // memory_object::decommit. (The multiple memory model has no such teardown access, which is
+-        // why only flexible-model devices crashed.)
+-        if (control_->shutting_down_) {
+-            return;
+-        }
+-
++        // Phone Mode V12 RAMLIFE: attachment is mapping lifetime, not ownership.
++        // Tear the mapping down before releasing the chunk range and do not destroy a
++        // chunk that another process still maps. This mirrors newer flexible-model code.
+         control_flexible *fl_control = reinterpret_cast<control_flexible *>(control_);
+ 
+         for (auto &attach: attachs_) {
+-            attach.chunk_->mem_obj_->detach_mapping(attach.map_.get());
+-            fl_control->chunk_mngr_->destroy(reinterpret_cast<flexible_mem_model_chunk *>(attach.chunk_));
++            flexible_mem_model_chunk *chunk = reinterpret_cast<flexible_mem_model_chunk *>(attach.chunk_);
++
++            chunk->mem_obj_->detach_mapping(attach.map_.get());
++            chunk->remove_attacher(this);
++
++            if (chunk->attachers_.empty()) {
++                fl_control->chunk_mngr_->destroy(chunk);
++            } else if (chunk->owner_ == this) {
++                chunk->owner_ = nullptr;
++            }
+         }
++
++        attachs_.clear();
+     }
+ 
+     static bool should_do_cpu_manipulate(const std::uint32_t flags) {
+diff --git a/src/emu/services/include/services/fbs/bitmap.h b/src/emu/services/include/services/fbs/bitmap.h
+index 7d5d987..75c0e98 100644
+--- a/src/emu/services/include/services/fbs/bitmap.h
++++ b/src/emu/services/include/services/fbs/bitmap.h
+@@ -46,6 +46,24 @@ namespace eka2l1::epoc {
+ 
+     static const std::size_t SUPPORTED_REV2_UID_COUNT = sizeof(SUPPORTED_REV2_UIDS) / sizeof(std::uint32_t);
+ 
++
++    // Phone Mode V10: emulate the CFbsRasterizer path used by S60/Avkon when
++    // BitGDI reads an NVG extended bitmap produced by AknIconSrv.
++    static constexpr std::size_t NVG_RASTERIZE_MAX_BYTES = 4 * 1024 * 1024;
++
++    static inline bool is_nvg_bitmap_rasterizable(const eka2l1::vec2 &size, const display_mode dpm) {
++        if ((size.x <= 0) || (size.y <= 0)) {
++            return false;
++        }
++
++        const int bpp = get_bpp_from_display_mode(dpm);
++        if ((bpp != 8) && (bpp != 16) && (bpp != 24) && (bpp != 32)) {
++            return false;
++        }
++
++        return (get_byte_width(size.x, bpp) * static_cast<std::size_t>(size.y)) <= NVG_RASTERIZE_MAX_BYTES;
++    }
++
+     enum bitmap_file_compression {
+         bitmap_file_no_compression = 0,
+         bitmap_file_byte_rle_compression = 1,
+diff --git a/src/emu/services/include/services/fbs/fbs.h b/src/emu/services/include/services/fbs/fbs.h
+index 4fd6f12..ddf6408 100644
+--- a/src/emu/services/include/services/fbs/fbs.h
++++ b/src/emu/services/include/services/fbs/fbs.h
+@@ -415,6 +415,14 @@ namespace eka2l1 {
+         fbsbitmap *create_bitmap(fbs_bitmap_data_info &info, const bool alloc_data = true, const bool support_current_display_mod_flag = true,
+             const bool support_dirty = true);
+ 
++
++        /**
++         * Phone Mode V10: rasterize an AknIconSrv NVG extended bitmap in-place.
++         * This stands in for the phone ROM's CFbsRasterizer so guest BitGDI sees
++         * real pixels rather than compressed NVG commands.
++         */
++        bool rasterize_nvg_bitmap(fbsbitmap *bmp);
++
+         /**
+          * \brief   Free a bitmap object.
+          * 
+diff --git a/src/emu/services/include/services/window/classes/gstore.h b/src/emu/services/include/services/window/classes/gstore.h
+index b463f8b..634ddad 100644
+--- a/src/emu/services/include/services/window/classes/gstore.h
++++ b/src/emu/services/include/services/window/classes/gstore.h
+@@ -49,6 +49,23 @@ namespace eka2l1::epoc {
+         gdi_store_command_update_texture
+     };
+ 
++    // Phone Mode V11 WINDOW: only actual drawing commands count as new content.
++    // Clipping/state-only commands cannot reconstruct pixels after a server clear.
++    static inline bool gdi_store_command_draws_pixels(const gdi_store_command_opcode opcode) {
++        switch (opcode) {
++        case gdi_store_command_draw_rect:
++        case gdi_store_command_draw_line:
++        case gdi_store_command_draw_polygon:
++        case gdi_store_command_draw_bitmap:
++        case gdi_store_command_draw_text:
++        case gdi_store_command_update_texture:
++            return true;
++
++        default:
++            return false;
++        }
++    }
++
+     struct gdi_store_command_draw_rect_data {
+         eka2l1::vec4 color_;
+         eka2l1::rect rect_;
+diff --git a/src/emu/services/src/fbs/impls/bitmap.cpp b/src/emu/services/src/fbs/impls/bitmap.cpp
+index b183f21..b9190e4 100644
+--- a/src/emu/services/src/fbs/impls/bitmap.cpp
++++ b/src/emu/services/src/fbs/impls/bitmap.cpp
+@@ -36,10 +36,17 @@
+ #include <kernel/kernel.h>
+ #include <system/epoc.h>
+ #include <utils/err.h>
++#include <utils/guest/akn.h>
+ #include <vfs/vfs.h>
+ 
++#include <common/buffer.h>
++#include <loader/nvg.h>
++#include <lunasvg.h>
++
+ #include <algorithm>
+ #include <cassert>
++#include <cstring>
++#include <vector>
+ 
+ namespace eka2l1 {
+     static epoc::bitmap_color get_bitmap_color_type_from_display_mode(const epoc::display_mode bpp) {
+@@ -536,6 +543,11 @@ namespace eka2l1 {
+ 
+         bmp = get_clean_bitmap(bmp);
+ 
++        // Phone Mode V10: a second client is picking up an immutable extended
++        // bitmap. On a real phone CFbsRasterizer turns NVG into pixels here;
++        // without it guest BitGDI copies compressed NVG bytes as pixel data.
++        server<fbs_server>()->rasterize_nvg_bitmap(bmp);
++
+         const std::uint32_t handle_ret = obj_table_.add(bmp);
+         const std::uint32_t server_handle = bmp->id;
+         const std::uint32_t off = server<fbs_server>()->host_ptr_to_guest_shared_offset(bmp->bitmap_);
+@@ -742,6 +754,135 @@ namespace eka2l1 {
+         return epoc::get_byte_width(size.x, epoc::get_bpp_from_display_mode(bpp)) * size.y;
+     }
+ 
++
++    bool fbs_server::rasterize_nvg_bitmap(fbsbitmap *bmp) {
++        if (!bmp || !bmp->bitmap_ || (bmp->bitmap_->uid_ != epoc::NVG_BITMAP_UID_REV2)) {
++            return false;
++        }
++
++        epoc::bitwise_bitmap *bws = bmp->bitmap_;
++        std::uint8_t *data = reinterpret_cast<std::uint8_t *>(bws->data_pointer(this));
++        if (!data) {
++            return false;
++        }
++
++        const int width = bws->header_.size_pixels.x;
++        const int height = bws->header_.size_pixels.y;
++        const epoc::display_mode dpm = bws->settings_.current_display_mode();
++
++        if (!epoc::is_nvg_bitmap_rasterizable(bws->header_.size_pixels, dpm)) {
++            return false;
++        }
++
++        const std::size_t raster_bytes = calculate_aligned_bitmap_bytes(bws->header_.size_pixels, dpm);
++        const std::uint32_t header_len = bws->header_.header_len;
++        if (bws->header_.bitmap_size < header_len) {
++            return false;
++        }
++
++        const std::uint32_t available = bws->header_.bitmap_size - header_len;
++        if ((raster_bytes == 0) || (available < raster_bytes) || (available < sizeof(utils::akn_icon_header))) {
++            return false;
++        }
++
++        utils::akn_icon_header *icon_header = reinterpret_cast<utils::akn_icon_header *>(data);
++        if ((icon_header->header_size_ < sizeof(utils::akn_icon_header)) || (icon_header->header_size_ >= available)) {
++            LOG_WARN(SERVICE_FBS, "Phone Mode V10 FBS: invalid Akn icon header while rasterizing NVG");
++            return false;
++        }
++
++        const std::uint8_t *nvg_data = data + icon_header->header_size_;
++        const std::uint32_t nvg_size = available - icon_header->header_size_;
++        const bool is_mask = icon_header->is_mask_;
++
++        std::vector<std::uint8_t> rgba(static_cast<std::size_t>(width) * height * 4, 0);
++
++        if (!is_mask && (icon_header->icon_color_ & 0xFFFFFF)) {
++            // Some colour planes are supplied as a forced tint while the paired mask
++            // carries the shape. Match the existing Window Server NVG path.
++            const std::uint32_t colour = static_cast<std::uint32_t>(icon_header->icon_color_);
++            for (std::size_t i = 0; i < rgba.size(); i += 4) {
++                rgba[i + 0] = static_cast<std::uint8_t>((colour >> 16) & 0xFF);
++                rgba[i + 1] = static_cast<std::uint8_t>((colour >> 8) & 0xFF);
++                rgba[i + 2] = static_cast<std::uint8_t>(colour & 0xFF);
++                rgba[i + 3] = 0xFF;
++            }
++        } else {
++            common::ro_buf_stream nvg_in(const_cast<std::uint8_t *>(nvg_data), nvg_size);
++            common::wo_growable_buf_stream svg_out;
++            std::vector<loader::nvg_convert_error_description> errors;
++
++            loader::nvg_options opts;
++            opts.width = width;
++            opts.height = height;
++            opts.aspect_ratio_mode_ = static_cast<loader::nvg_aspect_ratio_mode>(icon_header->aspect_ratio_);
++
++            if (!loader::convert_nvg_to_svg(nvg_in, svg_out, errors, &opts)) {
++                LOG_WARN(SERVICE_FBS, "Phone Mode V10 FBS: NVG to SVG conversion failed");
++                return false;
++            }
++
++            auto doc = lunasvg::Document::loadFromData(svg_out.content());
++            if (!doc) {
++                LOG_WARN(SERVICE_FBS, "Phone Mode V10 FBS: LunaSVG could not parse converted NVG");
++                return false;
++            }
++
++            lunasvg::Bitmap luna(rgba.data(), width, height, width * 4);
++            doc->render(luna, lunasvg::Matrix{ 1, 0, 0, 1, 0, 0 });
++            luna.convertToRGBA();
++        }
++
++        const int bpp = epoc::get_bpp_from_display_mode(dpm);
++        const int byte_width = bws->byte_width_;
++        std::memset(data, 0, raster_bytes);
++
++        for (int y = 0; y < height; y++) {
++            for (int x = 0; x < width; x++) {
++                const std::uint8_t *src = rgba.data() + (static_cast<std::size_t>(y) * width + x) * 4;
++                std::uint8_t *dst = data + static_cast<std::size_t>(y) * byte_width;
++
++                switch (bpp) {
++                case 8:
++                    // For EGray256 masks the rendered coverage belongs in the byte.
++                    dst[x] = epoc::is_display_mode_mono(dpm) ? src[3] : src[0];
++                    break;
++
++                case 16: {
++                    const std::uint16_t px = static_cast<std::uint16_t>(((src[0] >> 3) << 11)
++                        | ((src[1] >> 2) << 5) | (src[2] >> 3));
++                    *reinterpret_cast<std::uint16_t *>(dst + x * 2) = px;
++                    break;
++                }
++
++                case 24:
++                    dst[x * 3 + 0] = src[2];
++                    dst[x * 3 + 1] = src[1];
++                    dst[x * 3 + 2] = src[0];
++                    break;
++
++                case 32:
++                    dst[x * 4 + 0] = src[2];
++                    dst[x * 4 + 1] = src[1];
++                    dst[x * 4 + 2] = src[0];
++                    dst[x * 4 + 3] = epoc::is_display_mode_alpha(dpm) ? src[3] : 0xFF;
++                    break;
++
++                default:
++                    return false;
++                }
++            }
++        }
++
++        bws->header_.bitmap_size = static_cast<std::uint32_t>(raster_bytes) + header_len;
++        bws->header_.compression = epoc::bitmap_file_no_compression;
++        bws->compressed_in_ram_ = false;
++        bws->uid_ = epoc::BITWISE_BITMAP_UID;
++
++        LOG_INFO(SERVICE_FBS, "Phone Mode V10 FBS: rasterized NVG bitmap {}x{} bpp {}", width, height, bpp);
++        return true;
++    }
++
+     static std::uint32_t calculate_reserved_each_side(const std::uint32_t height) {
+         // Reserve some space in left and right. Observed shows some apps outwrite their
+         // available data region, a little bit, hopefully.
+@@ -928,6 +1069,15 @@ namespace eka2l1 {
+ 
+         fbs_server *fbss = server<fbs_server>();
+ 
++        // Phone Mode V10: AknIconSrv initially asks for only enough bytes to hold
++        // compressed NVG. Reserve the larger raster form now so the emulated
++        // CFbsRasterizer can expand it in-place later.
++        const std::uint32_t vector_size = force_size;
++        if ((assign_uid == epoc::NVG_BITMAP_UID_REV2) && epoc::is_nvg_bitmap_rasterizable(specs.size, specs.bpp)) {
++            force_size = common::max(force_size,
++                static_cast<std::uint32_t>(calculate_aligned_bitmap_bytes(specs.size, specs.bpp)));
++        }
++
+         fbs_bitmap_data_info info;
+         info.size_ = specs.size;
+         info.dpm_ = specs.bpp;
+@@ -940,6 +1090,12 @@ namespace eka2l1 {
+             return;
+         }
+ 
++        if ((force_size > vector_size) && bmp->bitmap_) {
++            if (std::uint8_t *data = reinterpret_cast<std::uint8_t *>(bmp->bitmap_->data_pointer(fbss))) {
++                std::memset(data + vector_size, 0, force_size - vector_size);
++            }
++        }
++
+         if (use_bmp_handles_writeback) {
+             // For maximum compability, in normal situation even if the app requested special bitmap type through UID
+             // We still assign standard bitmap type UID to the bitmap
+diff --git a/src/emu/services/src/window/classes/winuser.cpp b/src/emu/services/src/window/classes/winuser.cpp
+index 4a00dea..73348b4 100644
+--- a/src/emu/services/src/window/classes/winuser.cpp
++++ b/src/emu/services/src/window/classes/winuser.cpp
+@@ -434,20 +434,15 @@ namespace eka2l1::epoc {
+             epoc::animation_scheduler *sched = client->get_ws().get_anim_scheduler();
+             ntimer *timing = client->get_ws().get_ntimer();
+ 
+-            // Limit the framerate, independent from screen vsync
++            // Phone Mode V11 WINDOW: pace every client update to the next shared
++            // frame boundary. This prevents an idle Avkon window from publishing
++            // a half-constructed frame before its final draw commands arrive.
+             const std::uint64_t crr = timing->microseconds();
+             const std::uint64_t time_spend_per_frame_us = 1000000 / scr->refresh_rate;
+-
+-            std::uint64_t wait_time = 0;
+-
+-            if (crr < time_spend_per_frame_us + last_draw_) {
+-                // Originally - (crr - last_draw_), but preventing overflow
+-                wait_time = time_spend_per_frame_us + last_draw_ - crr;
+-            } else {
+-                wait_time = 0;
+-            }
+-
+-            last_draw_ = ((crr + time_spend_per_frame_us - 1) / time_spend_per_frame_us) * time_spend_per_frame_us;
++            const std::uint64_t next_frame_boundary = ((crr + time_spend_per_frame_us)
++                / time_spend_per_frame_us) * time_spend_per_frame_us;
++            const std::uint64_t wait_time = next_frame_boundary - crr;
++            last_draw_ = next_frame_boundary;
+ 
+             if (crr - last_fps_sync_ >= common::microsecs_per_sec) {
+                 scr->last_fps = fps_count_;
+@@ -458,11 +453,26 @@ namespace eka2l1::epoc {
+ 
+             fps_count_++;
+ 
+-            // We need a redraw from the client side, so set this
+-            scr->set_client_draw_pending();
++            // A partial client redraw cannot safely overwrite a window that is
++            // occluded by another Avkon pane. Ask the server to composite the
++            // complete tree back-to-front instead.
++            bool fully_visible = false;
++            if (!visible_region.empty()) {
++                if (flags & flag_shape_region) {
++                    fully_visible = visible_region.identical(shape_region);
++                } else {
++                    fully_visible = (visible_region.rects_.size() == 1)
++                        && (visible_region.rects_[0] == bounding_rect());
++                }
++            }
++
++            if (!visible_region.empty() && !fully_visible) {
++                scr->flags_ |= screen::FLAG_SERVER_REDRAW_PENDING;
++            }
+ 
++            scr->set_client_draw_pending();
+             sched->schedule(client->get_ws().get_graphics_driver(), scr, crr + wait_time);
+-            
++
+             if (drawer) {
+                 drawer->sleep(static_cast<std::uint32_t>(wait_time));
+             }
+@@ -979,6 +989,12 @@ namespace eka2l1::epoc {
+                 invalidate(new_bounding_rect);
+             } else {
+                 redraw_region.clip(new_bounding_rect);
++
++                if (redraw_region.rects_.empty()) {
++                    // Phone Mode V11 WINDOW: do not keep stale redraw requests for
++                    // a region that disappeared after the Home/Menu window resized.
++                    client->remove_redraws(this);
++                }
+             }
+ 
+             if (scr->is_screenplay_architecture() || (!scr->scr_config.blt_offscreen && scr->scr_config.flicker_free)) {
+@@ -1041,6 +1057,10 @@ namespace eka2l1::epoc {
+         redraw_segments_.promote_last_segment();
+ 
+         if (content_changed()) {
++            // Phone Mode V11 WINDOW: replay the finished client store through a
++            // complete server recomposite so the Home/Menu pane is restored in
++            // the correct z-order instead of being left blank after a clear.
++            scr->flags_ |= screen::FLAG_SERVER_REDRAW_PENDING;
+             try_update(ctx.msg->own_thr);
+         }
+ 
+@@ -1110,6 +1130,7 @@ namespace eka2l1::epoc {
+     void redraw_msg_canvas::add_draw_command(gdi_store_command &command) {
+         const std::lock_guard<std::mutex> guard(scr->screen_mutex);
+ 
++        bool created_non_redraw_segment = false;
+         if ((flags & flags_in_redraw) == 0) {
+             eka2l1::rect full_size_rect(eka2l1::vec2(0, 0), abs_rect.size);
+ 
+@@ -1124,14 +1145,24 @@ namespace eka2l1::epoc {
+             if (!current_segment || (current_segment->type_ != gdi_store_command_segment_non_redraw)) {
+                 // Create a new non redraw segment, covers the entire screen
+                 redraw_segments_.add_new_segment(full_size_rect, gdi_store_command_segment_non_redraw);
++                created_non_redraw_segment = true;
+             }
+         }
+ 
+-        content_changed(true);
++        // Phone Mode V11 WINDOW: clipping/state commands do not draw pixels.
++        // Treating them as content causes the server to clear the target and then
++        // replay a store that cannot put the previous Home/Menu pixels back.
++        if (gdi_store_command_draws_pixels(command.opcode_)) {
++            content_changed(true);
++        }
+ 
+         gdi_store_command_segment *current_segment = redraw_segments_.get_current_segment();
+         current_segment->add_command(command);
+ 
++        if (created_non_redraw_segment || (flags & flags_enable_alpha)) {
++            scr->flags_ |= screen::FLAG_SERVER_REDRAW_PENDING;
++        }
++
+         canvas_base::add_draw_command(command);
+     }
+ 
+@@ -1297,6 +1328,14 @@ namespace eka2l1::epoc {
+             store_draw_commands(ctx, cmd);
+             break;
+ 
++        case EWsWinOpEnableBackup:
++            // RM-612 Avkon requests this on redraw windows. The current WSERV
++            // implementation stores redraw commands already, so acknowledge the
++            // compatibility request instead of treating it as an unknown opcode.
++            LOG_TRACE(SERVICE_WINDOW, "Phone Mode V11 WINDOW: acknowledged EnableBackup on redraw window {}", id);
++            ctx.complete(epoc::error_none);
++            break;
++
+         default:
+             LOG_WARN(SERVICE_WINDOW, "Unimplemented redraw canvas opcode 0x{:X}!", cmd.header.op);
+             ctx.complete(epoc::error_none);
+@@ -1635,8 +1674,17 @@ namespace eka2l1::epoc {
+             ctx.complete(epoc::error_none);
+             break;
+ 
++        case EWsWinOpEnableBackup:
++            // This window is already bitmap-backed. Match newer WSERV behaviour
++            // and acknowledge the synchronous request.
++            ctx.complete(epoc::error_none);
++            break;
++
+         default:
+-            LOG_ERROR(SERVICE_WINDOW, "Unimplemented bitmap backed canavas opcode 0x{:X}!", cmd.header.op);
++            LOG_ERROR(SERVICE_WINDOW, "Phone Mode V11 WINDOW: unimplemented bitmap backed canvas opcode 0x{:X}!", cmd.header.op);
++            // Never leave a synchronous WSERV SendReceive hanging: a blocked
++            // Avkon UI thread looks exactly like a blank Home/Menu client area.
++            ctx.complete(epoc::error_none);
+             break;
+         }
+ 
+diff --git a/src/emu/services/src/window/screen.cpp b/src/emu/services/src/window/screen.cpp
+index 3073095..c5a9088 100644
+--- a/src/emu/services/src/window/screen.cpp
++++ b/src/emu/services/src/window/screen.cpp
+@@ -180,6 +180,9 @@ namespace eka2l1::epoc {
+         builder.set_feature(eka2l1::drivers::graphics_feature::depth_test, false);
+         builder.set_feature(eka2l1::drivers::graphics_feature::blend, false);
+         builder.set_feature(eka2l1::drivers::graphics_feature::clipping, false);
++        // Phone Mode V11 WINDOW: stale stencil state from a previous client must
++        // not clip the server's Home/Menu recomposite.
++        builder.set_feature(eka2l1::drivers::graphics_feature::stencil_test, false);
+ 
+         builder.clear(eka2l1::vecx<float, 6>({ 0.0, 0.0, 0.0, 0.0, 1.0, 0.0 }), drivers::draw_buffer_bit_depth_buffer
+             | drivers::draw_buffer_bit_stencil_buffer | ((flags_ & FLAG_SERVER_REDRAW_PENDING) ? drivers::draw_buffer_bit_color_buffer : 0));
+@@ -192,7 +195,9 @@ namespace eka2l1::epoc {
+         // We dont care about visible regions. Nowadays, detect visible region to reduce pixel plotting is
+         // just not really worth the time, since GPU draws so fast. Symbian code still has it though.
+         window_drawer_walker adrawwalker(builder);
+-        root->walk_tree(&adrawwalker, window_tree_walk_style::bonjour_children);
++        // Phone Mode V11 WINDOW: composite in actual z-order. The old recursive
++        // child order could repaint a background pane over matrixmenu/Home.
++        root->walk_tree_back_to_front(&adrawwalker);
+ 
+         // Done! Unbind and submit this to the driver
+         builder.bind_bitmap(0);
+@@ -257,8 +262,12 @@ namespace eka2l1::epoc {
+         eka2l1::vec2 screen_size_scaled = current_mode().size * display_scale_factor;
+ 
+         if (!screen_texture) {
+-            // Create new one!
++            // Phone Mode V11 WINDOW: a new GPU bitmap has undefined pixels. Force
++            // a color clear and complete server recomposite before presenting it.
+             screen_texture = drivers::create_bitmap(driver, screen_size_scaled, 32);
++            flags_ |= FLAG_SERVER_REDRAW_PENDING;
++            LOG_TRACE(SERVICE_WINDOW, "Phone Mode V11 WINDOW: created screen texture {}x{} and forced full redraw",
++                screen_size_scaled.x, screen_size_scaled.y);
+         } else {
+             builder.bind_bitmap(screen_texture);
+             builder.resize_bitmap(screen_texture, screen_size_scaled);
+diff --git a/src/emu/services/src/window/window.cpp b/src/emu/services/src/window/window.cpp
+index b5aa6ae..fceda4a 100644
+--- a/src/emu/services/src/window/window.cpp
++++ b/src/emu/services/src/window/window.cpp
+@@ -2300,9 +2300,9 @@ namespace eka2l1 {
+     std::uint32_t window_server::get_total_window_groups(const int pri, const int scr_num) {
+         epoc::screen *scr = get_screen(scr_num);
+ 
+-        if (!scr) {
+-            LOG_TRACE(SERVICE_WINDOW, "Screen number {} doesnt exist", scr_num);
+-            return false;
++        if (!scr || !scr->root || !scr->root->child) {
++            LOG_TRACE(SERVICE_WINDOW, "Phone Mode V10: screen {} has no window-group tree yet", scr_num);
++            return 0;
+         }
+ 
+         bool hit_priority = false;
+@@ -2317,8 +2317,8 @@ namespace eka2l1 {
+     std::uint32_t window_server::get_window_group_list(std::uint32_t *ids, const std::uint32_t max, const int pri, const int scr_num) {
+         epoc::screen *scr = get_screen(scr_num);
+ 
+-        if (!scr) {
+-            LOG_TRACE(SERVICE_WINDOW, "Screen number {} doesnt exist", scr_num);
++        if (!scr || !scr->root || !scr->root->child) {
++            LOG_TRACE(SERVICE_WINDOW, "Phone Mode V10: screen {} has no window-group tree yet", scr_num);
+             return 0;
+         }
+ 
+@@ -2331,9 +2331,9 @@ namespace eka2l1 {
+     std::uint32_t window_server::get_window_group_list_and_chain(epoc::window_group_chain_info *infos, const std::uint32_t max, const int pri, const int scr_num) {
+         epoc::screen *scr = get_screen(scr_num);
+ 
+-        if (!scr) {
+-            LOG_TRACE(SERVICE_WINDOW, "Screen number {} doesnt exist", scr_num);
+-            return false;
++        if (!scr || !scr->root || !scr->root->child) {
++            LOG_TRACE(SERVICE_WINDOW, "Phone Mode V10: screen {} has no window-group tree yet", scr_num);
++            return 0;
+         }
+ 
+         window_group_tree_moonwalker walker(scr, infos, window_group_tree_moonwalker::FLAGS_GET_CHAIN, pri, max);
