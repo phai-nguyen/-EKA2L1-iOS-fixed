@@ -111,7 +111,7 @@ namespace eka2l1::ios {
         std::vector<std::string> get_all_apps();
         app_icon get_app_icon(std::uint32_t uid);
         void launch_app(std::uint32_t uid);
-        // Phone Mode V9 Codeseg: reproduce the important RM-612 Starter UI-service bootstrap.
+        // Phone Mode V10 RAMCODE: reproduce the important RM-612 Starter UI-service bootstrap.
         // It starts the firmware's Z:\\sys\\bin service executables directly and uses
         // AppArc only as a fallback. Returns the number already running or started.
         int prepare_system_ui_services();
