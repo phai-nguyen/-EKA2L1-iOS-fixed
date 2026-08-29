@@ -1,0 +1,450 @@
+name: Build EKA2L1 iOS Phone Mode V15 Shared Bridge Vietnamese IPA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-ipa:
+    runs-on: macos-15
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout patch repository
+        uses: actions/checkout@v4
+
+      - name: Clone pinned EKA2L1 iOS fork with submodules
+        run: |
+          set -euo pipefail
+          UPSTREAM_COMMIT="661031f9d8ccd37612797e32a52b2d4c6aadfcdc"
+          git clone https://github.com/MuhannadYT/EKA2L1_IOS.git upstream
+          git -C upstream checkout --detach "$UPSTREAM_COMMIT"
+          git -C upstream submodule sync --recursive
+          git -C upstream submodule update --init --recursive
+          ACTUAL_COMMIT="$(git -C upstream rev-parse HEAD)"
+          test "$ACTUAL_COMMIT" = "$UPSTREAM_COMMIT"
+          echo "Pinned upstream commit: $ACTUAL_COMMIT"
+
+      - name: Verify V15 Shared Bridge + Vietnamese UI synchronized files
+        run: |
+          set -euo pipefail
+
+          # V15-VI UI file must be the exact synchronized file.
+          for f in RootViewController.mm launcher.h launcher.cpp emu_bridge.h emu_bridge.mm; do
+            if [ ! -s "patches/$f" ]; then
+              echo "::error::Missing patches/$f" >&2
+              exit 1
+            fi
+          done
+
+          ROOT_V15_VI_SHA="$(shasum -a 256 patches/RootViewController.mm | awk '{print $1}')"
+          echo "Detected RootViewController.mm SHA256: $ROOT_V15_VI_SHA"
+          if [ "$ROOT_V15_VI_SHA" != '2a0603ccc5a45ba4b56b06cec935bee609d93347ea19c3a5bdff2ae0ad59fd5c' ]; then
+            echo "::error::Wrong/stale RootViewController.mm. Expected 2a0603ccc5a45ba4b56b06cec935bee609d93347ea19c3a5bdff2ae0ad59fd5c, got $ROOT_V15_VI_SHA" >&2
+            exit 1
+          fi
+          grep -Fq 'EKA2L1 V15 VI: Vietnamese UI active' patches/RootViewController.mm || {
+            echo "::error::V15 Vietnamese marker missing from RootViewController.mm" >&2
+            exit 1
+          }
+          grep -Fq 'EKAAppLanguageModeV15VI' patches/RootViewController.mm || {
+            echo "::error::V15 Vietnamese language setting key missing" >&2
+            exit 1
+          }
+          if grep -Fq 'EKA2L1 V16 UI/DEVICE' patches/RootViewController.mm || \
+             grep -Fq 'Device Catalog' patches/RootViewController.mm || \
+             grep -Fq 'Nokia C6-00 (RM-612)' patches/RootViewController.mm; then
+            echo "::error::V16 Device Manager code is still present in RootViewController.mm" >&2
+            exit 1
+          fi
+          echo "Verified V15 Vietnamese RootViewController SHA256: $ROOT_V15_VI_SHA"
+          test -s core-patches/phone-v11-core.patch
+          test -s core-patches/phone-v12-core.patch
+          test -s core-patches/phone-v13-owner-generation.patch
+          test -s core-patches/phone-v14-core.patch
+          grep -q 'rasterize_nvg_bitmap' core-patches/phone-v11-core.patch
+          grep -q 'NVG_BITMAP_UID_REV2' core-patches/phone-v11-core.patch
+          grep -q 'collector_linked' core-patches/phone-v11-core.patch
+          grep -q 'apply_relocations' core-patches/phone-v11-core.patch
+          grep -q 'restored and relocated .data' core-patches/phone-v11-core.patch
+          grep -q 'invalid ordinal' core-patches/phone-v11-core.patch
+          grep -q 'refresh_mapping' core-patches/phone-v11-core.patch
+          grep -q 'Phone Mode V10 RAMCODE: mapping repair succeeded' core-patches/phone-v11-core.patch
+          grep -q 'page_info path as data reads' core-patches/phone-v11-core.patch
+          grep -q 'Phone Mode V11 WINDOW' core-patches/phone-v11-core.patch
+          grep -q 'Phone Mode V12 RAMLIFE' core-patches/phone-v12-core.patch
+          grep -q 'LATE REPAIR SUCCEEDED' core-patches/phone-v12-core.patch
+          grep -q 'decommit-unmap' core-patches/phone-v12-core.patch
+          grep -q 'detach mapping' core-patches/phone-v12-core.patch
+          grep -q '0x78C00000' core-patches/phone-v12-core.patch
+          grep -q '0x7A700000' core-patches/phone-v12-core.patch
+          grep -q '0x7B500000' core-patches/phone-v12-core.patch
+          grep -q '0x7CC00000' core-patches/phone-v12-core.patch
+          # Compile-safety: fmt rejects non-void pointers such as std::uint8_t*.
+          grep -Fq 'static_cast<const void *>(reinterpret_cast<std::uint8_t *>(data_) + start_offset)' core-patches/phone-v12-core.patch
+          V12_SHA="$(shasum -a 256 core-patches/phone-v12-core.patch | awk '{print $1}')"
+          test "$V12_SHA" = 'd31f36db9042675d5e63a756a19998d44bbcecf6fbe3f25776ea13ba68335c0a'
+          echo "Verified V12 RAMLIFE compile-safe patch SHA256: $V12_SHA"
+          grep -q 'STALE UNMAP BLOCKED' core-patches/phone-v13-owner-generation.patch
+          grep -q 'STALE DEALLOC BLOCKED' core-patches/phone-v13-owner-generation.patch
+          grep -q 'OWNER MISMATCH' core-patches/phone-v13-owner-generation.patch
+          grep -q 'mapping_generation_seed' core-patches/phone-v13-owner-generation.patch
+          grep -q 'runtime_mapping_matches' core-patches/phone-v13-owner-generation.patch
+          # V13 is pinned to upstream 661031f9...; reject the known-bad patch variant early.
+          grep -Fq '@@ -82,8 +142,36 @@ namespace eka2l1::mem::flexible {' core-patches/phone-v13-owner-generation.patch
+          grep -Fq -- '-                        // Empty it out' core-patches/phone-v13-owner-generation.patch
+          grep -Fq 'static_cast<const void *>(starting_point_host)' core-patches/phone-v13-owner-generation.patch
+          grep -Fq 'static_cast<const void *>(info->host_addr)' core-patches/phone-v13-owner-generation.patch
+          V13_SHA="$(shasum -a 256 core-patches/phone-v13-owner-generation.patch | awk '{print $1}')"
+          test "$V13_SHA" = '7cac4fb175c30ca7f5c3fe37b108dce3671ad0dbd52513d36139e28a3be9bd8d'
+          echo "Verified corrected V13 patch SHA256: $V13_SHA"
+          grep -Fq 'Phone Mode V14 CPUFETCH: manager-path MISS' core-patches/phone-v14-core.patch
+          grep -Fq 'Phone Mode V14 CPUFETCH: manager-path HIT' core-patches/phone-v14-core.patch
+          grep -Fq 'manager_->get_host_pointer' core-patches/phone-v14-core.patch
+          V14_SHA="$(shasum -a 256 core-patches/phone-v14-core.patch | awk '{print $1}')"
+          test "$V14_SHA" = '04df34e0501b36481821b69419c1852cf2405969ca5b6f128e6913279568fc0a'
+          echo "Verified V14 CPUFETCH patch SHA256: $V14_SHA"
+          if [ ! -s core-patches/phone-v15-core.patch ]; then
+            echo "::error::Missing core-patches/phone-v15-core.patch" >&2
+            exit 1
+          fi
+          V15_SHA="$(shasum -a 256 core-patches/phone-v15-core.patch | awk '{print $1}')"
+          echo "Detected V15 core patch SHA256: $V15_SHA"
+          if [ "$V15_SHA" != '59d2904d4a21969f7afd9e16d580bffc1570ab36fbd01b69d8dcf7767298b69b' ]; then
+            echo "::error::Wrong/stale phone-v15-core.patch. Expected 59d2904d4a21969f7afd9e16d580bffc1570ab36fbd01b69d8dcf7767298b69b, got $V15_SHA" >&2
+            exit 1
+          fi
+          if ! grep -Fq 'Phone Mode V15 SHARED-BRIDGE: RECOVERED current-AS miss' core-patches/phone-v15-core.patch; then
+            echo "::error::V15 core patch is missing RECOVERED marker" >&2
+            exit 1
+          fi
+          if ! grep -Fq 'Phone Mode V15 SHARED-BRIDGE: GLOBAL MISS' core-patches/phone-v15-core.patch; then
+            echo "::error::V15 core patch is missing GLOBAL MISS marker" >&2
+            exit 1
+          fi
+          if ! grep -Fq 'manager_->get_host_pointer(-1, addr)' core-patches/phone-v15-core.patch; then
+            echo "::error::V15 core patch is stale: compile-fix get_host_pointer(-1, addr) not found" >&2
+            exit 1
+          fi
+          if grep -Fq 'manager_->get_real_pointer(addr)' core-patches/phone-v15-core.patch; then
+            echo "::error::V15 core patch is the old non-compiling get_real_pointer variant" >&2
+            exit 1
+          fi
+          echo "Verified V15 SHARED-BRIDGE compile-fixed patch SHA256: $V15_SHA"
+          grep -q 'gdi_store_command_draws_pixels' core-patches/phone-v11-core.patch
+          grep -q 'walk_tree_back_to_front' core-patches/phone-v11-core.patch
+          grep -q 'acknowledged EnableBackup' core-patches/phone-v11-core.patch
+          grep -q 'screen {} has no window-group tree yet' core-patches/phone-v11-core.patch
+          grep -q 'get_all_apps' patches/RootViewController.mm
+          grep -q 'get_all_apps' patches/launcher.h
+          grep -q 'launcher::get_all_apps' patches/launcher.cpp
+          grep -q 'get_all_apps' patches/emu_bridge.h
+          grep -q 'get_all_apps' patches/emu_bridge.mm
+          grep -q 'launch_system_ui' patches/launcher.cpp
+          grep -q 'launch_system_ui' patches/emu_bridge.mm
+          grep -q 'prepare_system_ui_services' patches/launcher.h
+          grep -q 'launcher::prepare_system_ui_services' patches/launcher.cpp
+          grep -q 'prepare_system_ui_services' patches/emu_bridge.h
+          grep -q 'prepare_system_ui_services' patches/emu_bridge.mm
+          grep -q 'AknIconSrv' patches/launcher.cpp
+          grep -q 'spawn_new_process' patches/launcher.cpp
+          grep -q 'starter_ui_seq' README.md || true
+          grep -q 'akncapserver.exe' patches/launcher.cpp
+          grep -q 'aknskinsrv.exe' patches/launcher.cpp
+          echo "V12 + V13 + V14 + V15 core patches and V15 Vietnamese UI files verified."
+
+      - name: Install V15 Vietnamese UI plus inherited iOS Phone Mode patches
+        run: |
+          set -euo pipefail
+          cp patches/RootViewController.mm upstream/src/emu/ios/app/RootViewController.mm
+          cp patches/launcher.h           upstream/src/emu/ios/include/ios/launcher.h
+          cp patches/launcher.cpp         upstream/src/emu/ios/src/launcher.cpp
+          cp patches/emu_bridge.h         upstream/src/emu/ios/include/ios/emu_bridge.h
+          cp patches/emu_bridge.mm        upstream/src/emu/ios/src/emu_bridge.mm
+
+          # Fail early if a wrong path was used or the API did not land in compiled sources.
+          grep -q 'get_all_apps' upstream/src/emu/ios/include/ios/launcher.h
+          grep -q 'launcher::get_all_apps' upstream/src/emu/ios/src/launcher.cpp
+          grep -q 'get_all_apps' upstream/src/emu/ios/include/ios/emu_bridge.h
+          grep -q 'get_all_apps' upstream/src/emu/ios/src/emu_bridge.mm
+          grep -q 'bridge::get_all_apps' upstream/src/emu/ios/app/RootViewController.mm
+          grep -q 'launch_system_ui' upstream/src/emu/ios/include/ios/launcher.h
+          grep -q 'launcher::launch_system_ui' upstream/src/emu/ios/src/launcher.cpp
+          grep -q 'launch_system_ui' upstream/src/emu/ios/include/ios/emu_bridge.h
+          grep -q 'launch_system_ui' upstream/src/emu/ios/src/emu_bridge.mm
+          grep -q 'prepare_system_ui_services' upstream/src/emu/ios/include/ios/launcher.h
+          grep -q 'launcher::prepare_system_ui_services' upstream/src/emu/ios/src/launcher.cpp
+          grep -q 'prepare_system_ui_services' upstream/src/emu/ios/include/ios/emu_bridge.h
+          grep -q 'prepare_system_ui_services' upstream/src/emu/ios/src/emu_bridge.mm
+          grep -Fq 'EKA2L1 V15 VI: Vietnamese UI active' upstream/src/emu/ios/app/RootViewController.mm
+          grep -Fq 'EKAAppLanguageModeV15VI' upstream/src/emu/ios/app/RootViewController.mm
+          if grep -Fq 'Device Catalog' upstream/src/emu/ios/app/RootViewController.mm; then
+            echo "V15-VI install verification failed: V16 Device Catalog still present" >&2
+            exit 1
+          fi
+          echo "V15 Vietnamese UI and inherited iOS Phone Mode files installed into compiled source tree."
+
+      - name: Apply V11 + V12 + V13 + V14 + V15 SHARED-BRIDGE deltas
+        run: |
+          set -euo pipefail
+          BASE_PATCH="$GITHUB_WORKSPACE/core-patches/phone-v11-core.patch"
+          V12_PATCH="$GITHUB_WORKSPACE/core-patches/phone-v12-core.patch"
+          V13_PATCH="$GITHUB_WORKSPACE/core-patches/phone-v13-owner-generation.patch"
+          V14_PATCH="$GITHUB_WORKSPACE/core-patches/phone-v14-core.patch"
+          V15_PATCH="$GITHUB_WORKSPACE/core-patches/phone-v15-core.patch"
+
+          echo "Upstream commit: $(git -C upstream rev-parse HEAD)"
+          shasum -a 256 "$BASE_PATCH" "$V12_PATCH" "$V13_PATCH" "$V14_PATCH" "$V15_PATCH"
+
+          git -C upstream apply --check "$BASE_PATCH"
+          git -C upstream apply "$BASE_PATCH"
+
+          # V12 was authored as a delta on top of V11, but several @@ line-number
+          # headers drifted while V11 evolved and V11 also leaves two files without
+          # a final newline. Apply V12 by its STRICT CODE-LINE CONTEXT instead of trusting
+          # those line numbers. Non-blank code must match exactly; blank-line count/trailing whitespace may differ.
+          python3 "$GITHUB_WORKSPACE/.github/scripts/apply_patch_context.py" \
+            --root "$GITHUB_WORKSPACE/upstream" \
+            --patch "$V12_PATCH"
+          git -C upstream diff --check
+
+          grep -Fq 'Phone Mode V12 RAMLIFE: LATE REPAIR SUCCEEDED' upstream/src/emu/kernel/src/codeseg.cpp
+          grep -Fq 'Phone Mode V12 RAMLIFE: decommit-unmap' upstream/src/emu/mem/src/model/flexible/memobj.cpp
+          grep -Fq 'static_cast<const void *>(reinterpret_cast<std::uint8_t *>(data_) + start_offset)' upstream/src/emu/mem/src/model/flexible/memobj.cpp
+          grep -Fq 'Phone Mode V12 RAMLIFE: detach shared mapping before chunk destroy' upstream/src/emu/mem/src/model/flexible/chunk.cpp
+
+          python3 "$GITHUB_WORKSPACE/.github/scripts/apply_patch_context.py" \
+            --root "$GITHUB_WORKSPACE/upstream" \
+            --patch "$V13_PATCH"
+          git -C upstream diff --check
+
+          grep -Fq 'Phone Mode V10 FBS: rasterized NVG bitmap' upstream/src/emu/services/src/fbs/impls/bitmap.cpp
+          grep -Fq 'Phone Mode V11 WINDOW: acknowledged EnableBackup' upstream/src/emu/services/src/window/classes/winuser.cpp
+          grep -Fq 'bool codeseg::ensure_runtime_code_mapping' upstream/src/emu/kernel/src/codeseg.cpp
+          grep -Fq 'Phone Mode V12 RAMLIFE: LATE REPAIR SUCCEEDED' upstream/src/emu/kernel/src/codeseg.cpp
+          grep -Fq 'Phone Mode V12 RAMLIFE: decommit-unmap' upstream/src/emu/mem/src/model/flexible/memobj.cpp
+          grep -Fq 'Phone Mode V12 RAMLIFE: detach mapping' upstream/src/emu/mem/src/model/flexible/memobj.cpp
+          grep -Fq 'Phone Mode V12 RAMLIFE: detach shared mapping before chunk destroy' upstream/src/emu/mem/src/model/flexible/chunk.cpp
+          grep -Fq 'Phone Mode V13 OWNERGEN: STALE UNMAP BLOCKED' upstream/src/emu/mem/src/model/flexible/mapping.cpp
+          grep -Fq 'Phone Mode V13 OWNERGEN: STALE DEALLOC BLOCKED' upstream/src/emu/mem/src/model/flexible/mapping.cpp
+          grep -Fq 'Phone Mode V13 OWNERGEN: OWNER MISMATCH' upstream/src/emu/kernel/src/codeseg.cpp
+          grep -Fq 'mapping_generation_seed' upstream/src/emu/mem/src/model/flexible/mapping.cpp
+          grep -Fq 'runtime_mapping_matches' upstream/src/emu/mem/src/model/flexible/chunk.cpp
+
+          # V14 removes the V10 direct page_info instruction-fetch shim and restores
+          # memory_manager::get_host_pointer(), which preserves the manager's normal
+          # address-space/global shared mapping resolution behavior.
+          python3 "$GITHUB_WORKSPACE/.github/scripts/apply_patch_context.py" \
+            --root "$GITHUB_WORKSPACE/upstream" \
+            --patch "$V14_PATCH"
+          git -C upstream diff --check
+
+          grep -Fq 'Phone Mode V14 CPUFETCH: manager-path MISS' upstream/src/emu/mem/src/mmu.cpp
+          grep -Fq 'Phone Mode V14 CPUFETCH: manager-path HIT' upstream/src/emu/mem/src/mmu.cpp
+          grep -Fq 'manager_->get_host_pointer(' upstream/src/emu/mem/src/mmu.cpp
+          if grep -Fq 'Phone Mode V10 RAMCODE: use the same page_info path as data reads' upstream/src/emu/mem/src/mmu.cpp; then
+            echo "V14 verification failed: V10 direct page_info code-fetch shim is still present" >&2
+            exit 1
+          fi
+
+          # V15 keeps current-address-space lookup authoritative for normal memory.
+          # Only the four V14-proven shared RAM-code windows may use the global
+          # get_real_pointer() resolver after a current-AS miss.
+          python3 "$GITHUB_WORKSPACE/.github/scripts/apply_patch_context.py" \
+            --root "$GITHUB_WORKSPACE/upstream" \
+            --patch "$V15_PATCH"
+          git -C upstream diff --check
+
+          grep -Fq 'Phone Mode V15 SHARED-BRIDGE: RECOVERED current-AS miss' upstream/src/emu/mem/src/mmu.cpp
+          grep -Fq 'Phone Mode V15 SHARED-BRIDGE: GLOBAL MISS' upstream/src/emu/mem/src/mmu.cpp
+          grep -Fq 'manager_->get_host_pointer(-1, addr)' upstream/src/emu/mem/src/mmu.cpp
+          grep -Fq 'watched_slot = 0' upstream/src/emu/mem/src/mmu.cpp
+          grep -Fq 'watched_slot = 3' upstream/src/emu/mem/src/mmu.cpp
+          echo "V11 base + V12 RAMLIFE + V13 OWNERGEN + V14 CPUFETCH + V15 SHARED-BRIDGE deltas applied."
+
+      - name: Verify V15 SHARED-BRIDGE and inherited V3-V14 fixes in source
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          grep -Fq 'Phone Mode V10: screen {} has no window-group tree yet' src/emu/services/src/window/window.cpp
+          grep -Fq 'collector_linked' src/emu/kernel/src/codedump_collector.cpp
+          grep -Fq 'while (!in_decease_list_.empty())' src/emu/kernel/src/codedump_collector.cpp
+          grep -Fq 'get_codedump_collector().remove(info)' src/emu/kernel/src/codeseg.cpp
+          grep -Fq 'void codeseg::apply_relocations' src/emu/kernel/src/codeseg.cpp
+          grep -Fq 'apply_relocations(nullptr, data_base_ptr' src/emu/kernel/src/codeseg.cpp
+          grep -Fq 'closing_lib_link.deque()' src/emu/kernel/src/codeseg.cpp
+          grep -Fq 'garbage_link.next != nullptr' src/emu/kernel/src/codeseg.cpp
+          if grep -Eq 'garbage_link\.alone\(\)|closing_lib_link\.alone\(\)' src/emu/kernel/src/codeseg.cpp; then
+            echo "V11 verification failed: alone() is still used as codeseg queue membership" >&2
+            exit 1
+          fi
+          grep -Fq 'std::try_to_lock' src/emu/ios/src/emu_bridge.mm
+          grep -Fq 'virtual bool refresh_mapping()' src/emu/mem/include/mem/chunk.h
+          grep -Fq 'Phone Mode V14 CPUFETCH: manager-path MISS' src/emu/mem/src/mmu.cpp
+          grep -Fq 'Phone Mode V14 CPUFETCH: manager-path HIT' src/emu/mem/src/mmu.cpp
+          grep -Fq 'Phone Mode V15 SHARED-BRIDGE: RECOVERED current-AS miss' src/emu/mem/src/mmu.cpp
+          grep -Fq 'Phone Mode V15 SHARED-BRIDGE: GLOBAL MISS' src/emu/mem/src/mmu.cpp
+          grep -Fq 'Phone Mode V15 SHARED-BRIDGE: current-AS HIT' src/emu/mem/src/mmu.cpp
+          grep -Fq 'manager_->get_host_pointer(-1, addr)' src/emu/mem/src/mmu.cpp
+          grep -Fq 'manager_->get_host_pointer(' src/emu/mem/src/mmu.cpp
+          if grep -Fq 'Phone Mode V10 RAMCODE: use the same page_info path as data reads' src/emu/mem/src/mmu.cpp; then
+            echo "V14 source verification failed: stale V10 read_code shim present" >&2
+            exit 1
+          fi
+          grep -Fq 'gdi_store_command_draws_pixels' src/emu/services/include/services/window/classes/gstore.h
+          grep -Fq 'FLAG_SERVER_REDRAW_PENDING' src/emu/services/src/window/classes/winuser.cpp
+          grep -Fq 'root->walk_tree_back_to_front(&adrawwalker)' src/emu/services/src/window/screen.cpp
+          grep -Fq 'stencil_test, false' src/emu/services/src/window/screen.cpp
+          grep -Fq 'EKA2L1_TakeThis.log' src/emu/ios/app/RootViewController.mm
+          grep -Fq 'EKA2L1 V15 VI: Vietnamese UI active' src/emu/ios/app/RootViewController.mm
+          grep -Fq 'EKAAppLanguageModeV15VI' src/emu/ios/app/RootViewController.mm
+          grep -Fq 'Ngôn ngữ ứng dụng' src/emu/ios/app/RootViewController.mm
+          if grep -Fq 'EKA2L1 V16 UI/DEVICE' src/emu/ios/app/RootViewController.mm || \
+             grep -Fq 'Device Catalog' src/emu/ios/app/RootViewController.mm; then
+            echo "V15-VI source verification failed: V16 UI/Device code found" >&2
+            exit 1
+          fi
+          grep -Fq 'Phone Mode V13 OWNERGEN: STALE UNMAP BLOCKED' src/emu/mem/src/model/flexible/mapping.cpp
+          grep -Fq 'Phone Mode V13 OWNERGEN: STALE DEALLOC BLOCKED' src/emu/mem/src/model/flexible/mapping.cpp
+          grep -Fq 'Phone Mode V13 OWNERGEN: OWNER MISMATCH' src/emu/kernel/src/codeseg.cpp
+          grep -Fq 'runtime_mapping_matches' src/emu/mem/src/model/flexible/chunk.cpp
+          echo "Phone Mode V15 SHARED-BRIDGE + Vietnamese UI verified; V16 Device Manager absent."
+
+      - name: Apply upstream iOS submodule patches
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          P="$PWD/.github/ios-build/patches"
+          if [ -d "$P" ]; then
+            git -C src/external/cubeb                     apply "$P/cubeb.patch"  || true
+            git -C src/external/fmt                       apply "$P/fmt.patch"    || true
+            git -C src/external/ffmpeg                    apply "$P/ffmpeg.patch" || true
+            git -C src/external/dynarmic/externals/oaknut apply "$P/oaknut.patch" || true
+            if [ -f .github/ios-build/ffmpeg/build-ios-device.sh ]; then
+              cp .github/ios-build/ffmpeg/build-ios-device.sh src/external/ffmpeg/
+              chmod +x src/external/ffmpeg/build-ios-device.sh
+            fi
+          fi
+
+      - name: Select newest installed Xcode
+        run: |
+          set -euo pipefail
+          XC=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1 || true)
+          [ -n "$XC" ] || XC=/Applications/Xcode.app
+          sudo xcode-select -s "$XC/Contents/Developer"
+          echo "DEVELOPER_DIR=$XC/Contents/Developer" >> "$GITHUB_ENV"
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Install Ninja
+        run: brew install ninja
+
+      - name: Install CMake 3.31.6
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/cmake.tar.gz" \
+            https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-macos-universal.tar.gz
+          tar xzf "$RUNNER_TEMP/cmake.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/cmake-3.31.6-macos-universal/CMake.app/Contents/bin" >> "$GITHUB_PATH"
+
+      - name: Build FFmpeg for iPhone if needed
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          if [ ! -f src/external/ffmpeg/macos/arm64-device/lib/libavcodec.a ]; then
+            chmod +x src/external/ffmpeg/build-ios-device.sh
+            (cd src/external/ffmpeg && ./build-ios-device.sh)
+          else
+            echo "Using prebuilt FFmpeg device libraries."
+          fi
+
+      - name: Configure iPhone arm64 build
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          cmake -S . -B build-ios-device -G Ninja \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_SYSROOT=iphoneos \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+      - name: Build EKA2L1 Phone Mode V15 Shared Bridge Vietnamese app
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          cmake --build build-ios-device --target eka2l1 -j"$(sysctl -n hw.logicalcpu)"
+
+      - name: Verify built app and Phone Mode strings
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          APP="build-ios-device/src/emu/ios/eka2l1.app"
+          BIN="$APP/eka2l1"
+          test -d "$APP"
+          test -f "$BIN"
+          file "$BIN"
+
+          # Write strings once to a file. This avoids SIGPIPE / "failed to flush output"
+          # from `strings | grep -q` when pipefail is enabled.
+          /usr/bin/strings "$BIN" > "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+
+          grep -Fq 'Phone Mode unavailable' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'Back to Manager' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'Home Screen' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'Phone Mode V11 WINDOW' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'AknIconSrv' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'starting raw system process' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'RM-612' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'Phone Mode V10 FBS: rasterized NVG bitmap' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'Phone Mode V10 Codeseg: restored and relocated .data' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'Phone Mode V10 Codeseg: invalid ordinal' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'Phone Mode V10: screen {} has no window-group tree yet' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'Phone Mode V11 WINDOW: acknowledged EnableBackup' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'Phone Mode V11 WINDOW: created screen texture' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'Phone Mode V11 WINDOW: unimplemented bitmap backed canvas opcode' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'Phone Mode V12 RAMLIFE: LATE REPAIR SUCCEEDED' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'Phone Mode V12 RAMLIFE: decommit-unmap' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'Phone Mode V12 RAMLIFE: detach mapping' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'Phone Mode V13 OWNERGEN: STALE UNMAP BLOCKED' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'Phone Mode V13 OWNERGEN: STALE DEALLOC BLOCKED' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'Phone Mode V13 OWNERGEN: OWNER MISMATCH' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'Phone Mode V14 CPUFETCH: manager-path MISS' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'Phone Mode V14 CPUFETCH: manager-path HIT' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'Phone Mode V15 SHARED-BRIDGE: RECOVERED current-AS miss' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'Phone Mode V15 SHARED-BRIDGE: GLOBAL MISS' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'Phone Mode V15 SHARED-BRIDGE: current-AS HIT' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'EKA2L1 V15 VI: Vietnamese UI active' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'EKAAppLanguageModeV15VI' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'Tiếng Việt' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          if grep -Fq 'EKA2L1 V16 UI/DEVICE' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"; then
+            echo "Final binary contains V16 UI/Device marker unexpectedly" >&2
+            exit 1
+          fi
+          grep -Fq 'NVG to SVG conversion failed' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+          grep -Fq 'prepared' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+
+          echo "Phone Mode V15 SHARED-BRIDGE markers and inherited Phone Mode paths found in final arm64 binary."
+
+      - name: Package unsigned IPA
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          APP="build-ios-device/src/emu/ios/eka2l1.app"
+          rm -rf ipa-stage
+          rm -f EKA2L1-iOS-PhoneMode-V15-VI-unsigned.ipa
+          mkdir -p ipa-stage/Payload
+          cp -R "$APP" ipa-stage/Payload/EKA2L1.app
+          rm -rf ipa-stage/Payload/EKA2L1.app/_CodeSignature
+          (cd ipa-stage && /usr/bin/zip -qry ../EKA2L1-iOS-PhoneMode-V15-VI-unsigned.ipa Payload)
+          ls -lh EKA2L1-iOS-PhoneMode-V15-VI-unsigned.ipa
+
+      - name: Upload Phone Mode V15 Vietnamese IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EKA2L1-iOS-PhoneMode-V15-VI-IPA
+          path: upstream/EKA2L1-iOS-PhoneMode-V15-VI-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
