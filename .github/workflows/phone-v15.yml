@@ -82,9 +82,9 @@ jobs:
           test -s core-patches/phone-v15-core.patch
           grep -Fq 'Phone Mode V15 SHARED-BRIDGE: RECOVERED current-AS miss' core-patches/phone-v15-core.patch
           grep -Fq 'Phone Mode V15 SHARED-BRIDGE: GLOBAL MISS' core-patches/phone-v15-core.patch
-          grep -Fq 'manager_->get_real_pointer(addr)' core-patches/phone-v15-core.patch
+          grep -Fq 'manager_->get_host_pointer(-1, addr)' core-patches/phone-v15-core.patch
           V15_SHA="$(shasum -a 256 core-patches/phone-v15-core.patch | awk '{print $1}')"
-          test "$V15_SHA" = '46d5b0b7bbd71f212f186e323a66e695b60ef26f0d30ba2e95d9beb0fed002a8'
+          test "$V15_SHA" = '59d2904d4a21969f7afd9e16d580bffc1570ab36fbd01b69d8dcf7767298b69b'
           echo "Verified V15 SHARED-BRIDGE patch SHA256: $V15_SHA"
           grep -q 'gdi_store_command_draws_pixels' core-patches/phone-v11-core.patch
           grep -q 'walk_tree_back_to_front' core-patches/phone-v11-core.patch
@@ -206,7 +206,7 @@ jobs:
 
           grep -Fq 'Phone Mode V15 SHARED-BRIDGE: RECOVERED current-AS miss' upstream/src/emu/mem/src/mmu.cpp
           grep -Fq 'Phone Mode V15 SHARED-BRIDGE: GLOBAL MISS' upstream/src/emu/mem/src/mmu.cpp
-          grep -Fq 'manager_->get_real_pointer(addr)' upstream/src/emu/mem/src/mmu.cpp
+          grep -Fq 'manager_->get_host_pointer(-1, addr)' upstream/src/emu/mem/src/mmu.cpp
           grep -Fq 'watched_slot = 0' upstream/src/emu/mem/src/mmu.cpp
           grep -Fq 'watched_slot = 3' upstream/src/emu/mem/src/mmu.cpp
           echo "V11 base + V12 RAMLIFE + V13 OWNERGEN + V14 CPUFETCH + V15 SHARED-BRIDGE deltas applied."
@@ -234,7 +234,7 @@ jobs:
           grep -Fq 'Phone Mode V15 SHARED-BRIDGE: RECOVERED current-AS miss' src/emu/mem/src/mmu.cpp
           grep -Fq 'Phone Mode V15 SHARED-BRIDGE: GLOBAL MISS' src/emu/mem/src/mmu.cpp
           grep -Fq 'Phone Mode V15 SHARED-BRIDGE: current-AS HIT' src/emu/mem/src/mmu.cpp
-          grep -Fq 'manager_->get_real_pointer(addr)' src/emu/mem/src/mmu.cpp
+          grep -Fq 'manager_->get_host_pointer(-1, addr)' src/emu/mem/src/mmu.cpp
           grep -Fq 'manager_->get_host_pointer(' src/emu/mem/src/mmu.cpp
           if grep -Fq 'Phone Mode V10 RAMCODE: use the same page_info path as data reads' src/emu/mem/src/mmu.cpp; then
             echo "V14 source verification failed: stale V10 read_code shim present" >&2
