@@ -377,7 +377,7 @@ jobs:
           set -euo pipefail
           cmake --build build-ios-device --target eka2l1 -j"$(sysctl -n hw.logicalcpu)"
 
-      - name: Verify built app and Phone Mode strings
+      - name: Verify built app, Phone Mode markers and Vietnamese UTF-16 strings
         working-directory: upstream
         run: |
           set -euo pipefail
@@ -418,7 +418,23 @@ jobs:
           grep -Fq 'Phone Mode V15 SHARED-BRIDGE: current-AS HIT' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
           grep -Fq 'EKA2L1 V15 VI: Vietnamese UI active' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
           grep -Fq 'EKAAppLanguageModeV15VI' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
-          grep -Fq 'Tiếng Việt' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
+
+          # Objective-C NSString literals containing non-ASCII characters are emitted
+          # into Mach-O as UTF-16LE, so /usr/bin/strings (ASCII-oriented here) will not
+          # reliably output "Tiếng Việt". Verify the actual binary bytes instead.
+          python3 - "$BIN" <<'PY'
+          import sys
+          from pathlib import Path
+
+          binary = Path(sys.argv[1]).read_bytes()
+          required = ("Tiếng Việt", "Ngôn ngữ ứng dụng")
+          missing = [s for s in required if s.encode("utf-16le") not in binary]
+          if missing:
+              print("Missing Vietnamese UTF-16 string(s) in Mach-O: " + ", ".join(missing), file=sys.stderr)
+              raise SystemExit(1)
+          print("Verified Vietnamese UTF-16 UI strings in final Mach-O: " + ", ".join(required))
+          PY
+
           if grep -Fq 'EKA2L1 V16 UI/DEVICE' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"; then
             echo "Final binary contains V16 UI/Device marker unexpectedly" >&2
             exit 1
@@ -426,7 +442,7 @@ jobs:
           grep -Fq 'NVG to SVG conversion failed' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
           grep -Fq 'prepared' "$RUNNER_TEMP/eka2l1-phone-v15-vi.strings"
 
-          echo "Phone Mode V15 SHARED-BRIDGE markers and inherited Phone Mode paths found in final arm64 binary."
+          echo "Phone Mode V15 markers plus Vietnamese UTF-16 UI strings verified in final arm64 binary."
 
       - name: Package unsigned IPA
         working-directory: upstream
