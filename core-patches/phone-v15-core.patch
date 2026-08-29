@@ -12,7 +12,7 @@ diff --git a/src/emu/mem/src/mmu.cpp b/src/emu/mem/src/mmu.cpp
 +        // V14 proved that a shared RAM codeseg can be valid in the emulator's global
 +        // memory view while the CPU's current process address space has no page for it.
 +        // Keep the normal per-address-space resolver first. Only for the four diagnosed
-+        // shared-code windows, fall back to memory_system::get_real_pointer(), which is
++        // shared-code windows, fall back to control_base::get_host_pointer(-1, addr), which is
 +        // the same canonical/global resolver used by the V12/V13 codeseg verifier.
          std::uint32_t *code = reinterpret_cast<std::uint32_t *>(manager_->get_host_pointer(
              current_addr_space(), addr));
@@ -38,7 +38,7 @@ diff --git a/src/emu/mem/src/mmu.cpp b/src/emu/mem/src/mmu.cpp
              (addr == 0x7B500000) || (addr == 0x7CC00000);
  
          if (!code) {
-+            void *global_host = watched_range ? manager_->get_real_pointer(addr) : nullptr;
++            void *global_host = watched_range ? manager_->get_host_pointer(-1, addr) : nullptr;
 +            if (global_host) {
 +                std::uint32_t *global_code = reinterpret_cast<std::uint32_t *>(global_host);
 +                *data = *global_code;
@@ -71,7 +71,7 @@ diff --git a/src/emu/mem/src/mmu.cpp b/src/emu/mem/src/mmu.cpp
 @@ -32,4 +65,10 @@
              page_info *direct = manager_->get_page_info(current_addr_space(), addr);
              const void *direct_host = direct ? static_cast<const void *>(direct->host_addr) : nullptr;
-+            void *global_host = manager_->get_real_pointer(addr);
++            void *global_host = manager_->get_host_pointer(-1, addr);
 +            LOG_INFO(MEMORY,
 +                "Phone Mode V15 SHARED-BRIDGE: current-AS HIT addr=0x{:08X} manager-host={} global-host={} direct-page={} direct-host={} word=0x{:08X}",
 +                addr, static_cast<const void *>(code), static_cast<const void *>(global_host),
