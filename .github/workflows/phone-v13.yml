@@ -15,10 +15,17 @@ jobs:
       - name: Checkout patch repository
         uses: actions/checkout@v4
 
-      - name: Clone EKA2L1 iOS fork with submodules
+      - name: Clone pinned EKA2L1 iOS fork with submodules
         run: |
           set -euo pipefail
-          git clone --recursive https://github.com/MuhannadYT/EKA2L1_IOS.git upstream
+          UPSTREAM_COMMIT="661031f9d8ccd37612797e32a52b2d4c6aadfcdc"
+          git clone https://github.com/MuhannadYT/EKA2L1_IOS.git upstream
+          git -C upstream checkout --detach "$UPSTREAM_COMMIT"
+          git -C upstream submodule sync --recursive
+          git -C upstream submodule update --init --recursive
+          ACTUAL_COMMIT="$(git -C upstream rev-parse HEAD)"
+          test "$ACTUAL_COMMIT" = "$UPSTREAM_COMMIT"
+          echo "Pinned upstream commit: $ACTUAL_COMMIT"
 
       - name: Verify Phone Mode V13 OWNERGEN patch files
         run: |
@@ -52,6 +59,12 @@ jobs:
           grep -q 'OWNER MISMATCH' core-patches/phone-v13-owner-generation.patch
           grep -q 'mapping_generation_seed' core-patches/phone-v13-owner-generation.patch
           grep -q 'runtime_mapping_matches' core-patches/phone-v13-owner-generation.patch
+          # V13 is pinned to upstream 661031f9...; reject the known-bad patch variant early.
+          grep -Fq '@@ -82,8 +142,36 @@ namespace eka2l1::mem::flexible {' core-patches/phone-v13-owner-generation.patch
+          grep -Fq -- '-                        // Empty it out' core-patches/phone-v13-owner-generation.patch
+          V13_SHA="$(shasum -a 256 core-patches/phone-v13-owner-generation.patch | awk '{print $1}')"
+          test "$V13_SHA" = '1dfb3887555df6c34fb2e2051f6d459c1e47c3b732c1d95d13f33ee349fd89d3'
+          echo "Verified corrected V13 patch SHA256: $V13_SHA"
           grep -q 'gdi_store_command_draws_pixels' core-patches/phone-v11-core.patch
           grep -q 'walk_tree_back_to_front' core-patches/phone-v11-core.patch
           grep -q 'acknowledged EnableBackup' core-patches/phone-v11-core.patch
