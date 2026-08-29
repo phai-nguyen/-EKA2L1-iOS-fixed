@@ -62,12 +62,12 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 }
 
 
-// ---- V16 app localization -------------------------------------------------
+// ---- V15 Vietnamese app localization -------------------------------------
 // Keep app-UI language independent from the Symbian firmware language.
 // "system" follows the iPhone language; users can force English or Vietnamese
 // from Settings -> App Language without rebooting the guest.
 static NSString *EKAAppLanguageMode(void) {
-    NSString *mode = [[NSUserDefaults standardUserDefaults] stringForKey:@"EKAAppLanguageModeV16"];
+    NSString *mode = [[NSUserDefaults standardUserDefaults] stringForKey:@"EKAAppLanguageModeV15VI"];
     return mode.length ? mode : @"system";
 }
 
@@ -134,12 +134,10 @@ static NSString *EKAT(NSString *english, NSString *vietnamese) {
 @property (nonatomic, strong) NSMutableDictionary<NSNumber *, UIImage *> *iconCache;
 @property (nonatomic, strong) NSString *pendingRomPath;
 @property (nonatomic, strong) NSMutableArray<NSString *> *pendingImportedFiles;
-@property (nonatomic, copy) NSString *pendingDeviceProfile; // V16 Device Catalog selection
 - (void)pollUntilAppsThen:(void (^)(BOOL found))done attemptsLeft:(int)attempts;
 - (void)refreshLocalizedChrome;
 - (void)showAppLanguageMenu;
 - (void)setAppLanguageMode:(NSString *)mode;
-- (void)onInstallC6Profile;
 - (void)drainPendingImportedFiles;
 - (void)installImportedContentAtPath:(NSString *)path;
 @end
@@ -223,7 +221,7 @@ static NSString *EKAT(NSString *english, NSString *vietnamese) {
 - (void)viewDidLoad {
     [super viewDidLoad];
     [self setupPhoneDebugLog];
-    NSLog(@"EKA2L1 V16 UI/DEVICE: localized Device Catalog active");
+    NSLog(@"EKA2L1 V15 VI: Vietnamese UI active");
     self.view.backgroundColor = [UIColor blackColor];
     self.keyLayout = 0;
     self.iconCache = [NSMutableDictionary dictionary];
@@ -1601,11 +1599,9 @@ static NSString *EKAT(NSString *english, NSString *vietnamese) {
     std::vector<eka2l1::ios::bridge::device_entry> devices = eka2l1::ios::bridge::get_devices();
     int current = eka2l1::ios::bridge::get_current_device();
 
-    NSString *message = EKAT(@"Choose an installed virtual phone, manage it, or add another firmware.",
-                             @"Chọn điện thoại ảo đã cài, quản lý thiết bị hoặc thêm firmware mới.");
     UIAlertController *sheet = [UIAlertController
-        alertControllerWithTitle:EKAT(@"Device Hub", @"Trung tâm thiết bị")
-        message:message
+        alertControllerWithTitle:EKAT(@"Devices", @"Thiết bị")
+        message:nil
         preferredStyle:UIAlertControllerStyleActionSheet];
 
     for (int i = 0; i < (int)devices.size(); i++) {
@@ -1622,7 +1618,7 @@ static NSString *EKAT(NSString *english, NSString *vietnamese) {
     [sheet addAction:[UIAlertAction actionWithTitle:hiddenTitle style:UIAlertActionStyleDefault
         handler:^(UIAlertAction *a) { [self openHiddenApps]; }]];
 
-    [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Add Another Device…", @"Thêm thiết bị khác…")
+    [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Install Another Device…", @"Cài thêm thiết bị…")
                                                   style:UIAlertActionStyleDefault
         handler:^(UIAlertAction *a) { [self onInstallDevice]; }]];
     [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Cancel", @"Hủy")
@@ -1641,24 +1637,20 @@ static NSString *EKAT(NSString *english, NSString *vietnamese) {
 }
 
 - (void)deviceActionsForIndex:(int)index name:(NSString *)name current:(BOOL)current {
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:name
-        message:(current ? EKAT(@"Active virtual phone", @"Điện thoại ảo đang hoạt động") : nil)
+    UIAlertController *sheet = [UIAlertController
+        alertControllerWithTitle:name
+        message:nil
         preferredStyle:UIAlertControllerStyleActionSheet];
 
     if (!current) {
         [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Switch to This Device", @"Chuyển sang thiết bị này")
                                                       style:UIAlertActionStyleDefault
             handler:^(UIAlertAction *a) { [self switchToDevice:index]; }]];
-    } else {
-        [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Boot Original Phone UI", @"Khởi động giao diện điện thoại gốc")
-                                                      style:UIAlertActionStyleDefault
-            handler:^(UIAlertAction *a) { [self onPhoneMode]; }]];
     }
-
     [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Rename", @"Đổi tên")
                                                   style:UIAlertActionStyleDefault
         handler:^(UIAlertAction *a) { [self promptRenameDevice:index name:name]; }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Firmware Language", @"Ngôn ngữ firmware")
+    [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Language", @"Ngôn ngữ firmware")
                                                   style:UIAlertActionStyleDefault
         handler:^(UIAlertAction *a) { [self showLanguagePickerForIndex:index name:name current:current]; }]];
     [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Delete", @"Xóa")
@@ -1880,13 +1872,13 @@ static NSString *EKAT(NSString *english, NSString *vietnamese) {
 }
 
 - (void)setAppLanguageMode:(NSString *)mode {
-    [[NSUserDefaults standardUserDefaults] setObject:mode forKey:@"EKAAppLanguageModeV16"];
+    [[NSUserDefaults standardUserDefaults] setObject:mode forKey:@"EKAAppLanguageModeV15VI"];
     [self refreshLocalizedChrome];
     if (!self.gameRunning) {
         self.statusLabel.hidden = NO;
         self.statusLabel.text = EKAT(@"Interface language updated.", @"Đã cập nhật ngôn ngữ giao diện.");
     }
-    NSLog(@"EKA2L1 V16 UI/DEVICE: app language=%@", mode);
+    NSLog(@"EKA2L1 V15 VI: app language=%@", mode);
 }
 
 // Settings-sheet label for Progress Sync, reflecting the live sync state once iCloud is on.
@@ -2153,56 +2145,21 @@ static NSString *EKAT(NSString *english, NSString *vietnamese) {
 
 - (void)onInstallDevice {
     UIAlertController *alert = [UIAlertController
-        alertControllerWithTitle:EKAT(@"Device Catalog", @"Danh mục thiết bị")
-        message:EKAT(@"Choose a phone profile first, then select that phone's firmware. EKA2L1 still validates and imports the actual firmware files.",
-                     @"Chọn mẫu điện thoại trước, sau đó chọn firmware đúng của máy đó. EKA2L1 vẫn kiểm tra và nhập các tệp firmware thực tế.")
-        preferredStyle:UIAlertControllerStyleActionSheet];
-
-    [alert addAction:[UIAlertAction actionWithTitle:@"Nokia C6-00 (RM-612)  ›"
-                                              style:UIAlertActionStyleDefault
-        handler:^(UIAlertAction *a) { [self onInstallC6Profile]; }]];
-    [alert addAction:[UIAlertAction actionWithTitle:EKAT(@"Auto-detect VPL Firmware…", @"Tự nhận diện firmware VPL…")
-                                              style:UIAlertActionStyleDefault
-        handler:^(UIAlertAction *a) {
-            self.pendingDeviceProfile = nil;
-            [self onInstallVplFirmware];
-        }]];
-    [alert addAction:[UIAlertAction actionWithTitle:EKAT(@"ROM + RPKG Device Dump…", @"Bản dump ROM + RPKG…")
-                                              style:UIAlertActionStyleDefault
-        handler:^(UIAlertAction *a) {
-            self.pendingDeviceProfile = nil;
-            [self onInstallDeviceDump];
-        }]];
-    [alert addAction:[UIAlertAction actionWithTitle:EKAT(@"Cancel", @"Hủy")
-                                              style:UIAlertActionStyleCancel handler:nil]];
-
-    UIView *anchor = self.deviceButton ?: self.toolbar;
-    alert.popoverPresentationController.sourceView = anchor;
-    alert.popoverPresentationController.sourceRect = anchor.bounds;
-    [self presentViewController:alert animated:YES completion:nil];
-}
-
-- (void)onInstallC6Profile {
-    self.pendingDeviceProfile = @"Nokia C6-00 (RM-612)";
-    UIAlertController *alert = [UIAlertController
-        alertControllerWithTitle:@"Nokia C6-00 (RM-612)"
-        message:EKAT(@"Profile: S60 5th Edition / Symbian^1. Select the folder containing the RM-612 .vpl manifest and all matching .fpsx / .rofs firmware files.",
-                     @"Hồ sơ: S60 5th Edition / Symbian^1. Hãy chọn thư mục chứa tệp .vpl RM-612 và toàn bộ tệp firmware .fpsx / .rofs đi kèm.")
+        alertControllerWithTitle:EKAT(@"Install Device", @"Cài thiết bị")
+        message:EKAT(@"Choose how you want to install your Symbian device.",
+                     @"Chọn cách cài thiết bị Symbian.")
         preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:EKAT(@"Choose Firmware Folder", @"Chọn thư mục firmware")
-                                              style:UIAlertActionStyleDefault
-        handler:^(UIAlertAction *a) {
-            self.pickMode = PickModeVplFirmware;
-            [self presentFolderPicker];
-        }]];
-    [alert addAction:[UIAlertAction actionWithTitle:EKAT(@"Select Firmware Files", @"Chọn các tệp firmware")
-                                              style:UIAlertActionStyleDefault
-        handler:^(UIAlertAction *a) {
-            self.pickMode = PickModeVplFirmwareFiles;
-            [self presentVplFirmwareFilesPicker];
-        }]];
-    [alert addAction:[UIAlertAction actionWithTitle:EKAT(@"Cancel", @"Hủy")
-                                              style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction
+        actionWithTitle:EKAT(@"Device Dump (Recommended)", @"Bản dump thiết bị (Khuyến nghị)")
+        style:UIAlertActionStyleDefault
+        handler:^(UIAlertAction *a) { [self onInstallDeviceDump]; }]];
+    [alert addAction:[UIAlertAction
+        actionWithTitle:EKAT(@"VPL Firmware", @"Firmware VPL")
+        style:UIAlertActionStyleDefault
+        handler:^(UIAlertAction *a) { [self onInstallVplFirmware]; }]];
+    [alert addAction:[UIAlertAction
+        actionWithTitle:EKAT(@"Cancel", @"Hủy")
+        style:UIAlertActionStyleCancel handler:nil]];
     [self presentViewController:alert animated:YES completion:nil];
 }
 
@@ -2260,13 +2217,9 @@ static NSString *EKAT(NSString *english, NSString *vietnamese) {
                              @"Thư mục này không có tệp khai báo .vpl. Hãy chọn thư mục chứa .vpl và toàn bộ tệp .fpsx / .rofs tương ứng.")];
         return;
     }
-
-    if (self.pendingDeviceProfile.length) {
-        NSLog(@"EKA2L1 V16 UI/DEVICE: profile=%@ firmware=%@", self.pendingDeviceProfile, vpl.lastPathComponent);
-    } else {
-        NSLog(@"EKA2L1 V16 UI/DEVICE: auto-detect firmware=%@", vpl.lastPathComponent);
-    }
-    [self runDeviceInstallWithRpkg:std::string() rom:std::string([vpl UTF8String]) installRpkg:NO];
+    [self runDeviceInstallWithRpkg:std::string()
+                               rom:std::string([vpl UTF8String])
+                       installRpkg:NO];
 }
 
 - (void)promptForRpkg {
@@ -2291,12 +2244,10 @@ static NSString *EKAT(NSString *english, NSString *vietnamese) {
 // Device-dump install: installRpkg = YES, rom = ROM path, rpkg = optional RPKG.
 // VPL firmware install: installRpkg = NO, rpkg empty, rom = the .vpl manifest path.
 - (void)runDeviceInstallWithRpkg:(std::string)rpkg rom:(std::string)rom installRpkg:(BOOL)installRpkg {
-    [self beginProgress:(installRpkg ? EKAT(@"Installing device…", @"Đang cài thiết bị…") : EKAT(@"Installing firmware…", @"Đang cài firmware…"))];
+    [self beginProgress:(installRpkg
+        ? EKAT(@"Installing device…", @"Đang cài thiết bị…")
+        : EKAT(@"Installing firmware…", @"Đang cài firmware…"))];
 
-    // Real extraction progress (0..100) drives the bar to 90%; the post-extraction boot
-    // then eases it toward completion (no granular metric for the boot itself). `me` is
-    // the root view controller, which lives for the app's lifetime, so a strong capture is
-    // safe (and the std::function is released as soon as the install call returns).
     RootViewController *me = self;
     std::function<void(int)> progress = [me](int pct) {
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -2314,33 +2265,35 @@ static NSString *EKAT(NSString *english, NSString *vietnamese) {
         int result = eka2l1::ios::bridge::install_device(rpkg, rom, installRpkg, progress);
         dispatch_async(dispatch_get_main_queue(), ^{
             if (result == 0) {
-                // Extraction done; the guest now boots asynchronously. Keep the bar moving
-                // until its apps register, then finish.
                 self.statusLabel.text = EKAT(@"Booting device…", @"Đang khởi động thiết bị…");
                 [self climbProgressToward:0.98f];
                 [self pollUntilAppsThen:^(BOOL found) {
                     [self endProgress];
                     [self showAppsScreen];
-                    NSString *installedMessage = self.pendingDeviceProfile.length
-                        ? [NSString stringWithFormat:EKAT(@"%@ was installed. EKA2L1 imported the firmware and started the virtual phone.",
-                                                         @"Đã cài %@. EKA2L1 đã nhập firmware và khởi động điện thoại ảo."),
-                                                   self.pendingDeviceProfile]
-                        : EKAT(@"The Symbian device was installed and booted.",
-                               @"Thiết bị Symbian đã được cài và khởi động.");
-                    [self showAlert:EKAT(@"Device installed", @"Đã cài thiết bị") message:installedMessage];
-                    self.pendingDeviceProfile = nil;
+                    [self showAlert:EKAT(@"Device installed", @"Đã cài thiết bị")
+                            message:EKAT(@"The Symbian device was installed and booted.",
+                                         @"Thiết bị Symbian đã được cài và khởi động.")];
                 } attemptsLeft:30];
             } else {
                 [self endProgress];
-                self.statusLabel.text = EKAT(@"No Symbian device installed.\n\nTap “Install Device” to try again.", @"Chưa cài được thiết bị Symbian.\n\nNhấn “Cài thiết bị” để thử lại.");
+                self.statusLabel.text = EKAT(
+                    @"No Symbian device installed.\n\nTap “Install Device” to try again.",
+                    @"Chưa cài được thiết bị Symbian.\n\nNhấn “Cài thiết bị” để thử lại.");
                 NSString *msg;
                 if (!installRpkg) {
-                    // device_installation_vpl_file_invalid == 8 (system/installation/common.h)
-                    msg = (result == 8)
-                        ? @"That .vpl firmware is invalid. Pick the folder holding a valid .vpl manifest and all of its .fpsx / .rofs files."
-                        : [NSString stringWithFormat:@"Could not install the firmware (error %d). Select a folder with a valid .vpl manifest and its firmware files.", result];
+                    if (result == 8) {
+                        msg = EKAT(
+                            @"That .vpl firmware is invalid. Pick the folder holding a valid .vpl manifest and all of its .fpsx / .rofs files.",
+                            @"Firmware .vpl không hợp lệ. Hãy chọn thư mục có tệp .vpl hợp lệ cùng toàn bộ tệp .fpsx / .rofs tương ứng.");
+                    } else {
+                        msg = EKAAppUsesVietnamese()
+                            ? [NSString stringWithFormat:@"Không thể cài firmware (lỗi %d). Hãy chọn thư mục có tệp .vpl hợp lệ và các tệp firmware đi kèm.", result]
+                            : [NSString stringWithFormat:@"Could not install the firmware (error %d). Select a folder with a valid .vpl manifest and its firmware files.", result];
+                    }
                 } else {
-                    msg = [NSString stringWithFormat:@"Could not install (error %d). Select a valid ROM and RPKG.", result];
+                    msg = EKAAppUsesVietnamese()
+                        ? [NSString stringWithFormat:@"Không thể cài thiết bị (lỗi %d). Hãy chọn ROM và RPKG hợp lệ.", result]
+                        : [NSString stringWithFormat:@"Could not install (error %d). Select a valid ROM and RPKG.", result];
                 }
                 [self showAlert:EKAT(@"Install failed", @"Cài đặt thất bại") message:msg];
             }
