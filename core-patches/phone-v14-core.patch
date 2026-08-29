@@ -1,0 +1,55 @@
+diff --git a/src/emu/mem/src/mmu.cpp b/src/emu/mem/src/mmu.cpp
+--- a/src/emu/mem/src/mmu.cpp
++++ b/src/emu/mem/src/mmu.cpp
+@@ -237,18 +237,38 @@ namespace eka2l1::mem {
+     }
+ 
+     bool mmu_base::read_code(const vm_address addr, std::uint32_t *data) {
+-        // Phone Mode V10 RAMCODE: use the same page_info path as data reads and seed the CPU TLB.
+-        // This matches newer EKA2L1 behavior and keeps code fetches coherent after a mapping refresh.
+-        page_info *inf = manager_->get_page_info(current_addr_space(), addr);
+-        if (!inf || !inf->host_addr) {
++        // Phone Mode V14 CPUFETCH: restore the memory manager's canonical lookup path.
++        // V13 proved that the shared RAM codeseg backing can be valid while a direct
++        // current-address-space page_info lookup still misses at instruction fetch time.
++        // get_host_pointer() is the pre-V10 path and is responsible for the manager's
++        // normal address-space/global-mapping resolution rules.
++        std::uint32_t *code = reinterpret_cast<std::uint32_t *>(manager_->get_host_pointer(
++            current_addr_space(), addr));
++
++        const bool watched_range =
++            ((addr >= 0x78C00000) && (addr < 0x78E00000)) ||
++            ((addr >= 0x7A700000) && (addr < 0x7A800000)) ||
++            ((addr >= 0x7B500000) && (addr < 0x7B600000)) ||
++            ((addr >= 0x7CC00000) && (addr < 0x7CD00000));
++        const bool watched_base = (addr == 0x78C00000) || (addr == 0x7A700000) ||
++            (addr == 0x7B500000) || (addr == 0x7CC00000);
++
++        if (!code) {
++            if (watched_range) {
++                page_info *direct = manager_->get_page_info(current_addr_space(), addr);
++                const void *direct_host = direct ? static_cast<const void *>(direct->host_addr) : nullptr;
++                LOG_ERROR(MEMORY,
++                    "Phone Mode V14 CPUFETCH: manager-path MISS addr=0x{:08X} direct-page={} direct-host={}",
++                    addr, static_cast<const void *>(direct), direct_host);
++            }
+             return false;
+         }
+ 
+-        *data = *reinterpret_cast<std::uint32_t *>(
+-            reinterpret_cast<std::uint8_t *>(inf->host_addr) + (addr & manager_->offset_mask_));
++        *data = *code;
+ 
+-        cpu_->set_tlb_page(addr & ~manager_->offset_mask_, reinterpret_cast<std::uint8_t *>(inf->host_addr),
+-            inf->perm);
++        if (watched_base) {
++            page_info *direct = manager_->get_page_info(current_addr_space(), addr);
++            const void *direct_host = direct ? static_cast<const void *>(direct->host_addr) : nullptr;
++            LOG_INFO(MEMORY,
++                "Phone Mode V14 CPUFETCH: manager-path HIT addr=0x{:08X} manager-host={} direct-page={} direct-host={} word=0x{:08X}",
++                addr, static_cast<const void *>(code), static_cast<const void *>(direct), direct_host, *data);
++        }
++
+         return true;
+     }
+ }
