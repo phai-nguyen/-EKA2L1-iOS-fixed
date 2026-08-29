@@ -54,6 +54,11 @@ jobs:
           grep -q '0x7A700000' core-patches/phone-v12-core.patch
           grep -q '0x7B500000' core-patches/phone-v12-core.patch
           grep -q '0x7CC00000' core-patches/phone-v12-core.patch
+          # Compile-safety: fmt rejects non-void pointers such as std::uint8_t*.
+          grep -Fq 'static_cast<const void *>(reinterpret_cast<std::uint8_t *>(data_) + start_offset)' core-patches/phone-v12-core.patch
+          V12_SHA="$(shasum -a 256 core-patches/phone-v12-core.patch | awk '{print $1}')"
+          test "$V12_SHA" = 'd31f36db9042675d5e63a756a19998d44bbcecf6fbe3f25776ea13ba68335c0a'
+          echo "Verified V12 RAMLIFE compile-safe patch SHA256: $V12_SHA"
           grep -q 'STALE UNMAP BLOCKED' core-patches/phone-v13-owner-generation.patch
           grep -q 'STALE DEALLOC BLOCKED' core-patches/phone-v13-owner-generation.patch
           grep -q 'OWNER MISMATCH' core-patches/phone-v13-owner-generation.patch
@@ -138,6 +143,7 @@ jobs:
 
           grep -Fq 'Phone Mode V12 RAMLIFE: LATE REPAIR SUCCEEDED' upstream/src/emu/kernel/src/codeseg.cpp
           grep -Fq 'Phone Mode V12 RAMLIFE: decommit-unmap' upstream/src/emu/mem/src/model/flexible/memobj.cpp
+          grep -Fq 'static_cast<const void *>(reinterpret_cast<std::uint8_t *>(data_) + start_offset)' upstream/src/emu/mem/src/model/flexible/memobj.cpp
           grep -Fq 'Phone Mode V12 RAMLIFE: detach shared mapping before chunk destroy' upstream/src/emu/mem/src/model/flexible/chunk.cpp
 
           python3 "$GITHUB_WORKSPACE/.github/scripts/apply_patch_context.py" \
