@@ -290,7 +290,7 @@ diff --git a/src/emu/mem/src/model/flexible/memobj.cpp b/src/emu/mem/src/model/f
 +                LOG_TRACE(MEMORY,
 +                    "Phone Mode V12 RAMLIFE: decommit-unmap base=0x{:08X} bytes=0x{:X} host={} page-offset={} pages={}",
 +                    mapping->base_ + start_offset, size_to_decommit,
-+                    reinterpret_cast<std::uint8_t *>(data_) + start_offset, page_offset, total_pages);
++                    static_cast<const void *>(reinterpret_cast<std::uint8_t *>(data_) + start_offset), page_offset, total_pages);
                  if (!mapping->unmap(page_offset, total_pages)) {
                      LOG_WARN(MEMORY, "Unable to unmap decommitted memory from a mapping!");
                  }
