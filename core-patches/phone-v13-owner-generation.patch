@@ -245,10 +245,11 @@ index e5b55af..0a8136c 100644
                      info->host_addr = starting_point_host;
                      info->perm = permissions;
                  }
-@@ -82,7 +142,36 @@ namespace eka2l1::mem::flexible {
+@@ -82,8 +142,36 @@ namespace eka2l1::mem::flexible {
                  while (start_page_index < end_page_index) {
                      page_info *info = tbl->get_page_info(start_page_index & control->page_index_mask_);
                      if (info) {
+-                        // Empty it out
 -                        info->host_addr = nullptr;
 +                        const vm_address guest_page = start_page_index << control->page_index_shift_;
 +                        const void *expected_host = backing_host_
