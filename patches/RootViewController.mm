@@ -61,6 +61,28 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
     return [ext isEqualToString:@"sis"] || [ext isEqualToString:@"sisx"];
 }
 
+
+// ---- V16 app localization -------------------------------------------------
+// Keep app-UI language independent from the Symbian firmware language.
+// "system" follows the iPhone language; users can force English or Vietnamese
+// from Settings -> App Language without rebooting the guest.
+static NSString *EKAAppLanguageMode(void) {
+    NSString *mode = [[NSUserDefaults standardUserDefaults] stringForKey:@"EKAAppLanguageModeV16"];
+    return mode.length ? mode : @"system";
+}
+
+static BOOL EKAAppUsesVietnamese(void) {
+    NSString *mode = EKAAppLanguageMode();
+    if ([mode isEqualToString:@"vi"]) return YES;
+    if ([mode isEqualToString:@"en"]) return NO;
+    NSString *preferred = [NSLocale preferredLanguages].firstObject.lowercaseString ?: @"";
+    return [preferred hasPrefix:@"vi"];
+}
+
+static NSString *EKAT(NSString *english, NSString *vietnamese) {
+    return EKAAppUsesVietnamese() ? vietnamese : english;
+}
+
 @interface EKAAppCell : UITableViewCell
 @end
 
@@ -112,7 +134,12 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 @property (nonatomic, strong) NSMutableDictionary<NSNumber *, UIImage *> *iconCache;
 @property (nonatomic, strong) NSString *pendingRomPath;
 @property (nonatomic, strong) NSMutableArray<NSString *> *pendingImportedFiles;
+@property (nonatomic, copy) NSString *pendingDeviceProfile; // V16 Device Catalog selection
 - (void)pollUntilAppsThen:(void (^)(BOOL found))done attemptsLeft:(int)attempts;
+- (void)refreshLocalizedChrome;
+- (void)showAppLanguageMenu;
+- (void)setAppLanguageMode:(NSString *)mode;
+- (void)onInstallC6Profile;
 - (void)drainPendingImportedFiles;
 - (void)installImportedContentAtPath:(NSString *)path;
 @end
@@ -196,6 +223,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 - (void)viewDidLoad {
     [super viewDidLoad];
     [self setupPhoneDebugLog];
+    NSLog(@"EKA2L1 V16 UI/DEVICE: localized Device Catalog active");
     self.view.backgroundColor = [UIColor blackColor];
     self.keyLayout = 0;
     self.iconCache = [NSMutableDictionary dictionary];
@@ -272,7 +300,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
     self.statusLabel.textAlignment = NSTextAlignmentCenter;
     self.statusLabel.numberOfLines = 0;
     self.statusLabel.font = [UIFont systemFontOfSize:16];
-    self.statusLabel.text = @"Starting EKA2L1…";
+    self.statusLabel.text = EKAT(@"Starting EKA2L1…", @"Đang khởi động EKA2L1…");
     [self.view addSubview:self.statusLabel];
 
     // Progress bar + percentage, shown during install / switch / delete-reboot.
@@ -294,7 +322,13 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
     self.toolbar = [[UIView alloc] init];
     self.toolbar.backgroundColor = [UIColor colorWithWhite:0.0 alpha:0.65];
     // Order matters: viewDidLayoutSubviews lays the buttons out left-to-right.
-    NSArray<NSString *> *titles = @[@"Install Device", @"Install Game", @"Settings", @"Apps", @"Phone"];
+    NSArray<NSString *> *titles = @[
+        EKAT(@"Install Device", @"Cài thiết bị"),
+        EKAT(@"Install Game", @"Cài trò chơi"),
+        EKAT(@"Settings", @"Cài đặt"),
+        EKAT(@"Apps", @"Ứng dụng"),
+        EKAT(@"Phone", @"Điện thoại")
+    ];
     NSArray<NSString *> *selectors = @[@"onDeviceButton", @"onInstallGame", @"onSettings", @"onShowApps", @"onPhoneMode"];
     for (NSUInteger i = 0; i < titles.count; i++) {
         UIButton *btn = [UIButton buttonWithType:UIButtonTypeSystem];
@@ -308,11 +342,31 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
     [self.view addSubview:self.toolbar];
 }
 
+- (void)refreshLocalizedChrome {
+    if (self.toolbar.subviews.count >= 5) {
+        NSArray<NSString *> *titles = @[
+            EKAT(@"Install Device", @"Cài thiết bị"),
+            EKAT(@"Install Game", @"Cài trò chơi"),
+            EKAT(@"Settings", @"Cài đặt"),
+            EKAT(@"Apps", @"Ứng dụng"),
+            EKAT(@"Phone", @"Điện thoại")
+        ];
+        for (NSUInteger i = 0; i < 5; ++i) {
+            UIButton *button = (UIButton *)self.toolbar.subviews[i];
+            [button setTitle:titles[i] forState:UIControlStateNormal];
+        }
+    }
+    [self refreshDeviceButton];
+    [self.view setNeedsLayout];
+}
+
 // Once at least one device is installed the first toolbar button becomes "Devices"
 // (a manager: switch / rename / add another). Before that it installs the first device.
 - (void)refreshDeviceButton {
     BOOL hasDevice = eka2l1::ios::bridge::has_device();
-    [self.deviceButton setTitle:(hasDevice ? @"Devices" : @"Install Device") forState:UIControlStateNormal];
+    [self.deviceButton setTitle:(hasDevice ? EKAT(@"Devices", @"Thiết bị")
+                                           : EKAT(@"Install Device", @"Cài thiết bị"))
+                       forState:UIControlStateNormal];
     [self.view setNeedsLayout];
 }
 
@@ -513,14 +567,14 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
                    dispatch_get_main_queue(), ^{ [[EKASyncManager shared] syncDownOnLaunch]; });
 
     if (hasDevice) {
-        self.statusLabel.text = @"Loading apps…";
+        self.statusLabel.text = EKAT(@"Loading apps…", @"Đang tải ứng dụng…");
         self.statusLabel.hidden = NO;
         [self pollForAppsWithAttemptsLeft:20];
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             [self maybeAutoInstallGame];
         });
     } else {
-        self.statusLabel.text = @"No Symbian device installed.\n\nTap “Install Device” to add one.";
+        self.statusLabel.text = EKAT(@"No Symbian device installed.\n\nTap “Install Device” to add one.", @"Chưa cài thiết bị Symbian.\n\nNhấn “Cài thiết bị” để thêm thiết bị.");
         [self maybeAutoInstallDevice];
         if (self.pendingImportedFiles.count > 0) {
             [self drainPendingImportedFiles];
@@ -573,7 +627,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
     }
     if (attempts <= 0) {
         self.statusLabel.hidden = NO;
-        self.statusLabel.text = @"Device booted, but no apps were found.\nTap “Apps” to retry or install a game.";
+        self.statusLabel.text = EKAT(@"Device booted, but no apps were found.\nTap “Apps” to retry or install a game.", @"Thiết bị đã khởi động nhưng chưa tìm thấy ứng dụng.\nNhấn “Ứng dụng” để thử lại hoặc cài trò chơi.");
         return;
     }
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
@@ -607,7 +661,8 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 // original Symbian UI whenever that system application is supported by the core.
 - (void)onPhoneMode {
     if (!eka2l1::ios::bridge::has_device()) {
-        [self showAlert:@"No device" message:@"Install a Symbian device first."];
+        [self showAlert:EKAT(@"No device", @"Chưa có thiết bị")
+                 message:EKAT(@"Install a Symbian device first.", @"Hãy cài một thiết bị Symbian trước.")];
         return;
     }
 
@@ -615,8 +670,6 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
     NSMutableArray<NSDictionary *> *candidates = [NSMutableArray array];
     NSMutableSet<NSNumber *> *seen = [NSMutableSet set];
 
-    // Known S60 shell / idle UIDs. 0x102750F0 is the S60 3rd FP2+ idle app;
-    // 0x101FD64C is used by older S60 idle screens; 0x101F4CD2 is Application Shell/Menu.
     const std::uint32_t preferred[] = { 0x102750F0u, 0x101FD64Cu, 0x101F4CD2u };
     for (std::uint32_t uid : preferred) {
         for (const auto &a : all) {
@@ -629,7 +682,6 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
         }
     }
 
-    // Firmware variants sometimes register the same components under different UIDs.
     for (const auto &a : all) {
         NSString *name = a.name.empty() ? @"" : [NSString stringWithUTF8String:a.name.c_str()];
         NSString *low = name.lowercaseString;
@@ -644,13 +696,16 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
     }
 
     if (candidates.count == 0) {
-        [self showAlert:@"Phone Mode unavailable"
-                message:@"This firmware does not expose a supported Home/Menu system application to EKA2L1. You can still use Apps mode normally."];
+        [self showAlert:EKAT(@"Phone Mode unavailable", @"Chưa thể mở chế độ điện thoại")
+                message:EKAT(@"This firmware does not expose a supported Home/Menu system application to EKA2L1. You can still use Apps mode normally.",
+                             @"Firmware này chưa cung cấp Home/Menu mà EKA2L1 hỗ trợ. Bạn vẫn có thể dùng chế độ Ứng dụng.")];
         return;
     }
 
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"Symbian Phone"
-        message:@"Launch the firmware's original system UI. Home Screen is preferred; Menu is the fallback."
+    UIAlertController *sheet = [UIAlertController
+        alertControllerWithTitle:EKAT(@"Symbian Phone", @"Điện thoại Symbian")
+        message:EKAT(@"Launch the firmware's original system UI. Home Screen is preferred; Menu is the fallback.",
+                     @"Khởi chạy giao diện gốc của firmware. Ưu tiên Màn hình chính; Menu là phương án dự phòng.")
         preferredStyle:UIAlertControllerStyleActionSheet];
 
     NSUInteger limit = MIN((NSUInteger)8, candidates.count);
@@ -660,15 +715,10 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
         std::uint32_t uid = (std::uint32_t)[entry[@"uid"] unsignedLongValue];
         NSString *title = [NSString stringWithFormat:@"%@  (0x%08X)", name, uid];
         [sheet addAction:[UIAlertAction actionWithTitle:title style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-            // UIAlertController is still tearing down while its action handler executes.
-            // Starting the emulator/system UI during that UIKit transition caused an iOS 18
-            // EXC_BAD_ACCESS in _UIVisualEffectFilterEntry/objc_release. Let the sheet fully
-            // disappear first, then enter Phone Mode on the next stable UI state.
             NSString *launchName = [name copy];
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.60 * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), ^{
                 if (self.presentedViewController != nil) {
-                    // A system picker/alert is unexpectedly still up; give UIKit one more beat.
                     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)),
                                    dispatch_get_main_queue(), ^{
                         [self launchPhoneUid:uid name:launchName];
@@ -679,7 +729,8 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
             });
         }]];
     }
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Cancel", @"Hủy")
+                                               style:UIAlertActionStyleCancel handler:nil]];
     UIView *anchor = self.toolbar.subviews.lastObject ?: self.toolbar;
     sheet.popoverPresentationController.sourceView = anchor;
     sheet.popoverPresentationController.sourceRect = anchor.bounds;
@@ -754,7 +805,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
     self.inputManager.enabled = NO;
     [self stopPollTimer];
     self.statusLabel.hidden = NO;
-    self.statusLabel.text = @"Leaving Symbian Phone…";
+    self.statusLabel.text = EKAT(@"Leaving Symbian Phone…", @"Đang thoát chế độ điện thoại Symbian…");
 
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         eka2l1::ios::bridge::exit_game();
@@ -1477,7 +1528,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 
     NSString *local = [self importFileAtURL:url];
     if (!local) {
-        [self showAlert:@"Import failed" message:@"Could not read the selected file."];
+        [self showAlert:EKAT(@"Import failed", @"Nhập dữ liệu thất bại") message:EKAT(@"Could not read the selected file.", @"Không thể đọc tệp đã chọn.")];
         return;
     }
 
@@ -1550,23 +1601,32 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
     std::vector<eka2l1::ios::bridge::device_entry> devices = eka2l1::ios::bridge::get_devices();
     int current = eka2l1::ios::bridge::get_current_device();
 
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"Devices" message:nil
-                                                           preferredStyle:UIAlertControllerStyleActionSheet];
+    NSString *message = EKAT(@"Choose an installed virtual phone, manage it, or add another firmware.",
+                             @"Chọn điện thoại ảo đã cài, quản lý thiết bị hoặc thêm firmware mới.");
+    UIAlertController *sheet = [UIAlertController
+        alertControllerWithTitle:EKAT(@"Device Hub", @"Trung tâm thiết bị")
+        message:message
+        preferredStyle:UIAlertControllerStyleActionSheet];
+
     for (int i = 0; i < (int)devices.size(); i++) {
         NSString *name = [NSString stringWithUTF8String:devices[i].name.c_str()];
         NSString *title = (i == current) ? [name stringByAppendingString:@"  ✓"] : name;
         [sheet addAction:[UIAlertAction actionWithTitle:title style:UIAlertActionStyleDefault
             handler:^(UIAlertAction *a) { [self deviceActionsForIndex:i name:name current:(i == current)]; }]];
     }
+
     NSUInteger hiddenCount = [HiddenAppsViewController hiddenCountForCurrentDevice];
     NSString *hiddenTitle = hiddenCount > 0
-        ? [NSString stringWithFormat:@"Hidden Apps (%lu)", (unsigned long)hiddenCount]
-        : @"Hidden Apps";
+        ? [NSString stringWithFormat:EKAT(@"Hidden Apps (%lu)", @"Ứng dụng ẩn (%lu)"), (unsigned long)hiddenCount]
+        : EKAT(@"Hidden Apps", @"Ứng dụng ẩn");
     [sheet addAction:[UIAlertAction actionWithTitle:hiddenTitle style:UIAlertActionStyleDefault
         handler:^(UIAlertAction *a) { [self openHiddenApps]; }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Install Another Device…" style:UIAlertActionStyleDefault
+
+    [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Add Another Device…", @"Thêm thiết bị khác…")
+                                                  style:UIAlertActionStyleDefault
         handler:^(UIAlertAction *a) { [self onInstallDevice]; }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Cancel", @"Hủy")
+                                                  style:UIAlertActionStyleCancel handler:nil]];
     sheet.popoverPresentationController.sourceView = self.deviceButton;
     sheet.popoverPresentationController.sourceRect = self.deviceButton.bounds;
     [self presentViewController:sheet animated:YES completion:nil];
@@ -1581,26 +1641,38 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 }
 
 - (void)deviceActionsForIndex:(int)index name:(NSString *)name current:(BOOL)current {
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:name message:nil
-                                                           preferredStyle:UIAlertControllerStyleActionSheet];
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:name
+        message:(current ? EKAT(@"Active virtual phone", @"Điện thoại ảo đang hoạt động") : nil)
+        preferredStyle:UIAlertControllerStyleActionSheet];
+
     if (!current) {
-        [sheet addAction:[UIAlertAction actionWithTitle:@"Switch to This Device" style:UIAlertActionStyleDefault
+        [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Switch to This Device", @"Chuyển sang thiết bị này")
+                                                      style:UIAlertActionStyleDefault
             handler:^(UIAlertAction *a) { [self switchToDevice:index]; }]];
+    } else {
+        [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Boot Original Phone UI", @"Khởi động giao diện điện thoại gốc")
+                                                      style:UIAlertActionStyleDefault
+            handler:^(UIAlertAction *a) { [self onPhoneMode]; }]];
     }
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Rename" style:UIAlertActionStyleDefault
+
+    [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Rename", @"Đổi tên")
+                                                  style:UIAlertActionStyleDefault
         handler:^(UIAlertAction *a) { [self promptRenameDevice:index name:name]; }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Language" style:UIAlertActionStyleDefault
+    [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Firmware Language", @"Ngôn ngữ firmware")
+                                                  style:UIAlertActionStyleDefault
         handler:^(UIAlertAction *a) { [self showLanguagePickerForIndex:index name:name current:current]; }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Delete" style:UIAlertActionStyleDestructive
+    [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Delete", @"Xóa")
+                                                  style:UIAlertActionStyleDestructive
         handler:^(UIAlertAction *a) { [self confirmDeleteDevice:index name:name current:current]; }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Cancel", @"Hủy")
+                                                  style:UIAlertActionStyleCancel handler:nil]];
     sheet.popoverPresentationController.sourceView = self.deviceButton;
     sheet.popoverPresentationController.sourceRect = self.deviceButton.bounds;
     [self presentViewController:sheet animated:YES completion:nil];
 }
 
 - (void)switchToDevice:(int)index {
-    [self beginProgress:@"Switching device…"];
+    [self beginProgress:EKAT(@"Switching device…", @"Đang chuyển thiết bị…")];
     [self climbProgressToward:0.95f];   // reboot has no granular metric
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         // set_current_device returns once the new instance's threads are spawned; the guest
@@ -1618,13 +1690,18 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 
 - (void)confirmDeleteDevice:(int)index name:(NSString *)name current:(BOOL)current {
     NSString *msg = current
-        ? [NSString stringWithFormat:@"Delete “%@”? It’s the active device, so the emulator will reboot onto another installed device.", name]
-        : [NSString stringWithFormat:@"Delete “%@” from your devices?", name];
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Delete Device" message:msg
-                                                           preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Delete" style:UIAlertActionStyleDestructive
+        ? [NSString stringWithFormat:EKAT(@"Delete “%@”? It’s the active device, so the emulator will reboot onto another installed device.",
+                                         @"Xóa “%@”? Đây là thiết bị đang hoạt động nên trình giả lập sẽ khởi động lại sang thiết bị khác."), name]
+        : [NSString stringWithFormat:EKAT(@"Delete “%@” from your devices?",
+                                         @"Xóa “%@” khỏi danh sách thiết bị?"), name];
+    UIAlertController *alert = [UIAlertController
+        alertControllerWithTitle:EKAT(@"Delete Device", @"Xóa thiết bị")
+        message:msg preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:EKAT(@"Delete", @"Xóa")
+                                              style:UIAlertActionStyleDestructive
         handler:^(UIAlertAction *a) { [self performDeleteDevice:index current:current]; }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:EKAT(@"Cancel", @"Hủy")
+                                              style:UIAlertActionStyleCancel handler:nil]];
     [self presentViewController:alert animated:YES completion:nil];
 }
 
@@ -1633,10 +1710,10 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
         // Removing a non-active device only reshuffles the list — quick, no reboot.
         eka2l1::ios::bridge::delete_device(index);
         [self refreshDeviceButton];
-        [self showAlert:@"Device deleted" message:@"It was removed from your devices."];
+        [self showAlert:EKAT(@"Device deleted", @"Đã xóa thiết bị") message:EKAT(@"It was removed from your devices.", @"Thiết bị đã được xóa khỏi danh sách.")];
         return;
     }
-    [self beginProgress:@"Deleting device…"];
+    [self beginProgress:EKAT(@"Deleting device…", @"Đang xóa thiết bị…")];
     [self climbProgressToward:0.95f];
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         eka2l1::ios::bridge::delete_device(index);   // reboots onto another device (or none)
@@ -1652,7 +1729,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
                 [self endProgress];
                 self.appsTable.hidden = YES;
                 self.statusLabel.hidden = NO;
-                self.statusLabel.text = @"No Symbian device installed.\n\nTap “Install Device” to add one.";
+                self.statusLabel.text = EKAT(@"No Symbian device installed.\n\nTap “Install Device” to add one.", @"Chưa cài thiết bị Symbian.\n\nNhấn “Cài thiết bị” để thêm thiết bị.");
             }
         });
     });
@@ -1681,17 +1758,18 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 - (void)showLanguagePickerForIndex:(int)index name:(NSString *)name current:(BOOL)current {
     std::vector<eka2l1::ios::bridge::language_entry> langs = eka2l1::ios::bridge::get_device_languages(index);
     if (langs.empty()) {
-        [self showAlert:@"No languages" message:@"This device's firmware doesn't list any languages."];
+        [self showAlert:EKAT(@"No languages", @"Không có ngôn ngữ")
+                 message:EKAT(@"This device's firmware doesn't list any languages.",
+                              @"Firmware của thiết bị này không liệt kê ngôn ngữ nào.")];
         return;
     }
-    // Each device keeps its own language; check the one selected for THIS device.
     int selectedLang = eka2l1::ios::bridge::get_device_language(index);
-
-    // The active device reboots to apply immediately; others just remember the choice.
-    NSString *msg = current ? nil : @"Applies the next time you switch to this device.";
+    NSString *msg = current ? nil : EKAT(@"Applies the next time you switch to this device.",
+                                         @"Sẽ áp dụng khi bạn chuyển sang thiết bị này lần tới.");
     UIAlertController *sheet = [UIAlertController
-        alertControllerWithTitle:[NSString stringWithFormat:@"%@ — Language", name] message:msg
-                  preferredStyle:UIAlertControllerStyleActionSheet];
+        alertControllerWithTitle:[NSString stringWithFormat:@"%@ — %@", name,
+                                  EKAT(@"Firmware Language", @"Ngôn ngữ firmware")]
+        message:msg preferredStyle:UIAlertControllerStyleActionSheet];
     for (const auto &lang : langs) {
         int langId = lang.id;
         NSString *lname = [NSString stringWithUTF8String:lang.name.c_str()];
@@ -1699,7 +1777,8 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
         [sheet addAction:[UIAlertAction actionWithTitle:title style:UIAlertActionStyleDefault
             handler:^(UIAlertAction *a) { [self applyLanguage:langId forDeviceIndex:index current:current]; }]];
     }
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Cancel", @"Hủy")
+                                               style:UIAlertActionStyleCancel handler:nil]];
     sheet.popoverPresentationController.sourceView = self.deviceButton;
     sheet.popoverPresentationController.sourceRect = self.deviceButton.bounds;
     [self presentViewController:sheet animated:YES completion:nil];
@@ -1710,10 +1789,10 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
         // A non-active device only needs the choice stored — no reboot. It takes effect when
         // the user switches to that device.
         eka2l1::ios::bridge::set_device_language(index, languageId);
-        [self showAlert:@"Language set" message:@"It will be used when you switch to this device."];
+        [self showAlert:EKAT(@"Language set", @"Đã đặt ngôn ngữ") message:EKAT(@"It will be used when you switch to this device.", @"Ngôn ngữ sẽ được dùng khi bạn chuyển sang thiết bị này.")];
         return;
     }
-    [self beginProgress:@"Changing language…"];
+    [self beginProgress:EKAT(@"Changing language…", @"Đang đổi ngôn ngữ firmware…")];
     [self climbProgressToward:0.95f];   // reboot has no granular metric
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         // The active device reboots in place to apply the new language; the guest then boots
@@ -1733,46 +1812,93 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 // ---- Settings (N-Gage) ----------------------------------------------------
 
 - (void)onSettings {
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"Settings" message:nil
-                                                           preferredStyle:UIAlertControllerStyleActionSheet];
-    // Progress Sync. Once iCloud sync is on, the entry shows its status and a "Sync Now" refresh
-    // appears next to it; tapping the status entry re-opens the sync page.
+    UIAlertController *sheet = [UIAlertController
+        alertControllerWithTitle:EKAT(@"Settings", @"Cài đặt")
+        message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+
+    [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"App Language", @"Ngôn ngữ ứng dụng")
+                                              style:UIAlertActionStyleDefault
+        handler:^(UIAlertAction *a) { [self showAppLanguageMenu]; }]];
+
     EKASyncManager *sync = [EKASyncManager shared];
     [sheet addAction:[UIAlertAction actionWithTitle:[self progressSyncTitle] style:UIAlertActionStyleDefault
         handler:^(UIAlertAction *a) { [self openProgressSync]; }]];
     if (sync.iCloudEnabled) {
-        [sheet addAction:[UIAlertAction actionWithTitle:@"Sync Now  ⟳" style:UIAlertActionStyleDefault
+        [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Sync Now  ⟳", @"Đồng bộ ngay  ⟳")
+                                                  style:UIAlertActionStyleDefault
             handler:^(UIAlertAction *a) { [sync syncNow:nil]; }]];
     }
     [sheet addAction:[UIAlertAction actionWithTitle:@"N-Gage" style:UIAlertActionStyleDefault
         handler:^(UIAlertAction *a) { [self showNGageMenu]; }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Keybinds" style:UIAlertActionStyleDefault
+    [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Keybinds", @"Phím điều khiển")
+                                              style:UIAlertActionStyleDefault
         handler:^(UIAlertAction *a) { [self openGlobalKeybinds]; }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Packages" style:UIAlertActionStyleDefault
+    [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Packages", @"Gói cài đặt")
+                                              style:UIAlertActionStyleDefault
         handler:^(UIAlertAction *a) { [self openPackages]; }]];
-    // CPU backend: jitless interpreter (default) vs. the dynarmic JIT (opt-in, needs an enabler).
-    [sheet addAction:[UIAlertAction actionWithTitle:@"CPU Backend" style:UIAlertActionStyleDefault
+    [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"CPU Backend", @"Bộ xử lý CPU")
+                                              style:UIAlertActionStyleDefault
         handler:^(UIAlertAction *a) { [self showCpuBackendMenu]; }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Delete All App Data" style:UIAlertActionStyleDestructive
+    [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Delete All App Data", @"Xóa toàn bộ dữ liệu ứng dụng")
+                                              style:UIAlertActionStyleDestructive
         handler:^(UIAlertAction *a) { [self confirmWipeAllData]; }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
-    // Anchor on the Settings toolbar button (3rd subview) for iPad popovers.
+    [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Cancel", @"Hủy")
+                                              style:UIAlertActionStyleCancel handler:nil]];
+
     UIView *anchor = (self.toolbar.subviews.count > 2) ? self.toolbar.subviews[2] : self.toolbar;
     sheet.popoverPresentationController.sourceView = anchor;
     sheet.popoverPresentationController.sourceRect = anchor.bounds;
     [self presentViewController:sheet animated:YES completion:nil];
 }
 
+- (void)showAppLanguageMenu {
+    NSString *mode = EKAAppLanguageMode();
+    UIAlertController *sheet = [UIAlertController
+        alertControllerWithTitle:EKAT(@"App Language", @"Ngôn ngữ ứng dụng")
+        message:EKAT(@"This changes EKA2L1's iOS interface only. Symbian firmware language is managed separately per device.",
+                     @"Mục này chỉ đổi giao diện iOS của EKA2L1. Ngôn ngữ Symbian được quản lý riêng cho từng thiết bị.")
+        preferredStyle:UIAlertControllerStyleActionSheet];
+
+    NSArray<NSArray<NSString *> *> *choices = @[
+        @[@"system", EKAT(@"Follow iPhone Language", @"Theo ngôn ngữ iPhone")],
+        @[@"en", @"English"],
+        @[@"vi", @"Tiếng Việt"]
+    ];
+    for (NSArray<NSString *> *choice in choices) {
+        NSString *value = choice[0];
+        NSString *label = choice[1];
+        NSString *title = [mode isEqualToString:value] ? [label stringByAppendingString:@"  ✓"] : label;
+        [sheet addAction:[UIAlertAction actionWithTitle:title style:UIAlertActionStyleDefault
+            handler:^(UIAlertAction *a) { [self setAppLanguageMode:value]; }]];
+    }
+    [sheet addAction:[UIAlertAction actionWithTitle:EKAT(@"Cancel", @"Hủy")
+                                              style:UIAlertActionStyleCancel handler:nil]];
+    UIView *anchor = (self.toolbar.subviews.count > 2) ? self.toolbar.subviews[2] : self.toolbar;
+    sheet.popoverPresentationController.sourceView = anchor;
+    sheet.popoverPresentationController.sourceRect = anchor.bounds;
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
+- (void)setAppLanguageMode:(NSString *)mode {
+    [[NSUserDefaults standardUserDefaults] setObject:mode forKey:@"EKAAppLanguageModeV16"];
+    [self refreshLocalizedChrome];
+    if (!self.gameRunning) {
+        self.statusLabel.hidden = NO;
+        self.statusLabel.text = EKAT(@"Interface language updated.", @"Đã cập nhật ngôn ngữ giao diện.");
+    }
+    NSLog(@"EKA2L1 V16 UI/DEVICE: app language=%@", mode);
+}
+
 // Settings-sheet label for Progress Sync, reflecting the live sync state once iCloud is on.
 - (NSString *)progressSyncTitle {
     EKASyncManager *s = [EKASyncManager shared];
-    if (!s.iCloudEnabled) return @"Progress Sync";
+    if (!s.iCloudEnabled) return EKAT(@"Progress Sync", @"Đồng bộ tiến trình");
     switch (s.status) {
-        case EKASyncStatusSyncing:     return @"Progress Sync — Syncing…";
-        case EKASyncStatusSynced:      return @"Progress Sync — Synced";
-        case EKASyncStatusUnavailable: return @"Progress Sync — iCloud unavailable";
-        case EKASyncStatusError:       return @"Progress Sync — Error";
-        default:                       return @"Progress Sync";
+        case EKASyncStatusSyncing:     return EKAT(@"Progress Sync — Syncing…", @"Đồng bộ tiến trình — Đang đồng bộ…");
+        case EKASyncStatusSynced:      return EKAT(@"Progress Sync — Synced", @"Đồng bộ tiến trình — Đã đồng bộ");
+        case EKASyncStatusUnavailable: return EKAT(@"Progress Sync — iCloud unavailable", @"Đồng bộ tiến trình — iCloud không khả dụng");
+        case EKASyncStatusError:       return EKAT(@"Progress Sync — Error", @"Đồng bộ tiến trình — Lỗi");
+        default:                       return EKAT(@"Progress Sync", @"Đồng bộ tiến trình");
     }
 }
 
@@ -2027,25 +2153,70 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 
 - (void)onInstallDevice {
     UIAlertController *alert = [UIAlertController
-        alertControllerWithTitle:@"Install Device"
-                         message:@"Choose how you want to install your Symbian device."
-                  preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Device Dump (Recommended)" style:UIAlertActionStyleDefault
-        handler:^(UIAlertAction *a) { [self onInstallDeviceDump]; }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"VPL Firmware" style:UIAlertActionStyleDefault
-        handler:^(UIAlertAction *a) { [self onInstallVplFirmware]; }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+        alertControllerWithTitle:EKAT(@"Device Catalog", @"Danh mục thiết bị")
+        message:EKAT(@"Choose a phone profile first, then select that phone's firmware. EKA2L1 still validates and imports the actual firmware files.",
+                     @"Chọn mẫu điện thoại trước, sau đó chọn firmware đúng của máy đó. EKA2L1 vẫn kiểm tra và nhập các tệp firmware thực tế.")
+        preferredStyle:UIAlertControllerStyleActionSheet];
+
+    [alert addAction:[UIAlertAction actionWithTitle:@"Nokia C6-00 (RM-612)  ›"
+                                              style:UIAlertActionStyleDefault
+        handler:^(UIAlertAction *a) { [self onInstallC6Profile]; }]];
+    [alert addAction:[UIAlertAction actionWithTitle:EKAT(@"Auto-detect VPL Firmware…", @"Tự nhận diện firmware VPL…")
+                                              style:UIAlertActionStyleDefault
+        handler:^(UIAlertAction *a) {
+            self.pendingDeviceProfile = nil;
+            [self onInstallVplFirmware];
+        }]];
+    [alert addAction:[UIAlertAction actionWithTitle:EKAT(@"ROM + RPKG Device Dump…", @"Bản dump ROM + RPKG…")
+                                              style:UIAlertActionStyleDefault
+        handler:^(UIAlertAction *a) {
+            self.pendingDeviceProfile = nil;
+            [self onInstallDeviceDump];
+        }]];
+    [alert addAction:[UIAlertAction actionWithTitle:EKAT(@"Cancel", @"Hủy")
+                                              style:UIAlertActionStyleCancel handler:nil]];
+
+    UIView *anchor = self.deviceButton ?: self.toolbar;
+    alert.popoverPresentationController.sourceView = anchor;
+    alert.popoverPresentationController.sourceRect = anchor.bounds;
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)onInstallC6Profile {
+    self.pendingDeviceProfile = @"Nokia C6-00 (RM-612)";
+    UIAlertController *alert = [UIAlertController
+        alertControllerWithTitle:@"Nokia C6-00 (RM-612)"
+        message:EKAT(@"Profile: S60 5th Edition / Symbian^1. Select the folder containing the RM-612 .vpl manifest and all matching .fpsx / .rofs firmware files.",
+                     @"Hồ sơ: S60 5th Edition / Symbian^1. Hãy chọn thư mục chứa tệp .vpl RM-612 và toàn bộ tệp firmware .fpsx / .rofs đi kèm.")
+        preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:EKAT(@"Choose Firmware Folder", @"Chọn thư mục firmware")
+                                              style:UIAlertActionStyleDefault
+        handler:^(UIAlertAction *a) {
+            self.pickMode = PickModeVplFirmware;
+            [self presentFolderPicker];
+        }]];
+    [alert addAction:[UIAlertAction actionWithTitle:EKAT(@"Select Firmware Files", @"Chọn các tệp firmware")
+                                              style:UIAlertActionStyleDefault
+        handler:^(UIAlertAction *a) {
+            self.pickMode = PickModeVplFirmwareFiles;
+            [self presentVplFirmwareFilesPicker];
+        }]];
+    [alert addAction:[UIAlertAction actionWithTitle:EKAT(@"Cancel", @"Hủy")
+                                              style:UIAlertActionStyleCancel handler:nil]];
     [self presentViewController:alert animated:YES completion:nil];
 }
 
 - (void)onInstallDeviceDump {
     UIAlertController *alert = [UIAlertController
-        alertControllerWithTitle:@"Install Device (1/2)"
-                         message:@"Select your Symbian ROM file (e.g. SYM.ROM)."
-                  preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Choose ROM" style:UIAlertActionStyleDefault
+        alertControllerWithTitle:EKAT(@"Install Device (1/2)", @"Cài thiết bị (1/2)")
+        message:EKAT(@"Select your Symbian ROM file (for example SYM.ROM).",
+                     @"Chọn tệp ROM Symbian của bạn (ví dụ SYM.ROM).")
+        preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:EKAT(@"Choose ROM", @"Chọn ROM")
+                                              style:UIAlertActionStyleDefault
         handler:^(UIAlertAction *a) { self.pickMode = PickModeDeviceRom; [self presentPicker]; }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:EKAT(@"Cancel", @"Hủy")
+                                              style:UIAlertActionStyleCancel handler:nil]];
     [self presentViewController:alert animated:YES completion:nil];
 }
 
@@ -2055,14 +2226,18 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 // pick the whole folder, copy it in, and locate the .vpl inside.
 - (void)onInstallVplFirmware {
     UIAlertController *alert = [UIAlertController
-        alertControllerWithTitle:@"VPL Firmware"
-                         message:@"Select the folder that contains your firmware’s .vpl file (along with its .fpsx / .rofs files)."
-                  preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Choose Firmware Folder" style:UIAlertActionStyleDefault
+        alertControllerWithTitle:EKAT(@"VPL Firmware", @"Firmware VPL")
+        message:EKAT(@"Select the folder that contains the firmware .vpl manifest together with its .fpsx / .rofs files.",
+                     @"Chọn thư mục chứa tệp khai báo .vpl cùng các tệp firmware .fpsx / .rofs.")
+        preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:EKAT(@"Choose Firmware Folder", @"Chọn thư mục firmware")
+                                              style:UIAlertActionStyleDefault
         handler:^(UIAlertAction *a) { self.pickMode = PickModeVplFirmware; [self presentFolderPicker]; }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Select Files in This Folder" style:UIAlertActionStyleDefault
+    [alert addAction:[UIAlertAction actionWithTitle:EKAT(@"Select Files in This Folder", @"Chọn các tệp trong thư mục")
+                                              style:UIAlertActionStyleDefault
         handler:^(UIAlertAction *a) { self.pickMode = PickModeVplFirmwareFiles; [self presentVplFirmwareFilesPicker]; }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:EKAT(@"Cancel", @"Hủy")
+                                              style:UIAlertActionStyleCancel handler:nil]];
     [self presentViewController:alert animated:YES completion:nil];
 }
 
@@ -2080,21 +2255,31 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 - (void)installVplFirmwareFromFolder:(NSString *)folder {
     NSString *vpl = [self findVplInFolder:folder];
     if (!vpl) {
-        [self showAlert:@"No .vpl file"
-                message:@"That folder doesn’t contain a .vpl file. Pick the folder that holds your firmware’s .vpl manifest and its .fpsx / .rofs files."];
+        [self showAlert:EKAT(@"No .vpl file", @"Không tìm thấy tệp .vpl")
+                message:EKAT(@"That folder doesn't contain a .vpl manifest. Choose the folder holding the .vpl and all matching .fpsx / .rofs files.",
+                             @"Thư mục này không có tệp khai báo .vpl. Hãy chọn thư mục chứa .vpl và toàn bộ tệp .fpsx / .rofs tương ứng.")];
         return;
+    }
+
+    if (self.pendingDeviceProfile.length) {
+        NSLog(@"EKA2L1 V16 UI/DEVICE: profile=%@ firmware=%@", self.pendingDeviceProfile, vpl.lastPathComponent);
+    } else {
+        NSLog(@"EKA2L1 V16 UI/DEVICE: auto-detect firmware=%@", vpl.lastPathComponent);
     }
     [self runDeviceInstallWithRpkg:std::string() rom:std::string([vpl UTF8String]) installRpkg:NO];
 }
 
 - (void)promptForRpkg {
     UIAlertController *alert = [UIAlertController
-        alertControllerWithTitle:@"Install Device (2/2)"
-                         message:@"Select the RPKG firmware file. Most S60v5 / Symbian^3 ROMs need one. Tap “Skip” if your ROM is already complete."
-                  preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Choose RPKG" style:UIAlertActionStyleDefault
+        alertControllerWithTitle:EKAT(@"Install Device (2/2)", @"Cài thiết bị (2/2)")
+        message:EKAT(@"Select the RPKG firmware file. Most S60v5 / Symbian^3 ROMs need one. Choose Skip if your ROM is already complete.",
+                     @"Chọn tệp firmware RPKG. Phần lớn ROM S60v5 / Symbian^3 cần tệp này. Chọn Bỏ qua nếu ROM đã đầy đủ.")
+        preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:EKAT(@"Choose RPKG", @"Chọn RPKG")
+                                              style:UIAlertActionStyleDefault
         handler:^(UIAlertAction *a) { self.pickMode = PickModeDeviceRpkg; [self presentPicker]; }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Skip" style:UIAlertActionStyleDestructive
+    [alert addAction:[UIAlertAction actionWithTitle:EKAT(@"Skip", @"Bỏ qua")
+                                              style:UIAlertActionStyleDestructive
         handler:^(UIAlertAction *a) {
             [self runDeviceInstallWithRpkg:std::string() rom:std::string([self.pendingRomPath UTF8String]) installRpkg:YES];
         }]];
@@ -2106,7 +2291,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 // Device-dump install: installRpkg = YES, rom = ROM path, rpkg = optional RPKG.
 // VPL firmware install: installRpkg = NO, rpkg empty, rom = the .vpl manifest path.
 - (void)runDeviceInstallWithRpkg:(std::string)rpkg rom:(std::string)rom installRpkg:(BOOL)installRpkg {
-    [self beginProgress:installRpkg ? @"Installing device…" : @"Installing firmware…"];
+    [self beginProgress:(installRpkg ? EKAT(@"Installing device…", @"Đang cài thiết bị…") : EKAT(@"Installing firmware…", @"Đang cài firmware…"))];
 
     // Real extraction progress (0..100) drives the bar to 90%; the post-extraction boot
     // then eases it toward completion (no granular metric for the boot itself). `me` is
@@ -2116,7 +2301,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
     std::function<void(int)> progress = [me](int pct) {
         dispatch_async(dispatch_get_main_queue(), ^{
             if (pct >= 100) {
-                me.statusLabel.text = @"Booting device…";
+                me.statusLabel.text = EKAT(@"Booting device…", @"Đang khởi động thiết bị…");
                 [me setProgressFraction:0.9f];
                 [me climbProgressToward:0.98f];
             } else {
@@ -2131,16 +2316,23 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
             if (result == 0) {
                 // Extraction done; the guest now boots asynchronously. Keep the bar moving
                 // until its apps register, then finish.
-                self.statusLabel.text = @"Booting device…";
+                self.statusLabel.text = EKAT(@"Booting device…", @"Đang khởi động thiết bị…");
                 [self climbProgressToward:0.98f];
                 [self pollUntilAppsThen:^(BOOL found) {
                     [self endProgress];
                     [self showAppsScreen];
-                    [self showAlert:@"Device installed" message:@"The Symbian device was installed and booted."];
+                    NSString *installedMessage = self.pendingDeviceProfile.length
+                        ? [NSString stringWithFormat:EKAT(@"%@ was installed. EKA2L1 imported the firmware and started the virtual phone.",
+                                                         @"Đã cài %@. EKA2L1 đã nhập firmware và khởi động điện thoại ảo."),
+                                                   self.pendingDeviceProfile]
+                        : EKAT(@"The Symbian device was installed and booted.",
+                               @"Thiết bị Symbian đã được cài và khởi động.");
+                    [self showAlert:EKAT(@"Device installed", @"Đã cài thiết bị") message:installedMessage];
+                    self.pendingDeviceProfile = nil;
                 } attemptsLeft:30];
             } else {
                 [self endProgress];
-                self.statusLabel.text = @"No Symbian device installed.\n\nTap “Install Device” to try again.";
+                self.statusLabel.text = EKAT(@"No Symbian device installed.\n\nTap “Install Device” to try again.", @"Chưa cài được thiết bị Symbian.\n\nNhấn “Cài thiết bị” để thử lại.");
                 NSString *msg;
                 if (!installRpkg) {
                     // device_installation_vpl_file_invalid == 8 (system/installation/common.h)
@@ -2150,7 +2342,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
                 } else {
                     msg = [NSString stringWithFormat:@"Could not install (error %d). Select a valid ROM and RPKG.", result];
                 }
-                [self showAlert:@"Install failed" message:msg];
+                [self showAlert:EKAT(@"Install failed", @"Cài đặt thất bại") message:msg];
             }
         });
     });
@@ -2162,7 +2354,7 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
     if (mode == PickModeVplFirmwareFiles) {
         NSString *folder = [self importFirmwareFilesAtURLs:urls];
         if (!folder) {
-            [self showAlert:@"Import failed" message:@"Could not copy the selected firmware files."];
+            [self showAlert:EKAT(@"Import failed", @"Nhập dữ liệu thất bại") message:EKAT(@"Could not copy the selected firmware files.", @"Không thể sao chép các tệp firmware đã chọn.")];
             return;
         }
         [self installVplFirmwareFromFolder:folder];
@@ -2174,14 +2366,14 @@ static BOOL EKAIsSisPackagePath(NSString *path) {
 
     if (mode == PickModeDeviceRom) {
         if (![[local pathExtension].lowercaseString isEqualToString:@"rom"]) {
-            [self showAlert:@"Wrong file" message:@"Please choose a SYM.ROM / .rom file."];
+            [self showAlert:EKAT(@"Wrong file", @"Sai tệp") message:EKAT(@"Please choose a SYM.ROM / .rom file.", @"Hãy chọn tệp SYM.ROM / .rom.")];
             return;
         }
         self.pendingRomPath = local;
         [self promptForRpkg];
     } else if (mode == PickModeDeviceRpkg) {
         if (![[local pathExtension].lowercaseString isEqualToString:@"rpkg"]) {
-            [self showAlert:@"Wrong file" message:@"Please choose a .RPKG file."];
+            [self showAlert:EKAT(@"Wrong file", @"Sai tệp") message:EKAT(@"Please choose a .RPKG file.", @"Hãy chọn tệp .RPKG.")];
             return;
         }
         std::string rpkg = [local UTF8String];
