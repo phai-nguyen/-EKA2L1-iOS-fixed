@@ -62,8 +62,10 @@ jobs:
           # V13 is pinned to upstream 661031f9...; reject the known-bad patch variant early.
           grep -Fq '@@ -82,8 +142,36 @@ namespace eka2l1::mem::flexible {' core-patches/phone-v13-owner-generation.patch
           grep -Fq -- '-                        // Empty it out' core-patches/phone-v13-owner-generation.patch
+          grep -Fq 'static_cast<const void *>(starting_point_host)' core-patches/phone-v13-owner-generation.patch
+          grep -Fq 'static_cast<const void *>(info->host_addr)' core-patches/phone-v13-owner-generation.patch
           V13_SHA="$(shasum -a 256 core-patches/phone-v13-owner-generation.patch | awk '{print $1}')"
-          test "$V13_SHA" = '1dfb3887555df6c34fb2e2051f6d459c1e47c3b732c1d95d13f33ee349fd89d3'
+          test "$V13_SHA" = '7cac4fb175c30ca7f5c3fe37b108dce3671ad0dbd52513d36139e28a3be9bd8d'
           echo "Verified corrected V13 patch SHA256: $V13_SHA"
           grep -q 'gdi_store_command_draws_pixels' core-patches/phone-v11-core.patch
           grep -q 'walk_tree_back_to_front' core-patches/phone-v11-core.patch
