@@ -238,7 +238,7 @@ index e5b55af..0a8136c 100644
 +                        if (current != mapping_owners.end() && current->second.generation != generation_) {
 +                            LOG_WARN(MEMORY,
 +                                "Phone Mode V13 OWNERGEN: mapping ownership transfer page=0x{:08X} old-generation={} new-generation={} old-host={} new-host={}",
-+                                guest_page, current->second.generation, generation_, current->second.host, starting_point_host);
++                                guest_page, current->second.generation, generation_, current->second.host, static_cast<const void *>(starting_point_host));
 +                        }
 +                        mapping_owners[key] = mapping_owner_entry{generation_, starting_point_host};
 +                    }
@@ -277,7 +277,7 @@ index e5b55af..0a8136c 100644
 +                            stale_unmap_blocked_ = true;
 +                            LOG_WARN(MEMORY,
 +                                "Phone Mode V13 OWNERGEN: STALE UNMAP BLOCKED page=0x{:08X} old-generation={} current-generation={} expected-host={} current-host={} page-host={}",
-+                                guest_page, generation_, current_generation, expected_host, current_host, info->host_addr);
++                                guest_page, generation_, current_generation, expected_host, current_host, static_cast<const void *>(info->host_addr));
 +                        } else {
 +                            info->host_addr = nullptr;
 +                        }
