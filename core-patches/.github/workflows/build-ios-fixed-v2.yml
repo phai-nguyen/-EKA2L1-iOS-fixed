@@ -1,0 +1,179 @@
+EKA2L1 iOS Phone Mode — Project Handoff (V9)
+
+1) Repository / build workflow
+
+	●	Main repository: https://github.com/phai-nguyen/Phan-mem
+	●	Branch: main
+	●	Build method: GitHub Actions on macOS runner -> unsigned ARM64 IPA -> sign/install on iPhone.
+	●	Current package lineage: V1 -> V9.
+
+2) User workflow / debugging contract
+
+	●	Prefer checking the GitHub repo first for source/workflow/build failures.
+	●	For normal runtime debugging, user will usually send only:
+	●	EKA2L1.log
+	●	EKA2L1_TakeThis.log
+	●	screen-recording video
+	●	Ask for the full eka2l1 data folder only when logs/video are insufficient (e.g. need devices.yml, Z:/C:/E: filesystem contents, package metadata, firmware files, corrupted state, saves/config).
+	●	Before telling the user to sign/install a new build, preflight the IPA and verify version markers in the binary.
+
+3) Test device / target
+
+	●	Primary target: Nokia N8-00 / RM-596.
+	●	Main problematic firmware: RM-596 v025.007 VIETNAM Full (Symbian^3 / epoc95 path in EKA2L1).
+	●	Known-good reference firmware: RM-596 v111.030.0609 VIETNAM Full (epoc10 path in EKA2L1).
+	●	Reference game: fruitninja_zOne1VT1.sis, UID 0x200398FD, Fruit Ninja 1.6.2.
+	●	Important A/B result: under V7, the same Fruit Ninja runs on v111.030.0609 but failed on v025.007. Use v111 as a behavioral/ABI reference, not as a source of DLLs to copy blindly into v025.
+
+4) Major fixes already completed
+
+V2 — iOS picker / shutdown fixes
+
+	●	Device Dump picker accepts SYM.ROM / .rom and RPKG-like paths as intended.
+	●	VPL Firmware supports folder-selection / multi-file import paths.
+	●	Choose Firmware Folder crash fixed (UTTypeFolder, asCopy:NO, safe handling).
+	●	Exit Game/input shutdown protections added to avoid race/deadlock.
+
+V3 — Symbian 9.5 / memory model
+
+	●	Symbian platform 9.5 is recognized as epoc95.
+	●	Existing epoc94 device metadata can migrate to epoc95.
+	●	Correct Flexible Memory Model used for N8/Symbian^3.
+	●	ROM-BSS null guard added in codeseg.cpp.
+
+V4/V5 — SVC + host-crash safety
+
+	●	V4 originally used epoc10 SVC table for epoc95.
+	●	V5 added epoc95-specific extras and diagnostics:
+	●	ChannelRequest handling
+	●	ChannelCreate handling
+	●	V5 SVCMISS diagnostics with PC/LR/R0-R3
+	●	codedump_collector re-entrancy guard added so guest crashes do not recursively corrupt host cleanup and crash the iOS app.
+
+V6/V7 — OpenVG / AknIcon diagnostics
+
+	●	epoc95 allowed to use OpenVG/OpenVGU HLE.
+	●	OpenVG patch coverage diagnostics added; confirmed 76/76 OpenVG + 9/9 OpenVGU exports patched in tests.
+	●	HLE !AknIconServer enabled for epoc95 to avoid the earlier native AknIconSrv -> fbscli -> khmangle/khmonitor crash path.
+	●	AknIcon unsupported-opcode diagnostics added.
+	●	IPC packed-structure mismatch diagnostics added.
+
+V8 — precise IPC/ALF diagnostics
+
+	●	IPC context diagnostics now log server, thread, opcode, arg, packed size, expected size, copied size, and bytes.
+	●	Fixed raw IPC argument type check (unspecified == 0 issue).
+	●	ALF streamer diagnostic logging added; known observed opcodes 0x526D, 0, 1, 2, 3 treated deterministically rather than pretending unknown calls always succeeded.
+
+V9 — FBS BitmapCreate ABI fix for epoc95
+
+File of interest: src/emu/services/src/fbs/impls/bitmap.cpp
+
+V8 proved the critical failure on v025.007 was:
+
+	●	server !Fontbitmapserver
+	●	opcode 0x0E = BitmapCreate
+	●	client sent 28-byte Anna/Belle bmp_specs_v2
+	●	old epoc95 branch parsed it as 24-byte legacy-modern layout
+	●	game immediately hit Leave -6 / KErrArgument and was killed.
+
+V9 fixes this by selecting the 28-byte bmp_specs_v2 contract for epoc95+ when the packet size indicates it, and writing bitmap handles back to IPC slot 1 (Anna/Belle ABI). 24-byte clients keep the older contract.
+
+Marker:
+V9 FBS95 CREATE: layout=v2 ... writeback_slot=1
+
+5) Latest test state — V9 CLEAN INSTALL
+
+This is the current project state and should be treated as the new baseline.
+
+Confirmed good
+
+	●	V9 clean install boots RM-596 v025.007 correctly.
+	●	V7 AknIcon HLE is active.
+	●	OpenVG coverage remains complete: 76/76 + 9/9.
+	●	Fruit Ninja UID 0x200398FD installs and launches.
+	●	V9 marker appears with the correct decoded packet, e.g.:
+	●	pixels=11x44, mode=7, uid=0x9A2C, writeback_slot=1
+	●	later 640x360 bitmaps are also decoded as bmp_specs_v2.
+	●	The old V8 critical signature is gone:
+	●	no V8 IPCCTX ... opcode=0xE ... packed=28 expected=24
+	●	no Leave -6
+	●	no Thread Fruit Ninja forcefully killed ... -6
+
+New remaining problems / next suspects
+
+	1.	AknIconServer HLE opcode 0x2 is unsupported
+	●	Repeats many times during the V9 clean run.
+	●	Current V7 HLE completes it as KErrNotSupported (-5).
+	●	This is now a strong next candidate for V10 because V9 removed the previous fatal -6 signature.
+	●	Do NOT blindly no-op it until its expected request/response ABI is identified. Compare against native AknIcon behavior on v111 if possible.
+	2.	Repeated Leave -5 / Leave -19 and Unknown thread state to wake up
+	●	Often appears around the AknIcon unsupported-opcode loop.
+	●	Determine which service/call actually owns each leave before patching.
+	3.	One V5 SVCMISS: svc=0xE8
+	●	Seen in V9 clean run.
+	●	Lower priority because v111 known-good testing also exhibited SVC 0xE8 while Fruit Ninja still ran.
+	4.	Graphics issues remain
+	●	early Invalid bitmap handle to draw warnings still occur.
+	●	Corrupted graphics command list! Emulation halt. appears late in EKA2L1_TakeThis around teardown/after the run.
+	●	Treat as separate graphics lifetime/teardown issue unless video/log proves it terminates gameplay earlier.
+	5.	ALF streamer
+	●	Remains diagnostic/compatibility debt, but no longer P0 because the same core ALF opcodes appear on v111 where Fruit Ninja runs.
+
+6) Current priority order for V10
+
+P0. Identify and correctly implement !AknIconServer opcode 0x2 for epoc95/Anna.
+
+P1. Add richer AknIcon IPC diagnostics before changing behavior:
+
+	●	caller thread/process
+	●	opcode
+	●	all 4 argument types/raw values/descriptors
+	●	descriptor len/max/hex
+	●	completion code
+
+P1. Compare the same Fruit Ninja transaction sequence with v111 native AknIconSrv if possible. Use v111 as known-good behavior.
+
+P2. Investigate recurring Leave -5/-19 and Unknown thread state to wake up only after associating them with an exact service/opcode.
+
+P2. Fix graphics teardown / command-list lifetime after core gameplay compatibility is stable.
+
+P3. SVC 0xE8 and ALF refinements unless evidence upgrades them.
+
+7) Important source files
+
+	●	.github/workflows/build-ios-fixed-v9.yml
+	●	src/emu/services/src/fbs/impls/bitmap.cpp
+	●	src/emu/services/src/ui/icon/icon.cpp
+	●	src/emu/services/include/services/context.h
+	●	src/emu/services/src/audio/alf/alf.cpp
+	●	src/emu/services/src/init.cpp
+	●	src/emu/dispatch/src/libraries/register.cpp
+	●	src/emu/kernel/src/libmanager.cpp
+	●	src/emu/kernel/src/codedump_collector.cpp
+	●	src/emu/kernel/src/codeseg.cpp
+	●	src/emu/system/software.cpp
+	●	src/emu/kernel/devices.cpp / device-version logic as present in current repo
+	●	src/emu/ios/app/RootViewController.mm
+
+8) Version markers to preserve in future builds
+
+	●	V3 EPOC95
+	●	V3 EPOC95 MIGRATION
+	●	V3 ROMBSS
+	●	V5 SVC95
+	●	V5 SVCMISS
+	●	V5 CHANNELREQ
+	●	V5 CHANCREATE
+	●	V5 CODEDUMP
+	●	V6 OPENVG95
+	●	V7 OPENVG95 COVERAGE
+	●	V7 AKNICON95
+	●	V8 IPCCTX
+	●	V8 ALF95
+	●	V9 FBS95 CREATE
+
+9) Starter prompt for the new conversation
+
+Paste this at the beginning of the new chat together with this handoff file:
+
+Phone Mode từ V9. Repo chính là https://github.com/phai-nguyen/Phan-mem branch main. Hãy đọc file handoff này trước khi phân tích. V9 clean đã sửa thành công FBS BitmapCreate ABI 28-byte của epoc95: không còn opcode 0x0E 28->24, Leave -6, hoặc Fruit Ninja bị kill -6. Nghi phạm tiếp theo là HLE !AknIconServer opcode 0x2 đang trả KErrNotSupported (-5) lặp lại. Hãy ưu tiên kiểm tra source repo trực tiếp và dùng firmware RM-596 v111.030.0609 chạy được Fruit Ninja làm behavioral reference cho v025.007. Bình thường tôi sẽ gửi 2 log + video; chỉ yêu cầu cả thư mục eka2l1 khi thật sự cần.
