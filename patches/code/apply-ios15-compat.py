@@ -173,6 +173,39 @@ struct CompatFileShareLink<Label: View>: View {
     }
 }
 
+
+private struct CompatAnyShape: Shape {
+    private let makePath: (CGRect) -> Path
+
+    init<S: Shape>(_ shape: S) {
+        makePath = { rect in shape.path(in: rect) }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        makePath(rect)
+    }
+}
+
+func isExternalDisplaySessionRole(_ role: UISceneSession.Role) -> Bool {
+    if #available(iOS 16.0, *) {
+        return role == .windowExternalDisplayNonInteractive
+    } else {
+        return role == .windowExternalDisplay
+    }
+}
+
+extension View {
+    @ViewBuilder
+    func compatHideNavigationChrome() -> some View {
+        if #available(iOS 16.0, *) {
+            toolbar(.hidden, for: .navigationBar)
+                .persistentSystemOverlays(.hidden)
+        } else {
+            navigationBarHidden(true)
+        }
+    }
+}
+
 private struct CompatActivityView: UIViewControllerRepresentable {
     let items: [Any]
 
@@ -214,6 +247,240 @@ for path in app.glob("*.swift"):
     text = text.replace("ToolbarItemGroup(placement: .topBarTrailing)",
                         "ToolbarItemGroup(placement: .navigationBarTrailing)")
     path.write_text(text)
+
+
+# ToolbarContentBuilder's conditional ToolbarContent conformances arrived in
+# iOS 16. Keep the ToolbarContent structure fixed; condition only the inner
+# ViewBuilder content, which is iOS 15-safe.
+path = app / "ContentView.swift"
+text = path.read_text()
+start = text.index("    private var statusToolbarItem: some ToolbarContent {")
+end = text.index("    private func bootIfNeeded()", start)
+toolbar = r'''    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .status) {
+            if store.busy {
+                ProgressView()
+                    .controlSize(.small)
+                    .fixedSize()
+            }
+        }
+
+        ToolbarItemGroup(placement: .navigationBarTrailing) {
+            Group {
+                if !store.devices.isEmpty {
+                    CompatMenu("home.install", systemImage: "plus") {
+                        Button {
+                            homeImportTarget = .sis
+                            showingHomeImporter = true
+                        } label: {
+                            Label("home.install.sis", systemImage: "square.and.arrow.down")
+                        }
+
+                        if store.deviceIsEKA1 {
+                            Button {
+                                homeImportTarget = .ngage
+                                showingHomeImporter = true
+                            } label: {
+                                Text("home.installNGage")
+                                Text("home.installNGage.subtitle")
+                                Image(systemName: "gamecontroller")
+                            }
+
+                            Button {
+                                homeImportTarget = .card
+                                showingHomeImporter = true
+                            } label: {
+                                Text("home.mountCard")
+                                Text("home.mountCard.subtitle")
+                                Image(systemName: "sdcard")
+                            }
+
+                            if let card = store.mountedCardName {
+                                Button(role: .destructive) {
+                                    if store.ejectCard() {
+                                        banner = String(localized: "home.card.ejected")
+                                    }
+                                } label: {
+                                    Text("home.card.eject")
+                                    Text(card)
+                                    Image(systemName: "eject")
+                                }
+                            }
+                        } else {
+                            Button {
+                                homeImportTarget = .ngage2
+                                showingHomeImporter = true
+                            } label: {
+                                Text("home.installNGage2")
+                                Text("home.installNGage2.subtitle")
+                                Image(systemName: "arrow.down.doc")
+                            }
+                        }
+
+                        Divider()
+
+                        Button {
+                            homeImportTarget = .font
+                            showingHomeImporter = true
+                        } label: {
+                            Text("home.installFonts")
+                            Text("home.installFonts.subtitle")
+                            Image(systemName: "textformat")
+                        }
+                    }
+                    .disabled(store.busy)
+
+                    CompatMenu("home.more", systemImage: "ellipsis.circle") {
+                        Button {
+                            showingSettings = true
+                        } label: {
+                            Label("settings.title", systemImage: "gearshape")
+                        }
+
+                        Button {
+                            showSystemApps.toggle()
+                        } label: {
+                            if showSystemApps {
+                                Label("home.hideSystemApps", systemImage: "eye.slash")
+                            } else {
+                                Label("home.showSystemApps", systemImage: "eye")
+                            }
+                        }
+
+                        Divider()
+
+                        Button {
+                            showingOnboarding = true
+                        } label: {
+                            Label("onboarding.title", systemImage: "questionmark.circle")
+                        }
+                    }
+                    .disabled(store.busy)
+                }
+            }
+        }
+    }
+
+'''
+text = text[:start] + toolbar + text[end:]
+path.write_text(text)
+
+# External display role name changed in iOS 16. Accept the legacy iOS 15 role.
+for filename in ["EKA2L1App.swift", "ExternalDisplay.swift"]:
+    path = app / filename
+    text = path.read_text()
+    text = text.replace(
+        "window?.windowScene?.session.role == .windowExternalDisplayNonInteractive",
+        "window?.windowScene.map { isExternalDisplaySessionRole($0.session.role) } == true"
+    )
+    text = text.replace(
+        "session.role == .windowExternalDisplayNonInteractive",
+        "isExternalDisplaySessionRole(session.role)"
+    )
+    path.write_text(text)
+
+# iOS 15 does not have toolbar(for:) / persistentSystemOverlays.
+path = app / "EmulatorView.swift"
+text = path.read_text()
+text = text.replace(
+    '''        .toolbar(.hidden, for: .navigationBar)
+        .persistentSystemOverlays(.hidden)
+''',
+    '''        .compatHideNavigationChrome()
+'''
+)
+
+# Orientation update APIs changed in iOS 16. Use the pre-iOS 16 rotation path
+# for iOS 15 and geometry requests on newer systems.
+text = text.replace(
+    "rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()",
+    "refreshSupportedOrientations()"
+)
+old_request = '''        scene.requestGeometryUpdate(.iOS(interfaceOrientations: landscape ? .landscape : .portrait))
+        // The request is rejected while a navigation transition is running (the
+        // emulator screen is usually mid-push), so confirm after it settles and
+        // re-request once if it didn't stick.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            guard let scene = activeScene,
+                  scene.interfaceOrientation.isLandscape != landscape else { return }
+            routeOrientationThroughLiveControllers(from: scene.keyWindow?.rootViewController)
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: landscape ? .landscape : .portrait))
+        }
+'''
+new_request = '''        requestSceneOrientation(scene, landscape: landscape)
+        // A navigation transition can temporarily reject rotation. Confirm
+        // after it settles and request once more if needed.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            guard let scene = activeScene,
+                  scene.interfaceOrientation.isLandscape != landscape else { return }
+            routeOrientationThroughLiveControllers(from: scene.keyWindow?.rootViewController)
+            requestSceneOrientation(scene, landscape: landscape)
+        }
+'''
+if old_request not in text:
+    raise SystemExit("orientation request block not found")
+text = text.replace(old_request, new_request)
+
+insert_before = '''    private static var activeScene: UIWindowScene? {
+'''
+orientation_helpers = '''    private static func refreshSupportedOrientations() {
+        if #available(iOS 16.0, *) {
+            rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+        } else {
+            UIViewController.attemptRotationToDeviceOrientation()
+        }
+    }
+
+    private static func requestSceneOrientation(_ scene: UIWindowScene, landscape: Bool) {
+        if #available(iOS 16.0, *) {
+            scene.requestGeometryUpdate(
+                .iOS(interfaceOrientations: landscape ? .landscape : .portrait)
+            )
+        } else {
+            UIDevice.current.setValue(
+                landscape ? UIInterfaceOrientation.landscapeRight.rawValue
+                          : UIInterfaceOrientation.portrait.rawValue,
+                forKey: "orientation"
+            )
+            UIViewController.attemptRotationToDeviceOrientation()
+        }
+    }
+
+'''
+if "private static func refreshSupportedOrientations()" not in text:
+    text = text.replace(insert_before, orientation_helpers + insert_before, 1)
+path.write_text(text)
+
+# SwiftUI.AnyShape is iOS 16+. Use the simple local type eraser above.
+path = app / "KeypadComponents.swift"
+text = path.read_text().replace("AnyShape", "CompatAnyShape")
+path.write_text(text)
+
+# Register a legacy external-display scene role so iOS 15 can create the same
+# delegate. Newer iOS continues to use the non-interactive role.
+plist = root / "src/emu/ios/Resources/Info.plist"
+text = plist.read_text()
+if "UIWindowSceneSessionRoleExternalDisplay</key>" not in text:
+    anchor = '''            <key>UIWindowSceneSessionRoleExternalDisplayNonInteractive</key>
+'''
+    legacy = '''            <key>UIWindowSceneSessionRoleExternalDisplay</key>
+            <array>
+                <dict>
+                    <key>UISceneConfigurationName</key>
+                    <string>Game Display</string>
+                    <key>UISceneClassName</key>
+                    <string>UIWindowScene</string>
+                    <key>UISceneDelegateClassName</key>
+                    <string>$(PRODUCT_MODULE_NAME).ExternalDisplaySceneDelegate</string>
+                </dict>
+            </array>
+'''
+    if anchor not in text:
+        raise SystemExit("scene manifest anchor not found")
+    text = text.replace(anchor, legacy + anchor, 1)
+    plist.write_text(text)
+
 
 # LocalizedStringResource is newer than our minimum. Store keys as ordinary
 # strings and hand them to SwiftUI as LocalizedStringKey on every supported OS.
