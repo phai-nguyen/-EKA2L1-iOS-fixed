@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - vi-localization-official
+    paths:
+      - ".github/workflows/build-ios-vietnamese.yml"
+      - "patches/code/**"
+      - "patches/**/*.patch"
+      - "patches/**/*.py"
   workflow_dispatch:
 
 permissions:
@@ -38,6 +43,25 @@ jobs:
           git checkout "$EKA2L1_UPSTREAM_COMMIT"
           git submodule update --init --recursive
 
+      - name: Install ccache
+        run: brew install ccache
+
+      - name: Restore compiler cache
+        uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/ccache
+          key: eka2l1-ios-ccache-${{ runner.os }}-${{ env.EKA2L1_UPSTREAM_COMMIT }}-${{ github.sha }}
+          restore-keys: |
+            eka2l1-ios-ccache-${{ runner.os }}-${{ env.EKA2L1_UPSTREAM_COMMIT }}-
+
+      - name: Restore incremental Xcode build
+        uses: actions/cache@v6
+        with:
+          path: upstream/build/ios-device
+          key: eka2l1-ios-build-${{ runner.os }}-${{ env.EKA2L1_UPSTREAM_COMMIT }}-${{ github.sha }}
+          restore-keys: |
+            eka2l1-ios-build-${{ runner.os }}-${{ env.EKA2L1_UPSTREAM_COMMIT }}-
+
       - name: Apply Vietnamese string catalogs
         run: |
           set -euo pipefail
@@ -64,6 +88,21 @@ jobs:
           test -f "$APP/vi.lproj/InfoPlist.strings"
           echo "Vietnamese resources are present in the app bundle."
           /usr/bin/plutil -p "$APP/vi.lproj/Localizable.strings" | head -40
+
+      - name: Stage reusable base app
+        run: |
+          set -euo pipefail
+          APP="upstream/build/ios-device/src/emu/ios/${EKA2L1_IOS_CONFIGURATION}-iphoneos/EKA2L1.app"
+          rm -rf base-app
+          mkdir -p base-app
+          cp -R "$APP" base-app/EKA2L1.app
+          rm -rf base-app/EKA2L1.app/_CodeSignature
+
+      - name: Seed reusable base app cache
+        uses: actions/cache@v6
+        with:
+          path: base-app
+          key: eka2l1-ios-base-${{ runner.os }}-${{ env.EKA2L1_UPSTREAM_COMMIT }}-jitoff-v1
 
       - name: Package unsigned IPAs
         run: |
