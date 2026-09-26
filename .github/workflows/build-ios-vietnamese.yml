@@ -1,6 +1,9 @@
 name: Build EKA2L1 iOS Vietnamese IPA
 
 on:
+  push:
+    branches:
+      - vi-localization-official
   workflow_dispatch:
 
 permissions:
