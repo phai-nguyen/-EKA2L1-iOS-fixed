@@ -21,6 +21,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 20
     env:
+      EKA2L1_IOS_DEPLOYMENT_TARGET: 15.0
       EKA2L1_UPSTREAM_COMMIT: 3afd85d249f4eef16071f6fdbbbf44e49e4072f7
       EKA2L1_ESIGN_BUNDLE_ID: app.lavender1865.valley8348
 
@@ -33,7 +34,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: base-app
-          key: eka2l1-ios-base-${{ runner.os }}-${{ env.EKA2L1_UPSTREAM_COMMIT }}-${{ hashFiles('.github/workflows/build-ios-vietnamese.yml', 'patches/code/**', 'patches/**/*.patch', 'patches/**/*.py') }}
+          key: eka2l1-ios-base-${{ runner.os }}-ios${{ env.EKA2L1_IOS_DEPLOYMENT_TARGET }}-${{ env.EKA2L1_UPSTREAM_COMMIT }}-${{ hashFiles('.github/workflows/build-ios-vietnamese.yml', 'patches/code/**', 'patches/**/*.patch', 'patches/**/*.py') }}
 
       - name: Require current base app
         run: |
