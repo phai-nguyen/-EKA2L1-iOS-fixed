@@ -1,0 +1,93 @@
+name: Build EKA2L1 iOS Vietnamese IPA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-ios-vi:
+    runs-on: macos-26
+    timeout-minutes: 120
+    env:
+      EKA2L1_IOS_CONFIGURATION: Release
+      EKA2L1_UPSTREAM_COMMIT: 3afd85d249f4eef16071f6fdbbbf44e49e4072f7
+
+    steps:
+      - name: Checkout Vietnamese localization branch
+        uses: actions/checkout@v7
+
+      - name: Clone official EKA2L1 source
+        run: |
+          set -euo pipefail
+          git clone https://github.com/EKA2L1/EKA2L1.git upstream
+          cd upstream
+          git checkout "$EKA2L1_UPSTREAM_COMMIT"
+          git submodule update --init --recursive
+
+      - name: Apply Vietnamese string catalogs
+        run: |
+          set -euo pipefail
+          cp patches/Localizable.xcstrings upstream/src/emu/ios/Resources/Localizable.xcstrings
+          cp patches/InfoPlist.xcstrings upstream/src/emu/ios/Resources/InfoPlist.xcstrings
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          base = Path("upstream/src/emu/ios/Resources")
+          ui = json.loads((base / "Localizable.xcstrings").read_text())
+          info = json.loads((base / "InfoPlist.xcstrings").read_text())
+
+          ui_vi = sum(
+              1 for item in ui["strings"].values()
+              if "vi" in item.get("localizations", {})
+          )
+          info_vi = sum(
+              1 for item in info["strings"].values()
+              if "vi" in item.get("localizations", {})
+          )
+          assert ui_vi == len(ui["strings"]), (ui_vi, len(ui["strings"]))
+          assert info_vi == len(info["strings"]), (info_vi, len(info["strings"]))
+          print(f"Vietnamese UI entries: {ui_vi}")
+          print(f"Vietnamese InfoPlist entries: {info_vi}")
+          PY
+
+      - name: Cache iOS FFmpeg
+        uses: actions/cache@v6
+        with:
+          path: upstream/src/external/ffmpeg/ios/device
+          key: ffmpeg-ios-device-vi-${{ env.EKA2L1_UPSTREAM_COMMIT }}
+
+      - name: Build unsigned iPhone app
+        working-directory: upstream
+        run: ./scripts/build_ios.sh device
+
+      - name: Verify Vietnamese resources
+        run: |
+          set -euo pipefail
+          APP="upstream/build/ios-device/src/emu/ios/${EKA2L1_IOS_CONFIGURATION}-iphoneos/EKA2L1.app"
+          test -d "$APP"
+          test -f "$APP/vi.lproj/Localizable.strings"
+          test -f "$APP/vi.lproj/InfoPlist.strings"
+          echo "Vietnamese resources are present in the app bundle."
+          /usr/bin/plutil -p "$APP/vi.lproj/Localizable.strings" | head -40
+
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          APP="upstream/build/ios-device/src/emu/ios/${EKA2L1_IOS_CONFIGURATION}-iphoneos/EKA2L1.app"
+          rm -rf ipa-stage EKA2L1-iOS-Vietnamese-unsigned.ipa
+          mkdir -p ipa-stage/Payload
+          cp -R "$APP" ipa-stage/Payload/EKA2L1.app
+          rm -rf ipa-stage/Payload/EKA2L1.app/_CodeSignature
+          (cd ipa-stage && /usr/bin/zip -qry ../EKA2L1-iOS-Vietnamese-unsigned.ipa Payload)
+          ls -lh EKA2L1-iOS-Vietnamese-unsigned.ipa
+
+      - name: Upload Vietnamese IPA
+        uses: actions/upload-artifact@v7
+        with:
+          name: EKA2L1-iOS-Vietnamese-IPA
+          path: EKA2L1-iOS-Vietnamese-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
