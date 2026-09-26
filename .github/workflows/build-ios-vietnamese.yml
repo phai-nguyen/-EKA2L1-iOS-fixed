@@ -24,6 +24,7 @@ jobs:
     timeout-minutes: 120
     env:
       EKA2L1_IOS_CONFIGURATION: Release
+      EKA2L1_IOS_DEPLOYMENT_TARGET: 15.0
       # iOS 18.7 can kill a sideloaded app while the upstream JIT probe executes a generated page.
       # Localization test builds use the interpreter so the app can always reach the UI.
       EKA2L1_IOS_DYNARMIC: OFF
@@ -43,6 +44,11 @@ jobs:
           git checkout "$EKA2L1_UPSTREAM_COMMIT"
           git submodule update --init --recursive
 
+      - name: Apply iOS 15 compatibility layer
+        run: |
+          set -euo pipefail
+          python3 patches/code/apply-ios15-compat.py upstream
+
       - name: Install ccache
         run: brew install ccache
 
@@ -50,17 +56,17 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/Library/Caches/ccache
-          key: eka2l1-ios-ccache-${{ runner.os }}-${{ env.EKA2L1_UPSTREAM_COMMIT }}-${{ github.sha }}
+          key: eka2l1-ios-ccache-${{ runner.os }}-ios${{ env.EKA2L1_IOS_DEPLOYMENT_TARGET }}-${{ env.EKA2L1_UPSTREAM_COMMIT }}-${{ github.sha }}
           restore-keys: |
-            eka2l1-ios-ccache-${{ runner.os }}-${{ env.EKA2L1_UPSTREAM_COMMIT }}-
+            eka2l1-ios-ccache-${{ runner.os }}-ios${{ env.EKA2L1_IOS_DEPLOYMENT_TARGET }}-${{ env.EKA2L1_UPSTREAM_COMMIT }}-
 
       - name: Restore incremental Xcode build
         uses: actions/cache@v6
         with:
           path: upstream/build/ios-device
-          key: eka2l1-ios-build-${{ runner.os }}-${{ env.EKA2L1_UPSTREAM_COMMIT }}-${{ github.sha }}
+          key: eka2l1-ios-build-${{ runner.os }}-ios${{ env.EKA2L1_IOS_DEPLOYMENT_TARGET }}-${{ env.EKA2L1_UPSTREAM_COMMIT }}-${{ github.sha }}
           restore-keys: |
-            eka2l1-ios-build-${{ runner.os }}-${{ env.EKA2L1_UPSTREAM_COMMIT }}-
+            eka2l1-ios-build-${{ runner.os }}-ios${{ env.EKA2L1_IOS_DEPLOYMENT_TARGET }}-${{ env.EKA2L1_UPSTREAM_COMMIT }}-
 
       - name: Apply Vietnamese string catalogs
         run: |
@@ -73,11 +79,19 @@ jobs:
         uses: actions/cache@v6
         with:
           path: upstream/src/external/ffmpeg/ios/device
-          key: ffmpeg-ios-device-vi-${{ env.EKA2L1_UPSTREAM_COMMIT }}
+          key: ffmpeg-ios-device-vi-ios${{ env.EKA2L1_IOS_DEPLOYMENT_TARGET }}-${{ env.EKA2L1_UPSTREAM_COMMIT }}
 
       - name: Build unsigned iPhone app
         working-directory: upstream
         run: ./scripts/build_ios.sh device
+
+      - name: Verify iOS 15 deployment target
+        run: |
+          set -euo pipefail
+          APP="upstream/build/ios-device/src/emu/ios/${EKA2L1_IOS_CONFIGURATION}-iphoneos/EKA2L1.app"
+          minimum=$(/usr/libexec/PlistBuddy -c "Print :MinimumOSVersion" "$APP/Info.plist")
+          echo "MinimumOSVersion=$minimum"
+          test "$minimum" = "15.0"
 
       - name: Verify Vietnamese resources
         run: |
@@ -102,7 +116,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: base-app
-          key: eka2l1-ios-base-${{ runner.os }}-${{ env.EKA2L1_UPSTREAM_COMMIT }}-${{ hashFiles('.github/workflows/build-ios-vietnamese.yml', 'patches/code/**', 'patches/**/*.patch', 'patches/**/*.py') }}
+          key: eka2l1-ios-base-${{ runner.os }}-ios${{ env.EKA2L1_IOS_DEPLOYMENT_TARGET }}-${{ env.EKA2L1_UPSTREAM_COMMIT }}-${{ hashFiles('.github/workflows/build-ios-vietnamese.yml', 'patches/code/**', 'patches/**/*.patch', 'patches/**/*.py') }}
 
       - name: Package unsigned IPAs
         run: |
