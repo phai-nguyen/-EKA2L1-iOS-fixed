@@ -102,7 +102,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: base-app
-          key: eka2l1-ios-base-${{ runner.os }}-${{ env.EKA2L1_UPSTREAM_COMMIT }}-jitoff-v1
+          key: eka2l1-ios-base-${{ runner.os }}-${{ env.EKA2L1_UPSTREAM_COMMIT }}-${{ hashFiles('.github/workflows/build-ios-vietnamese.yml', 'patches/code/**', 'patches/**/*.patch', 'patches/**/*.py') }}
 
       - name: Package unsigned IPAs
         run: |
