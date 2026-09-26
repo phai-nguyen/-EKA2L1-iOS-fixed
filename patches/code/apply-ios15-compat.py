@@ -174,7 +174,7 @@ struct CompatFileShareLink<Label: View>: View {
 }
 
 
-private struct CompatAnyShape: Shape {
+struct CompatAnyShape: Shape {
     private let makePath: (CGRect) -> Path
 
     init<S: Shape>(_ shape: S) {
