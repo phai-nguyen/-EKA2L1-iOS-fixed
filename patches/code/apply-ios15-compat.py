@@ -296,4 +296,25 @@ patch_view_that_fits(
     "visibilityMenu"
 )
 
+# Make iOS 15 the patched source tree's own default as well as the CI value.
+root_cmake = root / "CMakeLists.txt"
+root_cmake_text = root_cmake.read_text()
+root_cmake_text = root_cmake_text.replace(
+    'set(EKA2L1_IOS_DEPLOYMENT_TARGET "16.0" CACHE STRING "Minimum iOS version to target")',
+    'set(EKA2L1_IOS_DEPLOYMENT_TARGET "15.0" CACHE STRING "Minimum iOS version to target")'
+)
+root_cmake.write_text(root_cmake_text)
+
+build_ios = root / "scripts/build_ios.sh"
+build_ios_text = build_ios.read_text()
+build_ios_text = build_ios_text.replace(
+    "EKA2L1_IOS_DEPLOYMENT_TARGET   default 16.0",
+    "EKA2L1_IOS_DEPLOYMENT_TARGET   default 15.0"
+)
+build_ios_text = build_ios_text.replace(
+    'DEPLOYMENT_TARGET="${EKA2L1_IOS_DEPLOYMENT_TARGET:-16.0}"',
+    'DEPLOYMENT_TARGET="${EKA2L1_IOS_DEPLOYMENT_TARGET:-15.0}"'
+)
+build_ios.write_text(build_ios_text)
+
 print("Applied iOS 15 compatibility layer")
