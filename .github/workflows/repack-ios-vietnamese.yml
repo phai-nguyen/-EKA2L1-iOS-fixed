@@ -1,0 +1,95 @@
+name: Fast Repack EKA2L1 iOS Vietnamese IPA
+
+on:
+  push:
+    branches:
+      - vi-localization-official
+    paths:
+      - "patches/Localizable.xcstrings"
+      - "patches/InfoPlist.xcstrings"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eka2l1-ios-vi-repack-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repack-ios-vi:
+    runs-on: macos-26
+    timeout-minutes: 20
+    env:
+      EKA2L1_UPSTREAM_COMMIT: 3afd85d249f4eef16071f6fdbbbf44e49e4072f7
+      EKA2L1_ESIGN_BUNDLE_ID: app.lavender1865.valley8348
+
+    steps:
+      - name: Checkout localization branch
+        uses: actions/checkout@v7
+
+      - name: Restore reusable base app
+        id: base
+        uses: actions/cache@v6
+        with:
+          path: base-app
+          key: eka2l1-ios-base-${{ runner.os }}-${{ env.EKA2L1_UPSTREAM_COMMIT }}-${{ hashFiles('.github/workflows/build-ios-vietnamese.yml', 'patches/code/**', 'patches/**/*.patch', 'patches/**/*.py') }}
+
+      - name: Require current base app
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.base.outputs.cache-hit }}" != "true" ]; then
+            echo "::error::No matching base app cache exists. Run 'Build EKA2L1 iOS Vietnamese IPA' once to seed the current code version."
+            exit 1
+          fi
+          test -d base-app/EKA2L1.app
+
+      - name: Compile only Vietnamese resources
+        run: |
+          set -euo pipefail
+          rm -rf compiled-localizable compiled-infoplist
+
+          xcrun xcstringstool compile             patches/Localizable.xcstrings             --output-directory compiled-localizable             --format stringsAndStringsdict             --language vi
+
+          xcrun xcstringstool compile             patches/InfoPlist.xcstrings             --output-directory compiled-infoplist             --format stringsAndStringsdict             --language vi
+
+          test -f compiled-localizable/vi.lproj/Localizable.strings
+          test -f compiled-infoplist/vi.lproj/InfoPlist.strings
+
+      - name: Replace Vietnamese bundle resources
+        run: |
+          set -euo pipefail
+          APP="base-app/EKA2L1.app"
+          rm -rf "$APP/vi.lproj"
+          mkdir -p "$APP/vi.lproj"
+          cp -R compiled-localizable/vi.lproj/. "$APP/vi.lproj/"
+          cp -R compiled-infoplist/vi.lproj/. "$APP/vi.lproj/"
+          rm -rf "$APP/_CodeSignature"
+
+          test -f "$APP/vi.lproj/Localizable.strings"
+          test -f "$APP/vi.lproj/InfoPlist.strings"
+          /usr/bin/plutil -p "$APP/vi.lproj/Localizable.strings" | head -20
+
+      - name: Package fast ESign-match IPA
+        run: |
+          set -euo pipefail
+          rm -rf ipa-fast
+          rm -f EKA2L1-iOS-Vietnamese-ESignMatch-fast.ipa
+
+          mkdir -p ipa-fast/Payload
+          cp -R base-app/EKA2L1.app ipa-fast/Payload/EKA2L1.app
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $EKA2L1_ESIGN_BUNDLE_ID"             ipa-fast/Payload/EKA2L1.app/Info.plist
+
+          actual=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier"             ipa-fast/Payload/EKA2L1.app/Info.plist)
+          test "$actual" = "$EKA2L1_ESIGN_BUNDLE_ID"
+
+          (cd ipa-fast && /usr/bin/zip -qry ../EKA2L1-iOS-Vietnamese-ESignMatch-fast.ipa Payload)
+          ls -lh EKA2L1-iOS-Vietnamese-ESignMatch-fast.ipa
+
+      - name: Upload fast Vietnamese IPA
+        uses: actions/upload-artifact@v7
+        with:
+          name: EKA2L1-iOS-Vietnamese-ESignMatch-FAST
+          path: EKA2L1-iOS-Vietnamese-ESignMatch-fast.ipa
+          if-no-files-found: error
+          retention-days: 14
