@@ -43,3 +43,45 @@ that profile. The Team ID prefix is not part of CFBundleIdentifier.
 This is now the preferred sideload packaging for this user's localization
 branch. The upstream picker implementation does not need to be replaced when
 the provisioning identity is matched correctly.
+
+
+## Fast build architecture
+
+The Vietnamese branch now has three build modes.
+
+### 1. FAST-REPACK — localization/resources only
+
+Workflow: `.github/workflows/repack-ios-vietnamese.yml`
+
+Triggered when either string catalog changes:
+
+- `patches/Localizable.xcstrings`
+- `patches/InfoPlist.xcstrings`
+
+It restores a previously built unsigned `EKA2L1.app`, runs Apple's
+`xcstringstool` only for Vietnamese, replaces `vi.lproj`, sets the confirmed
+ESign-match bundle identifier, and repackages the IPA. It does not run CMake,
+FFmpeg, or compile EKA2L1 C++/Swift code.
+
+### 2. INCREMENTAL-CODE — Swift/C++ changes
+
+Workflow: `.github/workflows/build-ios-vietnamese.yml`
+
+The full-code workflow now restores:
+
+- the previous `build/ios-device` Xcode/CMake build tree;
+- ccache compiler objects;
+- the separately cached FFmpeg iOS slice.
+
+Xcode therefore recompiles only changed translation units and the targets that
+depend on them, then relinks as required.
+
+### 3. FULL-BASE — cold build
+
+A clean build is only required when the upstream revision/toolchain/build
+configuration changes, the reusable cache has expired, or a deliberate clean
+build is requested.
+
+The base-app cache is keyed by the upstream commit and a code fingerprint, so a
+localization-only repack cannot accidentally reuse a binary from a different
+code revision.
