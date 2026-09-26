@@ -85,3 +85,33 @@ build is requested.
 The base-app cache is keyed by the upstream commit and a code fingerprint, so a
 localization-only repack cannot accidentally reuse a binary from a different
 code revision.
+
+
+## iOS 15 minimum deployment target
+
+The Vietnamese/sideload branch targets iOS 15.0.
+
+The patch `patches/code/apply-ios15-compat.py` applies an iOS 15 compatibility
+layer before the official EKA2L1 iOS source is built. Modern behaviour remains
+active on newer iOS releases; iOS 15 uses fallbacks only where SwiftUI APIs did
+not yet exist.
+
+Compatibility fallbacks include:
+
+- `NavigationStack` -> `NavigationView` on iOS 15;
+- state-driven `navigationDestination` -> hidden `NavigationLink`;
+- navigation-title device menu -> navigation-bar menu;
+- `ShareLink` -> `UIActivityViewController`;
+- `LabeledContent` -> an equivalent `HStack`;
+- sheet presentation detents -> normal iOS 15 sheet presentation;
+- `ViewThatFits` editor controls -> vertical control layout;
+- clock-based `Task.sleep` -> the nanosecond overload;
+- `LocalizedStringResource` storage -> `LocalizedStringKey` conversion.
+
+Both the patched source defaults and CI set
+`EKA2L1_IOS_DEPLOYMENT_TARGET=15.0`. Compiler, Xcode build, FFmpeg and base-app
+caches are keyed separately for the iOS 15 deployment target so an iOS 16 build
+cannot leak into the iOS 15 artifact.
+
+The build verifies the produced app bundle contains
+`MinimumOSVersion = 15.0` before packaging.
