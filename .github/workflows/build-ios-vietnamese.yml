@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: eka2l1-ios-vi-\${{ github.ref }}
+  group: eka2l1-ios-vi-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
