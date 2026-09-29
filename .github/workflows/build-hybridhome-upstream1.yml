@@ -32,7 +32,7 @@ jobs:
         with:
           repository: EKA2L1/EKA2L1
           ref: ${{ env.UPSTREAM_REF }}
-          fetch-depth: 0
+          fetch-depth: 1
           submodules: recursive
           path: source
 
@@ -56,6 +56,25 @@ jobs:
           grep -q 'AppGridCell(uid: app.uid, name: app.name)' source/src/emu/ios/App/S60HybridHomeView.swift
           grep -q 'app.lavender1865.valley8348' source/src/emu/ios/CMakeLists.txt
           echo "HYBRIDHOME-UPSTREAM1 static contract PASS"
+
+      - name: Install ccache
+        run: brew install ccache
+
+      - name: Restore compiler cache
+        uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/ccache
+          key: hybridhome-upstream1-ccache-${{ runner.os }}-ios16-dyncom-${{ env.UPSTREAM_REF }}-${{ github.sha }}
+          restore-keys: |
+            hybridhome-upstream1-ccache-${{ runner.os }}-ios16-dyncom-${{ env.UPSTREAM_REF }}-
+
+      - name: Restore incremental Xcode build
+        uses: actions/cache@v6
+        with:
+          path: source/build/ios-device
+          key: hybridhome-upstream1-xcode-${{ runner.os }}-ios16-dyncom-${{ env.UPSTREAM_REF }}-${{ github.sha }}
+          restore-keys: |
+            hybridhome-upstream1-xcode-${{ runner.os }}-ios16-dyncom-${{ env.UPSTREAM_REF }}-
 
       - name: Cache iOS ffmpeg
         uses: actions/cache@v6
