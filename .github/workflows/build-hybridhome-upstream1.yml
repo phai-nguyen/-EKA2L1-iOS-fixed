@@ -18,6 +18,7 @@ jobs:
     runs-on: macos-26
     env:
       EKA2L1_IOS_CONFIGURATION: Release
+      EKA2L1_IOS_DYNARMIC: "OFF"
       UPSTREAM_REF: c5ae62d9c667f6e7060d76be58a2614122a629a4
 
     steps:
