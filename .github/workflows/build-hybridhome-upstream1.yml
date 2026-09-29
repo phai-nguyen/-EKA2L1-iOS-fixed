@@ -1,0 +1,90 @@
+name: Build HYBRIDHOME-UPSTREAM1
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hybridhome-upstream1
+  cancel-in-progress: true
+
+jobs:
+  build-ios:
+    runs-on: macos-26
+    env:
+      EKA2L1_IOS_CONFIGURATION: Release
+      UPSTREAM_REF: c5ae62d9c667f6e7060d76be58a2614122a629a4
+
+    steps:
+      - name: Checkout Hybrid Home control repo
+        uses: actions/checkout@v7
+        with:
+          path: control
+
+      - name: Checkout EKA2L1 upstream baseline
+        uses: actions/checkout@v7
+        with:
+          repository: EKA2L1/EKA2L1
+          ref: ${{ env.UPSTREAM_REF }}
+          fetch-depth: 0
+          submodules: recursive
+          path: source
+
+      - name: Record upstream baseline
+        run: |
+          cd source
+          echo "upstream_head=$(git rev-parse HEAD)" | tee ../UPSTREAM-BASELINE.txt
+          git status --short
+
+      - name: Apply HYBRIDHOME-UPSTREAM1
+        run: python3 control/scripts/apply_hybridhome_upstream1.py source
+
+      - name: Static contract
+        run: |
+          set -euo pipefail
+          grep -q 'HYBRIDHOME-UPSTREAM1' source/src/emu/ios/App/S60HybridHomeView.swift
+          grep -q 'firmwareCode.caseInsensitiveCompare("RM-356")' source/src/emu/ios/App/ContentView.swift
+          grep -q 'S60HybridHomeView.swift' source/src/emu/ios/CMakeLists.txt
+          grep -q '0x102750F0' source/src/emu/ios/App/S60HybridHomeView.swift
+          grep -q 'NavigationLink(destination: EmulatorView(uid: app.uid))' source/src/emu/ios/App/S60HybridHomeView.swift
+          grep -q 'AppGridCell(uid: app.uid, name: app.name)' source/src/emu/ios/App/S60HybridHomeView.swift
+          echo "HYBRIDHOME-UPSTREAM1 static contract PASS"
+
+      - name: Cache iOS ffmpeg
+        uses: actions/cache@v6
+        with:
+          path: source/src/external/ffmpeg/ios/device
+          key: hybridhome-upstream1-ffmpeg-ios-device-v1
+
+      - name: Build upstream iOS + Hybrid Home
+        working-directory: source
+        env:
+          EKA2L1_IOS_DEPLOYMENT_TARGET: "16.0"
+          EKA2L1_IOS_CONFIGURATION: Release
+        run: ./scripts/build_ios.sh device
+
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          app="source/build/ios-device/src/emu/ios/Release-iphoneos/EKA2L1.app"
+          test -d "${app}"
+          mkdir -p out/Payload
+          cp -R "${app}" out/Payload/
+          (
+            cd out
+            zip -qry EKA2L1-HYBRIDHOME-UPSTREAM1-unsigned.ipa Payload
+          )
+          shasum -a 256 out/EKA2L1-HYBRIDHOME-UPSTREAM1-unsigned.ipa | tee out/SHA256.txt
+          cp UPSTREAM-BASELINE.txt out/
+
+      - name: Upload HYBRIDHOME-UPSTREAM1 IPA
+        uses: actions/upload-artifact@v7
+        with:
+          name: EKA2L1-HYBRIDHOME-UPSTREAM1-IPA
+          path: |
+            out/EKA2L1-HYBRIDHOME-UPSTREAM1-unsigned.ipa
+            out/SHA256.txt
+            out/UPSTREAM-BASELINE.txt
+          if-no-files-found: error
