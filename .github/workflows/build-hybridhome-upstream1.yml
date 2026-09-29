@@ -2,6 +2,9 @@ name: Build HYBRIDHOME-UPSTREAM1
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - hybridhome-upstream1
 
 permissions:
   contents: read
