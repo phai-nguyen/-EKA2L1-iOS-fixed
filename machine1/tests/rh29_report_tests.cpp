@@ -94,12 +94,42 @@ static void test_report_contains_error_detail() {
     require_contains(text, "DETAIL=unexpected ROM base");
 }
 
+static void test_cp15_classifier_blocks_all_a32_p15_coprocessor_classes() {
+    // MRC p15, 0, r0, c1, c0, 0
+    assert(is_arm_cp15_instruction(0xEE110F10u));
+    // MCR p15, 0, r0, c1, c0, 0
+    assert(is_arm_cp15_instruction(0xEE010F10u));
+    // CDP p15 class (bit 4 clear).
+    assert(is_arm_cp15_instruction(0xEE000F00u));
+    // LDC/STC coprocessor class with p15 selected.
+    assert(is_arm_cp15_instruction(0xEC900F00u));
+
+    // Same MRC encoding but p10, a normal MOV, and SVC/SWI are not CP15.
+    assert(!is_arm_cp15_instruction(0xEE110A10u));
+    assert(!is_arm_cp15_instruction(0xE1A00000u));
+    assert(!is_arm_cp15_instruction(0xEF000000u));
+}
+
+static void test_report_contains_cp15_barrier() {
+    auto result = sample_result();
+    result.unresolved.reset();
+    result.stop_reason = probe_stop_reason::cp15_access;
+    result.cp15 = cp15_access_info{0x50004000u, 0xEE110F10u};
+
+    const auto text = format_report(result);
+    require_contains(text, "STOP_REASON=cp15_access");
+    require_contains(text, "CP15_PC=0x50004000");
+    require_contains(text, "CP15_INSTRUCTION=0xEE110F10");
+}
+
 int main() {
     test_report_contains_probe_identity_and_rom_header();
     test_report_contains_budget_stop_and_registers();
     test_report_contains_unresolved_access();
     test_report_contains_cpu_exception();
     test_report_contains_error_detail();
+    test_cp15_classifier_blocks_all_a32_p15_coprocessor_classes();
+    test_report_contains_cp15_barrier();
     std::cout << "rh29_report_tests: PASS\n";
     return 0;
 }
