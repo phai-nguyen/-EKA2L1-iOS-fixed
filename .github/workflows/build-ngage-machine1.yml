@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - ngage-machine1
+    paths-ignore:
+      - ".github/workflows/build-ngage-machine1.yml"
 
 permissions:
   contents: read
@@ -185,17 +187,10 @@ jobs:
             cd out
             zip -qry EKA2L1-NGAGE-MACHINE1-D-unsigned.ipa Payload
           )
-          shasum -a 256 out/EKA2L1-NGAGE-MACHINE1-D-unsigned.ipa | tee out/SHA256.txt
-          cp UPSTREAM-BASELINE.txt out/
-          cp MACHINE1-BASELINE.txt out/
 
       - name: Upload NGAGE MACHINE1-D IPA
         uses: actions/upload-artifact@v7
         with:
           name: EKA2L1-NGAGE-MACHINE1-D-IPA
-          path: |
-            out/EKA2L1-NGAGE-MACHINE1-D-unsigned.ipa
-            out/SHA256.txt
-            out/UPSTREAM-BASELINE.txt
-            out/MACHINE1-BASELINE.txt
+          path: out/EKA2L1-NGAGE-MACHINE1-D-unsigned.ipa
           if-no-files-found: error
