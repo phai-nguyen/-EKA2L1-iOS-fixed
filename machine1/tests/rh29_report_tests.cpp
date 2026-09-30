@@ -122,6 +122,25 @@ static void test_report_contains_cp15_barrier() {
     require_contains(text, "CP15_INSTRUCTION=0xEE110F10");
 }
 
+static void test_arm_condition_passed_matches_a32_flags() {
+    // EQ: execute only when Z is set.
+    assert(!arm_condition_passed(0x0E110F10u, 0x00000000u));
+    assert(arm_condition_passed(0x0E110F10u, 1u << 30));
+
+    // NE: execute only when Z is clear.
+    assert(arm_condition_passed(0x1E110F10u, 0x00000000u));
+    assert(!arm_condition_passed(0x1E110F10u, 1u << 30));
+
+    // GE: N must equal V.
+    assert(arm_condition_passed(0xAE110F10u, 0x00000000u));
+    assert(arm_condition_passed(0xAE110F10u, (1u << 31) | (1u << 28)));
+    assert(!arm_condition_passed(0xAE110F10u, 1u << 31));
+
+    // AL always executes; cond=0xF is treated conservatively as unconditional.
+    assert(arm_condition_passed(0xEE110F10u, 0x00000000u));
+    assert(arm_condition_passed(0xFE110F10u, 0x00000000u));
+}
+
 int main() {
     test_report_contains_probe_identity_and_rom_header();
     test_report_contains_budget_stop_and_registers();
@@ -130,6 +149,7 @@ int main() {
     test_report_contains_error_detail();
     test_cp15_classifier_blocks_all_a32_p15_coprocessor_classes();
     test_report_contains_cp15_barrier();
+    test_arm_condition_passed_matches_a32_flags();
     std::cout << "rh29_report_tests: PASS\n";
     return 0;
 }
