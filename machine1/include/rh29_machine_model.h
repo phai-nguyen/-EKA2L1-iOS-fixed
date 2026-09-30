@@ -1,0 +1,77 @@
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string>
+
+namespace eka2l1::machine::rh29 {
+    static constexpr std::uint32_t expected_eka1_rom_base = 0x50000000u;
+    static constexpr std::size_t eka1_rom_header_size = 512u;
+
+    enum class parse_error {
+        none = 0,
+        truncated_header,
+        unexpected_rom_base,
+        invalid_rom_size,
+        rom_size_exceeds_file,
+        mapped_range_overflow
+    };
+
+    struct rom_header_info {
+        std::uint32_t restart_vector = 0;
+        std::uint32_t rom_base = 0;
+        std::uint32_t rom_size = 0;
+        std::uint32_t rom_root_dir_list = 0;
+        std::uint32_t kern_data_address = 0;
+        std::uint32_t kern_limit = 0;
+    };
+
+    struct parse_result {
+        bool ok = false;
+        parse_error error = parse_error::none;
+        rom_header_info header{};
+    };
+
+    parse_result parse_rom_header(const std::uint8_t *data, std::size_t size);
+
+    enum class access_kind {
+        code_read,
+        data_read,
+        data_write
+    };
+
+    struct unresolved_access {
+        access_kind kind = access_kind::data_read;
+        std::size_t width = 0;
+        std::uint32_t address = 0;
+        std::uint32_t pc = 0;
+        std::uint32_t lr = 0;
+        std::uint64_t value = 0;
+        std::uint64_t count = 0;
+    };
+
+    class strict_bus {
+    public:
+        strict_bus(const std::uint8_t *rom_data,
+                   std::size_t rom_size,
+                   std::uint32_t rom_base);
+
+        bool read(access_kind kind, std::uint32_t address, void *out, std::size_t width,
+                  std::uint32_t pc, std::uint32_t lr);
+        bool write(std::uint32_t address, const void *value, std::size_t width,
+                   std::uint32_t pc, std::uint32_t lr);
+
+        const std::optional<unresolved_access> &first_unresolved() const;
+
+    private:
+        bool range_inside_rom(std::uint32_t address, std::size_t width, std::size_t &offset) const;
+        void record_unresolved(access_kind kind, std::size_t width, std::uint32_t address,
+                               std::uint32_t pc, std::uint32_t lr, std::uint64_t value);
+
+        const std::uint8_t *rom_data_ = nullptr;
+        std::size_t rom_size_ = 0;
+        std::uint32_t rom_base_ = 0;
+        std::optional<unresolved_access> first_unresolved_{};
+    };
+}
