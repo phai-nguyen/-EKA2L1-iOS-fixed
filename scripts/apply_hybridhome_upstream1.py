@@ -13,11 +13,10 @@ home_path = root / "src/emu/ios/App/S60HybridHomeView.swift"
 content = content_path.read_text(encoding="utf-8")
 cmake = cmake_path.read_text(encoding="utf-8")
 
-# Device-tested ESign identity. The Files document picker returned usable ROM/RPKG
-# URLs on this user's iPhone only when CFBundleIdentifier matched the
-# provisioning application identifier used by ESign.
+# Project bundle identity requested for the RH-29 MACHINE1 builds.
+# Keep the upstream anchor strict so an upstream CMake change fails closed.
 bundle_old = 'set(EKA2L1_IOS_BUNDLE_ID "com.eka2l1.emulator" CACHE STRING "iOS bundle identifier")'
-bundle_new = 'set(EKA2L1_IOS_BUNDLE_ID "app.lavender1865.valley8348" CACHE STRING "iOS bundle identifier")'
+bundle_new = 'set(EKA2L1_IOS_BUNDLE_ID "com.phai.gpt.eka2l1.emulator" CACHE STRING "iOS bundle identifier")'
 if bundle_old not in cmake:
     raise SystemExit("iOS bundle-id anchor not found")
 cmake = cmake.replace(bundle_old, bundle_new, 1)

@@ -91,7 +91,7 @@ jobs:
           # Preserve known-good product path.
           grep -q 'HYBRIDHOME3' source/src/emu/ios/App/S60HybridHomeView.swift
           grep -q 'firmwareCode.caseInsensitiveCompare("RM-356")' source/src/emu/ios/App/ContentView.swift
-          grep -q 'app.lavender1865.valley8348' source/src/emu/ios/CMakeLists.txt
+          grep -q 'com.phai.gpt.eka2l1.emulator' source/src/emu/ios/CMakeLists.txt
           grep -q 'installDeviceWithVplPath' source/src/emu/ios/Bridge/IosEmulator.h
           grep -q '"vi"' source/src/emu/ios/Resources/Localizable.xcstrings
 
