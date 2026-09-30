@@ -37,6 +37,8 @@ static probe_result sample_result() {
     result.exact_observed_flash_command_count = 1;
     result.exact_observed_flash_id_entry_enabled = true;
     result.exact_observed_flash_id_entry_count = 1;
+    result.amd_reference_manufacturer_id_enabled = true;
+    result.amd_reference_manufacturer_read_count = 1;
     result.executed_instructions = 37;
     result.stop_reason = probe_stop_reason::unresolved_access;
     for (std::size_t i = 0; i < result.registers.r.size(); ++i) {
@@ -54,7 +56,7 @@ static probe_result sample_result() {
 
 static void test_report_contains_probe_identity_and_rom_header() {
     const auto text = format_report(sample_result());
-    require_contains(text, "RH29_MACHINE1_G");
+    require_contains(text, "RH29_MACHINE1_H");
     require_contains(text, "ROM_BASE=0x50000000");
     require_contains(text, "ROM_SIZE=0x01170000");
     require_contains(text, "RESTART_VECTOR_WORD=0x00000000");
@@ -86,6 +88,11 @@ static void test_report_contains_probe_identity_and_rom_header() {
     require_contains(text, "FLASH_ID_ENTRY_WIDTH_BITS=16");
     require_contains(text, "FLASH_ID_ENTRY_VALUE=0x0090");
     require_contains(text, "FLASH_ID_ENTRY_ACCEPTED_COUNT=1");
+    require_contains(text, "FLASH_ID_RESPONSE_POLICY=amd_rh29_reference_variant_manufacturer_only");
+    require_contains(text, "FLASH_MANUFACTURER_ID_ADDRESS=0x02000000");
+    require_contains(text, "FLASH_MANUFACTURER_ID_WIDTH_BITS=16");
+    require_contains(text, "FLASH_MANUFACTURER_ID_VALUE=0x0001");
+    require_contains(text, "FLASH_MANUFACTURER_ID_READ_COUNT=1");
     require_contains(text, "KERN_DATA_ADDRESS=0x80001000");
     require_contains(text, "KERN_LIMIT=0x80002000");
 }
@@ -187,7 +194,7 @@ static void test_report_contains_cp15_barrier() {
     require_contains(text, "CP15_INSTRUCTION=0xEE110F10");
 }
 
-static void test_machine1_g_defaults_to_1k() {
+static void test_machine1_h_defaults_to_1k() {
     probe_options options{};
     assert(options.instruction_budget == 1000);
 }
@@ -221,7 +228,7 @@ int main() {
     test_observed_arm920t_control_write_is_exact_allowlist();
     test_report_contains_cp15_emulation_evidence();
     test_report_contains_cp15_barrier();
-    test_machine1_g_defaults_to_1k();
+    test_machine1_h_defaults_to_1k();
     test_arm_condition_passed_matches_a32_flags();
     std::cout << "rh29_report_tests: PASS\n";
     return 0;

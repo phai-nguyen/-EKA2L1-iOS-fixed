@@ -253,6 +253,38 @@ static void test_flash_id_entry_allowlist_is_exact() {
     assert(bus.first_unresolved()->value == wrong);
 }
 
+static void test_amd_reference_manufacturer_id_requires_id_entry() {
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+
+    std::uint16_t out = 0;
+    assert(!bus.read(access_kind::data_read, amd_reference_manufacturer_id_address,
+                     &out, sizeof(out), 0x0000099C, 0x00000AFC));
+    assert(bus.first_unresolved().has_value());
+}
+
+static void test_amd_reference_manufacturer_id_read_after_id_entry() {
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+
+    const std::uint16_t entry = observed_flash_id_entry_value;
+    assert(bus.write(observed_flash_id_entry_address, &entry, sizeof(entry),
+                     0x00000994, 0x00000AFC));
+    std::uint16_t out = 0;
+    assert(bus.read(access_kind::data_read, amd_reference_manufacturer_id_address,
+                    &out, sizeof(out), 0x0000099C, 0x00000AFC));
+    assert(out == amd_reference_manufacturer_id);
+    assert(bus.amd_reference_manufacturer_read_count() == 1);
+    assert(!bus.first_unresolved().has_value());
+
+    std::uint16_t other = 0;
+    assert(!bus.read(access_kind::data_read, amd_reference_manufacturer_id_address + 2,
+                     &other, sizeof(other), 0x000009A0, 0x00000AFC));
+    assert(bus.first_unresolved().has_value());
+}
+
 static void test_bus_records_unmapped_data_read() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000);
@@ -313,6 +345,8 @@ int main() {
     test_second_flash_window_is_not_generically_mapped();
     test_exact_observed_flash_id_entry_write_is_allowlisted();
     test_flash_id_entry_allowlist_is_exact();
+    test_amd_reference_manufacturer_id_requires_id_entry();
+    test_amd_reference_manufacturer_id_read_after_id_entry();
     test_bus_records_unmapped_data_read();
     test_bus_records_unmapped_code_read();
     test_bus_keeps_first_unresolved();

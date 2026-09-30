@@ -35,6 +35,13 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::size_t observed_flash_id_entry_width = 2u;
     static constexpr std::uint16_t observed_flash_id_entry_value = 0x0090u;
 
+    // MACHINE1-H models only the documented AMD RH-29 reference variant.
+    // After the observed ID-entry write, a 16-bit read at bank base returns
+    // AMD manufacturer ID 0x0001. No other flash read is synthesized.
+    static constexpr std::uint32_t amd_reference_manufacturer_id_address = second_flash_base;
+    static constexpr std::size_t amd_reference_manufacturer_id_width = 2u;
+    static constexpr std::uint16_t amd_reference_manufacturer_id = 0x0001u;
+
     enum class parse_error {
         none = 0,
         truncated_header,
@@ -104,6 +111,7 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t observed_mmio_write_count() const;
         std::uint64_t observed_flash_command_count() const;
         std::uint64_t observed_flash_id_entry_count() const;
+        std::uint64_t amd_reference_manufacturer_read_count() const;
 
     private:
         bool range_inside_rom_mapping(std::uint32_t address, std::size_t width, std::size_t &offset) const;
@@ -124,6 +132,7 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t observed_mmio_write_count_ = 0;
         std::uint64_t observed_flash_command_count_ = 0;
         std::uint64_t observed_flash_id_entry_count_ = 0;
+        std::uint64_t amd_reference_manufacturer_read_count_ = 0;
         std::optional<unresolved_access> first_unresolved_{};
     };
 }
