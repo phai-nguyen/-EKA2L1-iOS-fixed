@@ -69,6 +69,8 @@ jobs:
           grep -q 'installDevice(vplPath:' source/src/emu/ios/App/EKA2L1Bridge.swift
           grep -q 'installDeviceWithVplPath' source/src/emu/ios/Bridge/IosEmulator.h
           grep -q 'eka2l1::install_firmware' source/src/emu/ios/Bridge/IosEmulator.mm
+          grep -q 'nonisolated private static func findVPL' source/src/emu/ios/App/ContentView.swift
+          grep -q 'nonisolated private static func stageFirmwareFiles' source/src/emu/ios/App/ContentView.swift
           grep -q '"vi"' source/src/emu/ios/Resources/Localizable.xcstrings
           grep -q '"vi"' source/src/emu/ios/Resources/InfoPlist.xcstrings
           echo "HYBRIDHOME2 + VPL + Vietnamese static contract PASS"
