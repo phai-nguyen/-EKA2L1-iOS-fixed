@@ -46,6 +46,9 @@ jobs:
       - name: Apply HYBRIDHOME-UPSTREAM1
         run: python3 control/scripts/apply_hybridhome_upstream1.py source
 
+      - name: Apply VPL firmware importer
+        run: python3 control/scripts/apply_vpl_firmware.py source
+
       - name: Apply Vietnamese localization
         run: python3 control/scripts/apply_vietnamese_ios.py source
 
@@ -62,9 +65,13 @@ jobs:
           grep -q 'NavigationLink(destination: EmulatorView(uid: app.uid))' source/src/emu/ios/App/S60HybridHomeView.swift
           grep -q 'AppGridCell(uid: app.uid, name: app.name)' source/src/emu/ios/App/S60HybridHomeView.swift
           grep -q 'app.lavender1865.valley8348' source/src/emu/ios/CMakeLists.txt
+          grep -q 'import.source.vpl' source/src/emu/ios/App/ContentView.swift
+          grep -q 'installDevice(vplPath:' source/src/emu/ios/App/EKA2L1Bridge.swift
+          grep -q 'installDeviceWithVplPath' source/src/emu/ios/Bridge/IosEmulator.h
+          grep -q 'eka2l1::install_firmware' source/src/emu/ios/Bridge/IosEmulator.mm
           grep -q '"vi"' source/src/emu/ios/Resources/Localizable.xcstrings
           grep -q '"vi"' source/src/emu/ios/Resources/InfoPlist.xcstrings
-          echo "HYBRIDHOME2 + Vietnamese static contract PASS"
+          echo "HYBRIDHOME2 + VPL + Vietnamese static contract PASS"
 
       - name: Install and configure ccache
         run: |

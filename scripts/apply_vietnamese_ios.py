@@ -42,6 +42,11 @@ direct = {
     "devices.delete.title": "Xoá thiết bị?",
     "import.isolateDrives": "Bộ nhớ riêng cho thiết bị này",
     "import.isolateDrives.footer": "Các ổ C, D và E của thiết bị này được tách riêng khỏi các thiết bị khác.",
+    "import.source.vpl": "Firmware VPL",
+    "import.vpl.chooseFolder": "Chọn thư mục firmware",
+    "import.vpl.chooseFiles": "Chọn các tệp firmware",
+    "import.vpl.hint": "Chọn thư mục chứa tệp khai báo .vpl và toàn bộ tệp firmware tương ứng, hoặc chọn các tệp đó cùng lúc.",
+    "import.vpl.noManifest": "Chưa chọn tệp khai báo .vpl.",
 }
 for key, value in direct.items():
     if key in loc["strings"]:
@@ -57,6 +62,7 @@ plural = {
     "home.fonts.importing %lld": "Đang cài đặt %lld phông chữ…",
     "home.ngage2.imported %lld": "Đã nhập %lld gói. Mở trình khởi chạy N-Gage để tiếp tục.",
     "home.ngage2.importing %lld": "Đang nhập %lld gói N-Gage 2.0...",
+    "import.vpl.fileCount %lld": "Đã chọn %lld tệp firmware.",
 }
 for key, value in plural.items():
     if key in loc["strings"]:
