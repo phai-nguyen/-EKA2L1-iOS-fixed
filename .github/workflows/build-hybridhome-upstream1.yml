@@ -46,6 +46,9 @@ jobs:
       - name: Apply HYBRIDHOME-UPSTREAM1
         run: python3 control/scripts/apply_hybridhome_upstream1.py source
 
+      - name: Apply Vietnamese localization
+        run: python3 control/scripts/apply_vietnamese_ios.py source
+
       - name: Static contract
         run: |
           set -euo pipefail
@@ -56,7 +59,9 @@ jobs:
           grep -q 'NavigationLink(destination: EmulatorView(uid: app.uid))' source/src/emu/ios/App/S60HybridHomeView.swift
           grep -q 'AppGridCell(uid: app.uid, name: app.name)' source/src/emu/ios/App/S60HybridHomeView.swift
           grep -q 'app.lavender1865.valley8348' source/src/emu/ios/CMakeLists.txt
-          echo "HYBRIDHOME-UPSTREAM1 static contract PASS"
+          grep -q '"vi"' source/src/emu/ios/Resources/Localizable.xcstrings
+          grep -q '"vi"' source/src/emu/ios/Resources/InfoPlist.xcstrings
+          echo "HYBRIDHOME-UPSTREAM1 + Vietnamese static contract PASS"
 
       - name: Install and configure ccache
         run: |
@@ -96,6 +101,15 @@ jobs:
           EKA2L1_IOS_DEPLOYMENT_TARGET: "16.0"
           EKA2L1_IOS_CONFIGURATION: Release
         run: ./scripts/build_ios.sh device
+
+      - name: Verify Vietnamese resources
+        run: |
+          set -euo pipefail
+          APP="source/build/ios-device/src/emu/ios/Release-iphoneos/EKA2L1.app"
+          test -f "$APP/vi.lproj/Localizable.strings"
+          test -f "$APP/vi.lproj/InfoPlist.strings"
+          /usr/bin/plutil -p "$APP/vi.lproj/Localizable.strings" | grep -q 'Thiết bị'
+          echo "Vietnamese resources PASS"
 
       - name: Report compiler cache
         if: always()
