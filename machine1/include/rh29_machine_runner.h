@@ -53,6 +53,7 @@ namespace eka2l1::machine::rh29 {
     };
 
     bool is_arm_cp15_instruction(std::uint32_t instruction);
+    bool arm_condition_passed(std::uint32_t instruction, std::uint32_t cpsr);
     probe_result run_probe(const std::string &rom_path, const probe_options &options);
     std::string format_report(const probe_result &result);
 }
