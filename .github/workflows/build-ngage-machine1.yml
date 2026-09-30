@@ -1,4 +1,4 @@
-name: Build NGAGE-MACHINE1-D-BUNDLEFIX
+name: Build NGAGE-MACHINE1-D-ROMFIX
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ngage-machine1-d-bundlefix
+  group: ngage-machine1-d-romfix
   cancel-in-progress: true
 
 jobs:
@@ -91,7 +91,7 @@ jobs:
           # Preserve known-good product path.
           grep -q 'HYBRIDHOME3' source/src/emu/ios/App/S60HybridHomeView.swift
           grep -q 'firmwareCode.caseInsensitiveCompare("RM-356")' source/src/emu/ios/App/ContentView.swift
-          grep -q 'com.phai.gpt.eka2l1.emulator.*FORCE' source/src/emu/ios/CMakeLists.txt
+          grep -q 'app.lavender1865.valley8348.*FORCE' source/src/emu/ios/CMakeLists.txt
           grep -q 'installDeviceWithVplPath' source/src/emu/ios/Bridge/IosEmulator.h
           grep -q '"vi"' source/src/emu/ios/Resources/Localizable.xcstrings
 
@@ -166,8 +166,8 @@ jobs:
           set -euo pipefail
           APP="source/build/ios-device/src/emu/ios/Release-iphoneos/EKA2L1.app"
           ACTUAL=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")
-          test "$ACTUAL" = "com.phai.gpt.eka2l1.emulator"
-          echo "Bundle identifier PASS: $ACTUAL"
+          test "$ACTUAL" = "app.lavender1865.valley8348"
+          echo "Bundle identifier PASS (ESign-match ROM access): $ACTUAL"
 
       - name: Verify Vietnamese resources
         run: |
@@ -193,12 +193,12 @@ jobs:
           cp -R "${app}" out/Payload/
           (
             cd out
-            zip -qry EKA2L1-NGAGE-MACHINE1-D-BUNDLEFIX-unsigned.ipa Payload
+            zip -qry EKA2L1-NGAGE-MACHINE1-D-ROMFIX-unsigned.ipa Payload
           )
 
       - name: Upload NGAGE MACHINE1-D IPA
         uses: actions/upload-artifact@v7
         with:
-          name: EKA2L1-NGAGE-MACHINE1-D-BUNDLEFIX-IPA
-          path: out/EKA2L1-NGAGE-MACHINE1-D-BUNDLEFIX-unsigned.ipa
+          name: EKA2L1-NGAGE-MACHINE1-D-ROMFIX-IPA
+          path: out/EKA2L1-NGAGE-MACHINE1-D-ROMFIX-unsigned.ipa
           if-no-files-found: error

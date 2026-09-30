@@ -13,10 +13,11 @@ home_path = root / "src/emu/ios/App/S60HybridHomeView.swift"
 content = content_path.read_text(encoding="utf-8")
 cmake = cmake_path.read_text(encoding="utf-8")
 
-# Project bundle identity requested for the RH-29 MACHINE1 builds.
-# Keep the upstream anchor strict so an upstream CMake change fails closed.
+# Device-tested ESign identity. Keep this CFBundleIdentifier matched to the
+# current signing/provisioning identity so Files document-picker ROM access works.
+# Project GPT attribution is recorded separately and must not change sandbox identity.
 bundle_old = 'set(EKA2L1_IOS_BUNDLE_ID "com.eka2l1.emulator" CACHE STRING "iOS bundle identifier")'
-bundle_new = 'set(EKA2L1_IOS_BUNDLE_ID "com.phai.gpt.eka2l1.emulator" CACHE STRING "iOS bundle identifier" FORCE)'
+bundle_new = 'set(EKA2L1_IOS_BUNDLE_ID "app.lavender1865.valley8348" CACHE STRING "iOS bundle identifier" FORCE)'
 if bundle_old not in cmake:
     raise SystemExit("iOS bundle-id anchor not found")
 cmake = cmake.replace(bundle_old, bundle_new, 1)
