@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MACHINE1-C is deliberately a research-only surface. It runs an isolated ARM
+// MACHINE1-D is deliberately a research-only surface. It runs an isolated ARM
 // core against the installed RH-29 ROM and never replaces the normal HLE boot.
 struct RH29MachineProbeView: View {
     private let budgets: [UInt32] = [1_000, 10_000, 100_000, 1_000_000]
@@ -13,8 +13,8 @@ struct RH29MachineProbeView: View {
 
     var body: some View {
         Form {
-            Section("MACHINE1-C") {
-                Text("Probe tiếp tục từ cold reset alias và chỉ emulation đúng CP15 ARM920T đã quan sát: MCR p15,c1 với R0=0x1272 (MMU vẫn tắt). Mọi CP15 khác, RAM/MMIO chưa biết vẫn dừng ngay.")
+            Section("MACHINE1-D") {
+                Text("Probe thêm SDRAM candidate 16 MiB tại 0x08000000 theo bằng chứng RH-29/WD2. Chỉ dữ liệu đã được guest ghi mới được đọc lại; CP15 khác và MMIO chưa biết vẫn dừng ngay.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
 
@@ -76,7 +76,7 @@ struct RH29MachineProbeView: View {
             reportSucceeded = item.succeeded
             reportText = item.text
             let url = URL(fileURLWithPath: documentsRoot())
-                .appendingPathComponent("RH29_MACHINE1_C.txt")
+                .appendingPathComponent("RH29_MACHINE1_D.txt")
             do {
                 try item.text.write(to: url, atomically: true, encoding: .utf8)
                 reportURL = url

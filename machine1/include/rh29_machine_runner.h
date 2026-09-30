@@ -54,6 +54,11 @@ namespace eka2l1::machine::rh29 {
         bool synthetic_reset_alias = false;
         std::uint32_t reset_alias_base = 0;
         std::uint32_t reset_alias_size = 0;
+        bool candidate_sdram_enabled = false;
+        std::uint32_t candidate_sdram_base_address = 0;
+        std::uint32_t candidate_sdram_size_bytes = 0;
+        std::uint64_t candidate_sdram_write_count = 0;
+        std::uint64_t candidate_sdram_initialized_bytes = 0;
         probe_stop_reason stop_reason = probe_stop_reason::io_error;
         register_snapshot registers{};
         std::optional<unresolved_access> unresolved{};

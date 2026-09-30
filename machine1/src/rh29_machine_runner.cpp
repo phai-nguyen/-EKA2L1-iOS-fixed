@@ -39,6 +39,15 @@ namespace eka2l1::machine::rh29 {
             return "unknown";
         }
 
+        const char *unresolved_cause_name(const unresolved_cause cause) {
+            switch (cause) {
+            case unresolved_cause::unmapped: return "unmapped";
+            case unresolved_cause::rom_write: return "rom_write";
+            case unresolved_cause::ram_uninitialized: return "ram_uninitialized";
+            }
+            return "unknown";
+        }
+
         template <typename T>
         void write_hex(std::ostringstream &out, const char *name, T value, int width = 8) {
             out << name << "=0x" << std::uppercase << std::hex << std::setfill('0')
@@ -102,7 +111,7 @@ namespace eka2l1::machine::rh29 {
 
     std::string format_report(const probe_result &result) {
         std::ostringstream out;
-        out << "RH29_MACHINE1_C\n";
+        out << "RH29_MACHINE1_D\n";
         write_hex(out, "ROM_BASE", result.header.rom_base);
         write_hex(out, "ROM_SIZE", result.header.rom_size);
         write_hex(out, "RESTART_VECTOR_WORD", result.header.restart_vector);
@@ -111,6 +120,12 @@ namespace eka2l1::machine::rh29 {
         write_hex(out, "RESET_ALIAS_BASE", result.reset_alias_base);
         write_hex(out, "RESET_ALIAS_SIZE", result.reset_alias_size);
         write_hex(out, "RESET_ALIAS_SOURCE_BASE", result.header.rom_base);
+        out << "SDRAM_MODE=" << (result.candidate_sdram_enabled ? "wd2_rh29_128mbit_candidate_write_tracked" : "disabled") << "\n";
+        write_hex(out, "SDRAM_BASE", result.candidate_sdram_base_address);
+        write_hex(out, "SDRAM_SIZE", result.candidate_sdram_size_bytes);
+        out << "SDRAM_INIT_POLICY=write_initialized_only\n";
+        out << "SDRAM_WRITE_COUNT=" << result.candidate_sdram_write_count << "\n";
+        out << "SDRAM_INITIALIZED_BYTES=" << result.candidate_sdram_initialized_bytes << "\n";
         write_hex(out, "KERN_DATA_ADDRESS", result.header.kern_data_address);
         write_hex(out, "KERN_LIMIT", result.header.kern_limit);
         out << "INSTRUCTION_BUDGET=" << result.instruction_budget << "\n";
@@ -135,6 +150,7 @@ namespace eka2l1::machine::rh29 {
             write_hex(out, "UNRESOLVED_LR", u.lr);
             write_hex(out, "UNRESOLVED_VALUE", u.value, 16);
             out << "UNRESOLVED_COUNT=" << u.count << "\n";
+            out << "UNRESOLVED_CAUSE=" << unresolved_cause_name(u.cause) << "\n";
         }
 
         if (result.exception) {
@@ -216,14 +232,18 @@ namespace eka2l1::machine::rh29 {
         }
 
         // TRomHeader::restart_vector is the 32-bit instruction word stored at
-        // header offset 0x7C, not a guest address. MACHINE1-C probes the ARM
+        // header offset 0x7C, not a guest address. MACHINE1-D probes the ARM
         // cold-reset PC (0x00000000) and exposes canonical ROM bytes there via
         // an explicitly-labelled synthetic alias hypothesis.
         result.reset_pc = cold_reset_pc;
         result.synthetic_reset_alias = true;
         result.reset_alias_base = cold_reset_pc;
         result.reset_alias_size = parsed.header.rom_size;
-        strict_bus bus(rom.data(), parsed.header.rom_size, parsed.header.rom_base, cold_reset_pc);
+        result.candidate_sdram_enabled = true;
+        result.candidate_sdram_base_address = candidate_sdram_base;
+        result.candidate_sdram_size_bytes = static_cast<std::uint32_t>(candidate_sdram_size);
+        strict_bus bus(rom.data(), parsed.header.rom_size, parsed.header.rom_base, cold_reset_pc,
+                       candidate_sdram_base, candidate_sdram_size);
         auto monitor = arm::create_exclusive_monitor(arm_emulator_type::dyncom, 1);
         if (!monitor) {
             result.stop_reason = probe_stop_reason::cpu_exception;
@@ -286,16 +306,24 @@ namespace eka2l1::machine::rh29 {
             const bool ok = read64(a, v, access_kind::data_read); if (!ok) cpu_ptr->stop(); return ok;
         };
         monitor->write_8bit = [&](arm::core *, std::uint32_t a, std::uint8_t value, std::uint8_t) {
-            bus.write(a, &value, sizeof(value), cpu_ptr->get_pc(), cpu_ptr->get_lr()); cpu_ptr->stop(); return 0;
+            const bool ok = bus.write(a, &value, sizeof(value), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            if (!ok) cpu_ptr->stop();
+            return 0;
         };
         monitor->write_16bit = [&](arm::core *, std::uint32_t a, std::uint16_t value, std::uint16_t) {
-            bus.write(a, &value, sizeof(value), cpu_ptr->get_pc(), cpu_ptr->get_lr()); cpu_ptr->stop(); return 0;
+            const bool ok = bus.write(a, &value, sizeof(value), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            if (!ok) cpu_ptr->stop();
+            return 0;
         };
         monitor->write_32bit = [&](arm::core *, std::uint32_t a, std::uint32_t value, std::uint32_t) {
-            bus.write(a, &value, sizeof(value), cpu_ptr->get_pc(), cpu_ptr->get_lr()); cpu_ptr->stop(); return 0;
+            const bool ok = bus.write(a, &value, sizeof(value), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            if (!ok) cpu_ptr->stop();
+            return 0;
         };
         monitor->write_64bit = [&](arm::core *, std::uint32_t a, std::uint64_t value, std::uint64_t) {
-            bus.write(a, &value, sizeof(value), cpu_ptr->get_pc(), cpu_ptr->get_lr()); cpu_ptr->stop(); return 0;
+            const bool ok = bus.write(a, &value, sizeof(value), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            if (!ok) cpu_ptr->stop();
+            return 0;
         };
 
         std::optional<cpu_exception_info> exception;
@@ -325,7 +353,7 @@ namespace eka2l1::machine::rh29 {
 
         std::uint32_t remaining = options.instruction_budget;
         while (remaining > 0 && !bus.first_unresolved() && !exception && !cp15) {
-            // MACHINE1-C must not let Dyncom's ARM11/MPCore CP15 model answer
+            // MACHINE1-D must not let Dyncom's ARM11/MPCore CP15 model answer
             // RH-29 hardware questions. Inspect the next A32 instruction while
             // it is still only ROM data and stop before any p15 operation runs.
             if (!cpu->is_thumb_mode()) {
@@ -367,6 +395,8 @@ namespace eka2l1::machine::rh29 {
         result.unresolved = bus.first_unresolved();
         result.exception = exception;
         result.cp15 = cp15;
+        result.candidate_sdram_write_count = bus.ram_write_count();
+        result.candidate_sdram_initialized_bytes = bus.ram_initialized_bytes();
 
         if (result.unresolved) {
             result.stop_reason = probe_stop_reason::unresolved_access;

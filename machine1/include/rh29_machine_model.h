@@ -4,11 +4,14 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace eka2l1::machine::rh29 {
     static constexpr std::uint32_t expected_eka1_rom_base = 0x50000000u;
     static constexpr std::size_t eka1_rom_header_size = 512u;
     static constexpr std::uint32_t cold_reset_pc = 0x00000000u;
+    static constexpr std::uint32_t candidate_sdram_base = 0x08000000u;
+    static constexpr std::size_t candidate_sdram_size = 16u * 1024u * 1024u;
 
     enum class parse_error {
         none = 0,
@@ -42,6 +45,12 @@ namespace eka2l1::machine::rh29 {
         data_write
     };
 
+    enum class unresolved_cause {
+        unmapped,
+        rom_write,
+        ram_uninitialized
+    };
+
     struct unresolved_access {
         access_kind kind = access_kind::data_read;
         std::size_t width = 0;
@@ -50,6 +59,7 @@ namespace eka2l1::machine::rh29 {
         std::uint32_t lr = 0;
         std::uint64_t value = 0;
         std::uint64_t count = 0;
+        unresolved_cause cause = unresolved_cause::unmapped;
     };
 
     class strict_bus {
@@ -57,7 +67,9 @@ namespace eka2l1::machine::rh29 {
         strict_bus(const std::uint8_t *rom_data,
                    std::size_t rom_size,
                    std::uint32_t rom_base,
-                   std::optional<std::uint32_t> read_alias_base = std::nullopt);
+                   std::optional<std::uint32_t> read_alias_base = std::nullopt,
+                   std::optional<std::uint32_t> ram_base = std::nullopt,
+                   std::size_t ram_size = 0);
 
         bool read(access_kind kind, std::uint32_t address, void *out, std::size_t width,
                   std::uint32_t pc, std::uint32_t lr);
@@ -65,16 +77,25 @@ namespace eka2l1::machine::rh29 {
                    std::uint32_t pc, std::uint32_t lr);
 
         const std::optional<unresolved_access> &first_unresolved() const;
+        std::uint64_t ram_write_count() const;
+        std::size_t ram_initialized_bytes() const;
 
     private:
-        bool range_inside_mapping(std::uint32_t address, std::size_t width, std::size_t &offset) const;
+        bool range_inside_rom_mapping(std::uint32_t address, std::size_t width, std::size_t &offset) const;
+        bool range_inside_ram(std::uint32_t address, std::size_t width, std::size_t &offset) const;
         void record_unresolved(access_kind kind, std::size_t width, std::uint32_t address,
-                               std::uint32_t pc, std::uint32_t lr, std::uint64_t value);
+                               std::uint32_t pc, std::uint32_t lr, std::uint64_t value,
+                               unresolved_cause cause);
 
         const std::uint8_t *rom_data_ = nullptr;
         std::size_t rom_size_ = 0;
         std::uint32_t rom_base_ = 0;
         std::optional<std::uint32_t> read_alias_base_{};
+        std::optional<std::uint32_t> ram_base_{};
+        std::vector<std::uint8_t> ram_data_{};
+        std::vector<std::uint8_t> ram_initialized_{};
+        std::uint64_t ram_write_count_ = 0;
+        std::size_t ram_initialized_bytes_ = 0;
         std::optional<unresolved_access> first_unresolved_{};
     };
 }

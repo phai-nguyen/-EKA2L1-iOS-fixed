@@ -148,6 +148,31 @@ static void test_bus_records_rom_write() {
     assert(u->lr == 0x50000134);
     assert(u->value == 0xAABBCCDD);
     assert(u->count == 1);
+    assert(u->cause == unresolved_cause::rom_write);
+}
+
+static void test_candidate_sdram_write_then_read_is_tracked() {
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc, candidate_sdram_base, 0x100);
+    const std::uint32_t value = 0x7037F800u;
+    assert(bus.write(candidate_sdram_base, &value, sizeof(value), 0x00000B2C, 0x00000344));
+    assert(bus.ram_write_count() == 1);
+    assert(bus.ram_initialized_bytes() == sizeof(value));
+    assert(!bus.first_unresolved().has_value());
+
+    std::uint32_t out = 0;
+    assert(bus.read(access_kind::data_read, candidate_sdram_base, &out, sizeof(out), 0x00000B30, 0x00000344));
+    assert(out == value);
+    assert(!bus.first_unresolved().has_value());
+}
+
+static void test_candidate_sdram_uninitialized_read_stops() {
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc, candidate_sdram_base, 0x100);
+    std::uint32_t out = 0;
+    assert(!bus.read(access_kind::data_read, candidate_sdram_base + 4, &out, sizeof(out), 0x00000B30, 0x00000344));
+    assert(bus.first_unresolved().has_value());
+    assert(bus.first_unresolved()->cause == unresolved_cause::ram_uninitialized);
 }
 
 static void test_bus_records_unmapped_data_read() {
@@ -163,6 +188,7 @@ static void test_bus_records_unmapped_data_read() {
     assert(u->pc == 0x50000140);
     assert(u->lr == 0x50000144);
     assert(u->count == 1);
+    assert(u->cause == unresolved_cause::unmapped);
 }
 
 static void test_bus_records_unmapped_code_read() {
@@ -201,6 +227,8 @@ int main() {
     test_bus_reset_alias_reads_same_rom_bytes();
     test_bus_rejects_cross_rom_end();
     test_bus_records_rom_write();
+    test_candidate_sdram_write_then_read_is_tracked();
+    test_candidate_sdram_uninitialized_read_stops();
     test_bus_records_unmapped_data_read();
     test_bus_records_unmapped_code_read();
     test_bus_keeps_first_unresolved();

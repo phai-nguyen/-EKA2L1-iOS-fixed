@@ -26,6 +26,11 @@ static probe_result sample_result() {
     result.synthetic_reset_alias = true;
     result.reset_alias_base = cold_reset_pc;
     result.reset_alias_size = result.header.rom_size;
+    result.candidate_sdram_enabled = true;
+    result.candidate_sdram_base_address = candidate_sdram_base;
+    result.candidate_sdram_size_bytes = static_cast<std::uint32_t>(candidate_sdram_size);
+    result.candidate_sdram_write_count = 3;
+    result.candidate_sdram_initialized_bytes = 12;
     result.executed_instructions = 37;
     result.stop_reason = probe_stop_reason::unresolved_access;
     for (std::size_t i = 0; i < result.registers.r.size(); ++i) {
@@ -36,13 +41,14 @@ static probe_result sample_result() {
     result.registers.pc = 0x50005678;
     result.registers.cpsr = 0x000000D3;
     result.unresolved = unresolved_access{access_kind::data_write, 4, 0x40000010,
-                                          0x50005678, 0x50001234, 0xAABBCCDD, 1};
+                                          0x50005678, 0x50001234, 0xAABBCCDD, 1,
+                                          unresolved_cause::unmapped};
     return result;
 }
 
 static void test_report_contains_probe_identity_and_rom_header() {
     const auto text = format_report(sample_result());
-    require_contains(text, "RH29_MACHINE1_C");
+    require_contains(text, "RH29_MACHINE1_D");
     require_contains(text, "ROM_BASE=0x50000000");
     require_contains(text, "ROM_SIZE=0x01170000");
     require_contains(text, "RESTART_VECTOR_WORD=0x00000000");
@@ -51,6 +57,12 @@ static void test_report_contains_probe_identity_and_rom_header() {
     require_contains(text, "RESET_ALIAS_BASE=0x00000000");
     require_contains(text, "RESET_ALIAS_SIZE=0x01170000");
     require_contains(text, "RESET_ALIAS_SOURCE_BASE=0x50000000");
+    require_contains(text, "SDRAM_MODE=wd2_rh29_128mbit_candidate_write_tracked");
+    require_contains(text, "SDRAM_BASE=0x08000000");
+    require_contains(text, "SDRAM_SIZE=0x01000000");
+    require_contains(text, "SDRAM_INIT_POLICY=write_initialized_only");
+    require_contains(text, "SDRAM_WRITE_COUNT=3");
+    require_contains(text, "SDRAM_INITIALIZED_BYTES=12");
     require_contains(text, "KERN_DATA_ADDRESS=0x80001000");
     require_contains(text, "KERN_LIMIT=0x80002000");
 }
@@ -80,6 +92,7 @@ static void test_report_contains_unresolved_access() {
     require_contains(text, "UNRESOLVED_LR=0x50001234");
     require_contains(text, "UNRESOLVED_VALUE=0x00000000AABBCCDD");
     require_contains(text, "UNRESOLVED_COUNT=1");
+    require_contains(text, "UNRESOLVED_CAUSE=unmapped");
 }
 
 static void test_report_contains_cpu_exception() {
@@ -151,7 +164,7 @@ static void test_report_contains_cp15_barrier() {
     require_contains(text, "CP15_INSTRUCTION=0xEE110F10");
 }
 
-static void test_machine1_c_defaults_to_1k() {
+static void test_machine1_d_defaults_to_1k() {
     probe_options options{};
     assert(options.instruction_budget == 1000);
 }
@@ -185,7 +198,7 @@ int main() {
     test_observed_arm920t_control_write_is_exact_allowlist();
     test_report_contains_cp15_emulation_evidence();
     test_report_contains_cp15_barrier();
-    test_machine1_c_defaults_to_1k();
+    test_machine1_d_defaults_to_1k();
     test_arm_condition_passed_matches_a32_flags();
     std::cout << "rh29_report_tests: PASS\n";
     return 0;

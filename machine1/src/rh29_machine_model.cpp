@@ -65,16 +65,21 @@ namespace eka2l1::machine::rh29 {
     strict_bus::strict_bus(const std::uint8_t *rom_data,
                            const std::size_t rom_size,
                            const std::uint32_t rom_base,
-                           const std::optional<std::uint32_t> read_alias_base)
+                           const std::optional<std::uint32_t> read_alias_base,
+                           const std::optional<std::uint32_t> ram_base,
+                           const std::size_t ram_size)
         : rom_data_(rom_data)
         , rom_size_(rom_size)
         , rom_base_(rom_base)
-        , read_alias_base_(read_alias_base) {
+        , read_alias_base_(read_alias_base)
+        , ram_base_(ram_base)
+        , ram_data_(ram_base && ram_size ? ram_size : 0, 0)
+        , ram_initialized_(ram_base && ram_size ? ram_size : 0, 0) {
     }
 
-    bool strict_bus::range_inside_mapping(const std::uint32_t address,
-                                          const std::size_t width,
-                                          std::size_t &offset) const {
+    bool strict_bus::range_inside_rom_mapping(const std::uint32_t address,
+                                              const std::size_t width,
+                                              std::size_t &offset) const {
         if (!rom_data_ || width == 0) {
             return false;
         }
@@ -100,17 +105,33 @@ namespace eka2l1::machine::rh29 {
         return read_alias_base_ && check_range(*read_alias_base_);
     }
 
+    bool strict_bus::range_inside_ram(const std::uint32_t address,
+                                      const std::size_t width,
+                                      std::size_t &offset) const {
+        if (!ram_base_ || ram_data_.empty() || width == 0 || address < *ram_base_) {
+            return false;
+        }
+        const std::uint64_t off64 = static_cast<std::uint64_t>(address) - *ram_base_;
+        const std::uint64_t end64 = off64 + static_cast<std::uint64_t>(width);
+        if (end64 < off64 || end64 > ram_data_.size()) {
+            return false;
+        }
+        offset = static_cast<std::size_t>(off64);
+        return true;
+    }
+
     void strict_bus::record_unresolved(const access_kind kind,
                                        const std::size_t width,
                                        const std::uint32_t address,
                                        const std::uint32_t pc,
                                        const std::uint32_t lr,
-                                       const std::uint64_t value) {
+                                       const std::uint64_t value,
+                                       const unresolved_cause cause) {
         if (first_unresolved_) {
             return;
         }
 
-        first_unresolved_ = unresolved_access{kind, width, address, pc, lr, value, 1};
+        first_unresolved_ = unresolved_access{kind, width, address, pc, lr, value, 1, cause};
     }
 
     bool strict_bus::read(const access_kind kind,
@@ -119,14 +140,30 @@ namespace eka2l1::machine::rh29 {
                           const std::size_t width,
                           const std::uint32_t pc,
                           const std::uint32_t lr) {
-        std::size_t offset = 0;
-        if (!out || !range_inside_mapping(address, width, offset)) {
-            record_unresolved(kind, width, address, pc, lr, 0);
+        if (!out) {
+            record_unresolved(kind, width, address, pc, lr, 0, unresolved_cause::unmapped);
             return false;
         }
 
-        std::memcpy(out, rom_data_ + offset, width);
-        return true;
+        std::size_t offset = 0;
+        if (range_inside_rom_mapping(address, width, offset)) {
+            std::memcpy(out, rom_data_ + offset, width);
+            return true;
+        }
+
+        if (range_inside_ram(address, width, offset)) {
+            for (std::size_t i = 0; i < width; ++i) {
+                if (!ram_initialized_[offset + i]) {
+                    record_unresolved(kind, width, address, pc, lr, 0, unresolved_cause::ram_uninitialized);
+                    return false;
+                }
+            }
+            std::memcpy(out, ram_data_.data() + offset, width);
+            return true;
+        }
+
+        record_unresolved(kind, width, address, pc, lr, 0, unresolved_cause::unmapped);
+        return false;
     }
 
     bool strict_bus::write(const std::uint32_t address,
@@ -134,12 +171,36 @@ namespace eka2l1::machine::rh29 {
                            const std::size_t width,
                            const std::uint32_t pc,
                            const std::uint32_t lr) {
+        std::size_t offset = 0;
+        if (value && range_inside_ram(address, width, offset)) {
+            std::memcpy(ram_data_.data() + offset, value, width);
+            for (std::size_t i = 0; i < width; ++i) {
+                if (!ram_initialized_[offset + i]) {
+                    ram_initialized_[offset + i] = 1;
+                    ++ram_initialized_bytes_;
+                }
+            }
+            ++ram_write_count_;
+            return true;
+        }
+
+        const auto cause = range_inside_rom_mapping(address, width, offset)
+            ? unresolved_cause::rom_write
+            : unresolved_cause::unmapped;
         record_unresolved(access_kind::data_write, width, address, pc, lr,
-                          value ? read_value_le(value, width) : 0);
+                          value ? read_value_le(value, width) : 0, cause);
         return false;
     }
 
     const std::optional<unresolved_access> &strict_bus::first_unresolved() const {
         return first_unresolved_;
+    }
+
+    std::uint64_t strict_bus::ram_write_count() const {
+        return ram_write_count_;
+    }
+
+    std::size_t strict_bus::ram_initialized_bytes() const {
+        return ram_initialized_bytes_;
     }
 }

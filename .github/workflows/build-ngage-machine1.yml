@@ -1,4 +1,4 @@
-name: Build NGAGE-MACHINE1-C
+name: Build NGAGE-MACHINE1-D
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ngage-machine1-c
+  group: ngage-machine1-d
   cancel-in-progress: true
 
 jobs:
@@ -46,7 +46,7 @@ jobs:
           {
             echo "controller_head=$(git rev-parse HEAD)"
             echo "branch=ngage-machine1"
-            echo "milestone=MACHINE1-C"
+            echo "milestone=MACHINE1-D"
             echo "target=Nokia N-Gage QD RH-29"
             echo "rom=RH-29 V04.10 SYM.ROM"
             echo "rom_status=DEVICE PASS (HLE import/boot/apps + FIFA 05 playable)"
@@ -79,7 +79,7 @@ jobs:
       - name: Apply Vietnamese localization
         run: python3 control/scripts/apply_vietnamese_ios.py source
 
-      - name: Apply NGAGE MACHINE1-C
+      - name: Apply NGAGE MACHINE1-D
         run: python3 control/scripts/apply_ngage_machine1.py source
 
       - name: Static contract
@@ -93,8 +93,8 @@ jobs:
           grep -q 'installDeviceWithVplPath' source/src/emu/ios/Bridge/IosEmulator.h
           grep -q '"vi"' source/src/emu/ios/Resources/Localizable.xcstrings
 
-          # MACHINE1-C must be present only as an opt-in RH-29 research path.
-          grep -q 'RH29_MACHINE1_C' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
+          # MACHINE1-D must be present only as an opt-in RH-29 research path.
+          grep -q 'RH29_MACHINE1_D' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q 'runRH29MachineProbeWithInstructionBudget' source/src/emu/ios/Bridge/IosEmulator.h
           grep -q 'caseInsensitiveCompare:@"RH-29"' source/src/emu/ios/Bridge/IosEmulator.mm
           grep -q 'roms/rh-29/SYM.ROM' source/src/emu/ios/Bridge/IosEmulator.mm
@@ -109,11 +109,14 @@ jobs:
           grep -q 'synthetic_rom_alias_hypothesis' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q 'is_observed_arm920t_control_write' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q 'observed_arm920t_c1_write_0x1272_mmu_off' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
+          grep -q 'candidate_sdram_base' source/src/emu/ios/Bridge/RH29MachineModel.h
+          grep -q 'write_initialized_only' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
+          grep -q 'wd2_rh29_128mbit_candidate_write_tracked' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q '@State private var instructionBudget: UInt32 = 1_000' source/src/emu/ios/App/RH29MachineProbeView.swift
-          grep -q 'RH29_MACHINE1_C.txt' source/src/emu/ios/App/RH29MachineProbeView.swift
+          grep -q 'RH29_MACHINE1_D.txt' source/src/emu/ios/App/RH29MachineProbeView.swift
 
           git -C source diff --check
-          echo "HYBRIDHOME3 + VPL + Vietnamese + MACHINE1-C static contract PASS"
+          echo "HYBRIDHOME3 + VPL + Vietnamese + MACHINE1-D static contract PASS"
 
       - name: Install and configure ccache
         run: |
@@ -129,9 +132,9 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ngage-machine1-ccache-${{ runner.os }}-ios16-dyncom-${{ env.UPSTREAM_REF }}-${{ github.sha }}
+          key: ngage-machine1-dcache-${{ runner.os }}-ios16-dyncom-${{ env.UPSTREAM_REF }}-${{ github.sha }}
           restore-keys: |
-            ngage-machine1-ccache-${{ runner.os }}-ios16-dyncom-${{ env.UPSTREAM_REF }}-
+            ngage-machine1-dcache-${{ runner.os }}-ios16-dyncom-${{ env.UPSTREAM_REF }}-
             hybridhome-upstream1-ccache-${{ runner.os }}-ios16-dyncom-${{ env.UPSTREAM_REF }}-
 
       - name: Restore incremental Xcode build
@@ -149,7 +152,7 @@ jobs:
           path: source/src/external/ffmpeg/ios/device
           key: hybridhome-upstream1-ffmpeg-ios-device-v1
 
-      - name: Build upstream iOS + MACHINE1-C
+      - name: Build upstream iOS + MACHINE1-D
         working-directory: source
         env:
           EKA2L1_IOS_DEPLOYMENT_TARGET: "16.0"
@@ -180,18 +183,18 @@ jobs:
           cp -R "${app}" out/Payload/
           (
             cd out
-            zip -qry EKA2L1-NGAGE-MACHINE1-C-unsigned.ipa Payload
+            zip -qry EKA2L1-NGAGE-MACHINE1-D-unsigned.ipa Payload
           )
-          shasum -a 256 out/EKA2L1-NGAGE-MACHINE1-C-unsigned.ipa | tee out/SHA256.txt
+          shasum -a 256 out/EKA2L1-NGAGE-MACHINE1-D-unsigned.ipa | tee out/SHA256.txt
           cp UPSTREAM-BASELINE.txt out/
           cp MACHINE1-BASELINE.txt out/
 
-      - name: Upload NGAGE MACHINE1-C IPA
+      - name: Upload NGAGE MACHINE1-D IPA
         uses: actions/upload-artifact@v7
         with:
-          name: EKA2L1-NGAGE-MACHINE1-C-IPA
+          name: EKA2L1-NGAGE-MACHINE1-D-IPA
           path: |
-            out/EKA2L1-NGAGE-MACHINE1-C-unsigned.ipa
+            out/EKA2L1-NGAGE-MACHINE1-D-unsigned.ipa
             out/SHA256.txt
             out/UPSTREAM-BASELINE.txt
             out/MACHINE1-BASELINE.txt
