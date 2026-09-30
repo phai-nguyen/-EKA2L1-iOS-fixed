@@ -175,6 +175,33 @@ static void test_candidate_sdram_uninitialized_read_stops() {
     assert(bus.first_unresolved()->cause == unresolved_cause::ram_uninitialized);
 }
 
+static void test_exact_observed_mmio_write_is_the_only_allowlisted_mmio() {
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+
+    const std::uint16_t exact = observed_mmio_write_value;
+    assert(bus.write(observed_mmio_write_address, &exact, sizeof(exact), 0x00000B68, 0x00000344));
+    assert(bus.observed_mmio_write_count() == 1);
+    assert(!bus.first_unresolved().has_value());
+
+    const std::uint16_t wrong = 0x0081u;
+    assert(!bus.write(observed_mmio_write_address, &wrong, sizeof(wrong), 0x00000B68, 0x00000344));
+    assert(bus.first_unresolved().has_value());
+    assert(bus.first_unresolved()->address == observed_mmio_write_address);
+    assert(bus.first_unresolved()->value == wrong);
+}
+
+static void test_observed_mmio_neighbor_is_not_mapped() {
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+    const std::uint16_t exact = observed_mmio_write_value;
+    assert(!bus.write(observed_mmio_write_address + 2, &exact, sizeof(exact), 0x00000B68, 0x00000344));
+    assert(bus.first_unresolved().has_value());
+    assert(bus.first_unresolved()->cause == unresolved_cause::unmapped);
+}
+
 static void test_bus_records_unmapped_data_read() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000);
@@ -229,6 +256,8 @@ int main() {
     test_bus_records_rom_write();
     test_candidate_sdram_write_then_read_is_tracked();
     test_candidate_sdram_uninitialized_read_stops();
+    test_exact_observed_mmio_write_is_the_only_allowlisted_mmio();
+    test_observed_mmio_neighbor_is_not_mapped();
     test_bus_records_unmapped_data_read();
     test_bus_records_unmapped_code_read();
     test_bus_keeps_first_unresolved();

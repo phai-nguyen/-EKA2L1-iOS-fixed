@@ -1,4 +1,4 @@
-name: Build NGAGE-MACHINE1-D-ROMFIX
+name: Build NGAGE-MACHINE1-E
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ngage-machine1-d-romfix
+  group: ngage-machine1-e
   cancel-in-progress: true
 
 jobs:
@@ -48,7 +48,7 @@ jobs:
           {
             echo "controller_head=$(git rev-parse HEAD)"
             echo "branch=ngage-machine1"
-            echo "milestone=MACHINE1-D"
+            echo "milestone=MACHINE1-E"
             echo "target=Nokia N-Gage QD RH-29"
             echo "rom=RH-29 V04.10 SYM.ROM"
             echo "rom_status=DEVICE PASS (HLE import/boot/apps + FIFA 05 playable)"
@@ -81,7 +81,7 @@ jobs:
       - name: Apply Vietnamese localization
         run: python3 control/scripts/apply_vietnamese_ios.py source
 
-      - name: Apply NGAGE MACHINE1-D
+      - name: Apply NGAGE MACHINE1-E
         run: python3 control/scripts/apply_ngage_machine1.py source
 
       - name: Static contract
@@ -95,8 +95,8 @@ jobs:
           grep -q 'installDeviceWithVplPath' source/src/emu/ios/Bridge/IosEmulator.h
           grep -q '"vi"' source/src/emu/ios/Resources/Localizable.xcstrings
 
-          # MACHINE1-D must be present only as an opt-in RH-29 research path.
-          grep -q 'RH29_MACHINE1_D' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
+          # MACHINE1-E must be present only as an opt-in RH-29 research path.
+          grep -q 'RH29_MACHINE1_E' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q 'runRH29MachineProbeWithInstructionBudget' source/src/emu/ios/Bridge/IosEmulator.h
           grep -q 'caseInsensitiveCompare:@"RH-29"' source/src/emu/ios/Bridge/IosEmulator.mm
           grep -q 'roms/rh-29/SYM.ROM' source/src/emu/ios/Bridge/IosEmulator.mm
@@ -114,11 +114,13 @@ jobs:
           grep -q 'candidate_sdram_base' source/src/emu/ios/Bridge/RH29MachineModel.h
           grep -q 'write_initialized_only' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q 'wd2_rh29_128mbit_candidate_write_tracked' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
+          grep -q 'observed_mmio_write_address = 0x0C150004u' source/src/emu/ios/Bridge/RH29MachineModel.h
+          grep -q 'exact_observed_write_only' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
+          grep -q 'RH29_MACHINE1_E.txt' source/src/emu/ios/App/RH29MachineProbeView.swift
           grep -q '@State private var instructionBudget: UInt32 = 1_000' source/src/emu/ios/App/RH29MachineProbeView.swift
-          grep -q 'RH29_MACHINE1_D.txt' source/src/emu/ios/App/RH29MachineProbeView.swift
 
           git -C source diff --check
-          echo "HYBRIDHOME3 + VPL + Vietnamese + MACHINE1-D static contract PASS"
+          echo "HYBRIDHOME3 + VPL + Vietnamese + MACHINE1-E static contract PASS"
 
       - name: Install and configure ccache
         run: |
@@ -154,7 +156,7 @@ jobs:
           path: source/src/external/ffmpeg/ios/device
           key: hybridhome-upstream1-ffmpeg-ios-device-v1
 
-      - name: Build upstream iOS + MACHINE1-D
+      - name: Build upstream iOS + MACHINE1-E
         working-directory: source
         env:
           EKA2L1_IOS_DEPLOYMENT_TARGET: "16.0"
@@ -193,12 +195,12 @@ jobs:
           cp -R "${app}" out/Payload/
           (
             cd out
-            zip -qry EKA2L1-NGAGE-MACHINE1-D-ROMFIX-unsigned.ipa Payload
+            zip -qry EKA2L1-NGAGE-MACHINE1-E-unsigned.ipa Payload
           )
 
-      - name: Upload NGAGE MACHINE1-D IPA
+      - name: Upload NGAGE MACHINE1-E IPA
         uses: actions/upload-artifact@v7
         with:
-          name: EKA2L1-NGAGE-MACHINE1-D-ROMFIX-IPA
-          path: out/EKA2L1-NGAGE-MACHINE1-D-ROMFIX-unsigned.ipa
+          name: EKA2L1-NGAGE-MACHINE1-E-IPA
+          path: out/EKA2L1-NGAGE-MACHINE1-E-unsigned.ipa
           if-no-files-found: error

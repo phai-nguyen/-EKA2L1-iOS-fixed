@@ -13,6 +13,12 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::uint32_t candidate_sdram_base = 0x08000000u;
     static constexpr std::size_t candidate_sdram_size = 16u * 1024u * 1024u;
 
+    // MACHINE1-D device evidence. Hardware identity is intentionally unknown:
+    // allow only this exact observed write, never the surrounding MMIO range.
+    static constexpr std::uint32_t observed_mmio_write_address = 0x0C150004u;
+    static constexpr std::size_t observed_mmio_write_width = 2u;
+    static constexpr std::uint16_t observed_mmio_write_value = 0x0080u;
+
     enum class parse_error {
         none = 0,
         truncated_header,
@@ -79,6 +85,7 @@ namespace eka2l1::machine::rh29 {
         const std::optional<unresolved_access> &first_unresolved() const;
         std::uint64_t ram_write_count() const;
         std::size_t ram_initialized_bytes() const;
+        std::uint64_t observed_mmio_write_count() const;
 
     private:
         bool range_inside_rom_mapping(std::uint32_t address, std::size_t width, std::size_t &offset) const;
@@ -96,6 +103,7 @@ namespace eka2l1::machine::rh29 {
         std::vector<std::uint8_t> ram_initialized_{};
         std::uint64_t ram_write_count_ = 0;
         std::size_t ram_initialized_bytes_ = 0;
+        std::uint64_t observed_mmio_write_count_ = 0;
         std::optional<unresolved_access> first_unresolved_{};
     };
 }

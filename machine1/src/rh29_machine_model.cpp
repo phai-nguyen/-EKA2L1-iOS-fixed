@@ -171,6 +171,15 @@ namespace eka2l1::machine::rh29 {
                            const std::size_t width,
                            const std::uint32_t pc,
                            const std::uint32_t lr) {
+        const std::uint64_t write_value = value ? read_value_le(value, width) : 0;
+        if (value
+            && address == observed_mmio_write_address
+            && width == observed_mmio_write_width
+            && write_value == observed_mmio_write_value) {
+            ++observed_mmio_write_count_;
+            return true;
+        }
+
         std::size_t offset = 0;
         if (value && range_inside_ram(address, width, offset)) {
             std::memcpy(ram_data_.data() + offset, value, width);
@@ -188,7 +197,7 @@ namespace eka2l1::machine::rh29 {
             ? unresolved_cause::rom_write
             : unresolved_cause::unmapped;
         record_unresolved(access_kind::data_write, width, address, pc, lr,
-                          value ? read_value_le(value, width) : 0, cause);
+                          write_value, cause);
         return false;
     }
 
@@ -202,5 +211,9 @@ namespace eka2l1::machine::rh29 {
 
     std::size_t strict_bus::ram_initialized_bytes() const {
         return ram_initialized_bytes_;
+    }
+
+    std::uint64_t strict_bus::observed_mmio_write_count() const {
+        return observed_mmio_write_count_;
     }
 }
