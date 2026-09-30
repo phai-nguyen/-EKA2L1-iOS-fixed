@@ -202,6 +202,34 @@ static void test_observed_mmio_neighbor_is_not_mapped() {
     assert(bus.first_unresolved()->cause == unresolved_cause::unmapped);
 }
 
+static void test_exact_observed_flash_command_is_allowlisted_only_at_fl1_base() {
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+
+    const std::uint16_t exact = observed_flash_command_value;
+    assert(bus.write(observed_flash_command_address, &exact, sizeof(exact), 0x00000984, 0x00000AFC));
+    assert(bus.observed_flash_command_count() == 1);
+    assert(!bus.first_unresolved().has_value());
+
+    const std::uint16_t wrong = 0x00F0u;
+    assert(!bus.write(observed_flash_command_address, &wrong, sizeof(wrong), 0x00000984, 0x00000AFC));
+    assert(bus.first_unresolved().has_value());
+    assert(bus.first_unresolved()->address == observed_flash_command_address);
+    assert(bus.first_unresolved()->value == wrong);
+}
+
+static void test_second_flash_window_is_not_generically_mapped() {
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+
+    const std::uint16_t exact = observed_flash_command_value;
+    assert(!bus.write(observed_flash_command_address + 2, &exact, sizeof(exact), 0x00000984, 0x00000AFC));
+    assert(bus.first_unresolved().has_value());
+    assert(bus.first_unresolved()->cause == unresolved_cause::unmapped);
+}
+
 static void test_bus_records_unmapped_data_read() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000);
@@ -258,6 +286,8 @@ int main() {
     test_candidate_sdram_uninitialized_read_stops();
     test_exact_observed_mmio_write_is_the_only_allowlisted_mmio();
     test_observed_mmio_neighbor_is_not_mapped();
+    test_exact_observed_flash_command_is_allowlisted_only_at_fl1_base();
+    test_second_flash_window_is_not_generically_mapped();
     test_bus_records_unmapped_data_read();
     test_bus_records_unmapped_code_read();
     test_bus_keeps_first_unresolved();

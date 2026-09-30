@@ -19,6 +19,15 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::size_t observed_mmio_write_width = 2u;
     static constexpr std::uint16_t observed_mmio_write_value = 0x0080u;
 
+    // RH-29 flashing evidence identifies this as the second 64-Mbit flash window.
+    // MACHINE1-F still does not map/read that window: only this exact observed
+    // 16-bit write is accepted as a flash-command probe.
+    static constexpr std::uint32_t second_flash_base = 0x02000000u;
+    static constexpr std::size_t second_flash_size = 8u * 1024u * 1024u;
+    static constexpr std::uint32_t observed_flash_command_address = second_flash_base;
+    static constexpr std::size_t observed_flash_command_width = 2u;
+    static constexpr std::uint16_t observed_flash_command_value = 0x00FFu;
+
     enum class parse_error {
         none = 0,
         truncated_header,
@@ -86,6 +95,7 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t ram_write_count() const;
         std::size_t ram_initialized_bytes() const;
         std::uint64_t observed_mmio_write_count() const;
+        std::uint64_t observed_flash_command_count() const;
 
     private:
         bool range_inside_rom_mapping(std::uint32_t address, std::size_t width, std::size_t &offset) const;
@@ -104,6 +114,7 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t ram_write_count_ = 0;
         std::size_t ram_initialized_bytes_ = 0;
         std::uint64_t observed_mmio_write_count_ = 0;
+        std::uint64_t observed_flash_command_count_ = 0;
         std::optional<unresolved_access> first_unresolved_{};
     };
 }

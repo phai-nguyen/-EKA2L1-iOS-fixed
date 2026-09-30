@@ -180,6 +180,14 @@ namespace eka2l1::machine::rh29 {
             return true;
         }
 
+        if (value
+            && address == observed_flash_command_address
+            && width == observed_flash_command_width
+            && write_value == observed_flash_command_value) {
+            ++observed_flash_command_count_;
+            return true;
+        }
+
         std::size_t offset = 0;
         if (value && range_inside_ram(address, width, offset)) {
             std::memcpy(ram_data_.data() + offset, value, width);
@@ -215,5 +223,9 @@ namespace eka2l1::machine::rh29 {
 
     std::uint64_t strict_bus::observed_mmio_write_count() const {
         return observed_mmio_write_count_;
+    }
+
+    std::uint64_t strict_bus::observed_flash_command_count() const {
+        return observed_flash_command_count_;
     }
 }

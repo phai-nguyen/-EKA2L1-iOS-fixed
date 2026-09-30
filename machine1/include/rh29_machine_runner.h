@@ -61,6 +61,8 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_sdram_initialized_bytes = 0;
         bool exact_observed_mmio_write_enabled = false;
         std::uint64_t exact_observed_mmio_write_count = 0;
+        bool exact_observed_flash_command_enabled = false;
+        std::uint64_t exact_observed_flash_command_count = 0;
         probe_stop_reason stop_reason = probe_stop_reason::io_error;
         register_snapshot registers{};
         std::optional<unresolved_access> unresolved{};

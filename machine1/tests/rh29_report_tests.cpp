@@ -33,6 +33,8 @@ static probe_result sample_result() {
     result.candidate_sdram_initialized_bytes = 12;
     result.exact_observed_mmio_write_enabled = true;
     result.exact_observed_mmio_write_count = 1;
+    result.exact_observed_flash_command_enabled = true;
+    result.exact_observed_flash_command_count = 1;
     result.executed_instructions = 37;
     result.stop_reason = probe_stop_reason::unresolved_access;
     for (std::size_t i = 0; i < result.registers.r.size(); ++i) {
@@ -50,7 +52,7 @@ static probe_result sample_result() {
 
 static void test_report_contains_probe_identity_and_rom_header() {
     const auto text = format_report(sample_result());
-    require_contains(text, "RH29_MACHINE1_E");
+    require_contains(text, "RH29_MACHINE1_F");
     require_contains(text, "ROM_BASE=0x50000000");
     require_contains(text, "ROM_SIZE=0x01170000");
     require_contains(text, "RESTART_VECTOR_WORD=0x00000000");
@@ -70,6 +72,13 @@ static void test_report_contains_probe_identity_and_rom_header() {
     require_contains(text, "MMIO_ALLOW_WIDTH_BITS=16");
     require_contains(text, "MMIO_ALLOW_VALUE=0x0080");
     require_contains(text, "MMIO_ACCEPTED_WRITE_COUNT=1");
+    require_contains(text, "FLASH_PROBE_POLICY=exact_observed_command_write_only");
+    require_contains(text, "FLASH2_BASE=0x02000000");
+    require_contains(text, "FLASH2_SIZE=0x00800000");
+    require_contains(text, "FLASH_ALLOW_ADDRESS=0x02000000");
+    require_contains(text, "FLASH_ALLOW_WIDTH_BITS=16");
+    require_contains(text, "FLASH_ALLOW_VALUE=0x00FF");
+    require_contains(text, "FLASH_ACCEPTED_COMMAND_COUNT=1");
     require_contains(text, "KERN_DATA_ADDRESS=0x80001000");
     require_contains(text, "KERN_LIMIT=0x80002000");
 }
@@ -171,7 +180,7 @@ static void test_report_contains_cp15_barrier() {
     require_contains(text, "CP15_INSTRUCTION=0xEE110F10");
 }
 
-static void test_machine1_e_defaults_to_1k() {
+static void test_machine1_f_defaults_to_1k() {
     probe_options options{};
     assert(options.instruction_budget == 1000);
 }
@@ -205,7 +214,7 @@ int main() {
     test_observed_arm920t_control_write_is_exact_allowlist();
     test_report_contains_cp15_emulation_evidence();
     test_report_contains_cp15_barrier();
-    test_machine1_e_defaults_to_1k();
+    test_machine1_f_defaults_to_1k();
     test_arm_condition_passed_matches_a32_flags();
     std::cout << "rh29_report_tests: PASS\n";
     return 0;
