@@ -52,16 +52,19 @@ jobs:
       - name: Static contract
         run: |
           set -euo pipefail
-          grep -q 'HYBRIDHOME-UPSTREAM1' source/src/emu/ios/App/S60HybridHomeView.swift
+          grep -q 'HYBRIDHOME2' source/src/emu/ios/App/S60HybridHomeView.swift
           grep -q 'firmwareCode.caseInsensitiveCompare("RM-356")' source/src/emu/ios/App/ContentView.swift
           grep -q 'S60HybridHomeView.swift' source/src/emu/ios/CMakeLists.txt
           grep -q '0x102750F0' source/src/emu/ios/App/S60HybridHomeView.swift
+          grep -q '0x100058B3' source/src/emu/ios/App/S60HybridHomeView.swift
+          grep -q '0x101F4CCE' source/src/emu/ios/App/S60HybridHomeView.swift
+          grep -q '0x100058C5' source/src/emu/ios/App/S60HybridHomeView.swift
           grep -q 'NavigationLink(destination: EmulatorView(uid: app.uid))' source/src/emu/ios/App/S60HybridHomeView.swift
           grep -q 'AppGridCell(uid: app.uid, name: app.name)' source/src/emu/ios/App/S60HybridHomeView.swift
           grep -q 'app.lavender1865.valley8348' source/src/emu/ios/CMakeLists.txt
           grep -q '"vi"' source/src/emu/ios/Resources/Localizable.xcstrings
           grep -q '"vi"' source/src/emu/ios/Resources/InfoPlist.xcstrings
-          echo "HYBRIDHOME-UPSTREAM1 + Vietnamese static contract PASS"
+          echo "HYBRIDHOME2 + Vietnamese static contract PASS"
 
       - name: Install and configure ccache
         run: |
