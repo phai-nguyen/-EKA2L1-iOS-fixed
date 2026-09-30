@@ -23,6 +23,7 @@ namespace eka2l1::machine::rh29 {
             case probe_stop_reason::budget_exhausted: return "budget_exhausted";
             case probe_stop_reason::unresolved_access: return "unresolved_access";
             case probe_stop_reason::cpu_exception: return "cpu_exception";
+            case probe_stop_reason::cp15_access: return "cp15_access";
             case probe_stop_reason::invalid_rom: return "invalid_rom";
             case probe_stop_reason::io_error: return "io_error";
             }
@@ -44,6 +45,23 @@ namespace eka2l1::machine::rh29 {
                 << std::setw(width) << static_cast<std::uint64_t>(value)
                 << std::dec << "\n";
         }
+    }
+
+    bool is_arm_cp15_instruction(const std::uint32_t instruction) {
+        // A32 coprocessor encodings carry the coprocessor number in bits 11:8.
+        // Stop on every p15 instruction class before Dyncom can service it with
+        // its ARM11/MPCore CP15 model. That model is not evidence for RH-29.
+        if ((instruction & 0x00000F00u) != 0x00000F00u) {
+            return false;
+        }
+
+        // LDC/STC and MCRR/MRRC families: bits 27:25 == 110.
+        if ((instruction & 0x0E000000u) == 0x0C000000u) {
+            return true;
+        }
+
+        // CDP/MCR/MRC families: bits 27:24 == 1110.
+        return (instruction & 0x0F000000u) == 0x0E000000u;
     }
 
     std::string format_report(const probe_result &result) {
@@ -82,6 +100,11 @@ namespace eka2l1::machine::rh29 {
             out << "EXCEPTION_TYPE=" << result.exception->type << "\n";
             write_hex(out, "EXCEPTION_DATA", result.exception->data);
             out << "SYSTEM_CALL=" << (result.exception->system_call ? 1 : 0) << "\n";
+        }
+
+        if (result.cp15) {
+            write_hex(out, "CP15_PC", result.cp15->pc);
+            write_hex(out, "CP15_INSTRUCTION", result.cp15->instruction);
         }
 
         if (!result.detail.empty()) {
@@ -227,6 +250,7 @@ namespace eka2l1::machine::rh29 {
         };
 
         std::optional<cpu_exception_info> exception;
+        std::optional<cp15_access_info> cp15;
         cpu->exception_handler = [&](arm::exception_type type, std::uint32_t data) {
             // A failed bus callback already carries the more precise unresolved-access record.
             if (!bus.first_unresolved() && !exception) {
@@ -251,11 +275,24 @@ namespace eka2l1::machine::rh29 {
         cpu->set_pc(parsed.header.restart_vector);
 
         std::uint32_t remaining = options.instruction_budget;
-        while (remaining > 0 && !bus.first_unresolved() && !exception) {
-            const std::uint32_t chunk = std::min<std::uint32_t>(remaining, 256u);
-            cpu->run(chunk);
-            // Dyncom resets ticks_executed_ at the start of every run(), so this value
-            // is per-run rather than cumulative.
+        while (remaining > 0 && !bus.first_unresolved() && !exception && !cp15) {
+            // MACHINE1-A must not let Dyncom's ARM11/MPCore CP15 model answer
+            // RH-29 hardware questions. Inspect the next A32 instruction while
+            // it is still only ROM data and stop before any p15 operation runs.
+            if (!cpu->is_thumb_mode()) {
+                const std::uint32_t pc = cpu->get_pc();
+                std::uint32_t instruction = 0;
+                if (!bus.read(access_kind::code_read, pc, &instruction, sizeof(instruction),
+                              pc, cpu->get_lr())) {
+                    break;
+                }
+                if (is_arm_cp15_instruction(instruction)) {
+                    cp15 = cp15_access_info{pc, instruction};
+                    break;
+                }
+            }
+
+            cpu->step();
             const std::uint32_t progressed = cpu->get_num_instruction_executed();
             if (progressed == 0) {
                 break;
@@ -268,9 +305,12 @@ namespace eka2l1::machine::rh29 {
         snapshot_registers(cpu.get(), result.registers);
         result.unresolved = bus.first_unresolved();
         result.exception = exception;
+        result.cp15 = cp15;
 
         if (result.unresolved) {
             result.stop_reason = probe_stop_reason::unresolved_access;
+        } else if (result.cp15) {
+            result.stop_reason = probe_stop_reason::cp15_access;
         } else if (result.exception) {
             result.stop_reason = probe_stop_reason::cpu_exception;
         } else if (result.executed_instructions >= options.instruction_budget) {
