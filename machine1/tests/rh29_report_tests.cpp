@@ -42,7 +42,7 @@ static probe_result sample_result() {
 
 static void test_report_contains_probe_identity_and_rom_header() {
     const auto text = format_report(sample_result());
-    require_contains(text, "RH29_MACHINE1_B");
+    require_contains(text, "RH29_MACHINE1_C");
     require_contains(text, "ROM_BASE=0x50000000");
     require_contains(text, "ROM_SIZE=0x01170000");
     require_contains(text, "RESTART_VECTOR_WORD=0x00000000");
@@ -119,6 +119,26 @@ static void test_cp15_classifier_blocks_all_a32_p15_coprocessor_classes() {
     assert(!is_arm_cp15_instruction(0xEF000000u));
 }
 
+static void test_observed_arm920t_control_write_is_exact_allowlist() {
+    assert(is_observed_arm920t_control_write(0xEE010F10u, 0x00001272u));
+    assert(!is_observed_arm920t_control_write(0xEE010F10u, 0x00001273u));
+    assert(!is_observed_arm920t_control_write(0xEE110F10u, 0x00001272u));
+    assert(!is_observed_arm920t_control_write(0xEE010F50u, 0x00001272u));
+}
+
+static void test_report_contains_cp15_emulation_evidence() {
+    auto result = sample_result();
+    result.cp15_emulated_count = 1;
+    result.cp15_emulated = cp15_emulation_info{0x00002DC8u, 0xEE010F10u, 0x00001272u};
+
+    const auto text = format_report(result);
+    require_contains(text, "CP15_EMULATED_COUNT=1");
+    require_contains(text, "CP15_EMULATED_PC=0x00002DC8");
+    require_contains(text, "CP15_EMULATED_INSTRUCTION=0xEE010F10");
+    require_contains(text, "CP15_EMULATED_VALUE=0x00001272");
+    require_contains(text, "CP15_EMULATION_POLICY=observed_arm920t_c1_write_0x1272_mmu_off");
+}
+
 static void test_report_contains_cp15_barrier() {
     auto result = sample_result();
     result.unresolved.reset();
@@ -131,7 +151,7 @@ static void test_report_contains_cp15_barrier() {
     require_contains(text, "CP15_INSTRUCTION=0xEE110F10");
 }
 
-static void test_machine1_b_defaults_to_1k() {
+static void test_machine1_c_defaults_to_1k() {
     probe_options options{};
     assert(options.instruction_budget == 1000);
 }
@@ -162,8 +182,10 @@ int main() {
     test_report_contains_cpu_exception();
     test_report_contains_error_detail();
     test_cp15_classifier_blocks_all_a32_p15_coprocessor_classes();
+    test_observed_arm920t_control_write_is_exact_allowlist();
+    test_report_contains_cp15_emulation_evidence();
     test_report_contains_cp15_barrier();
-    test_machine1_b_defaults_to_1k();
+    test_machine1_c_defaults_to_1k();
     test_arm_condition_passed_matches_a32_flags();
     std::cout << "rh29_report_tests: PASS\n";
     return 0;

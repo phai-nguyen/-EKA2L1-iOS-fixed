@@ -40,6 +40,12 @@ namespace eka2l1::machine::rh29 {
         std::uint32_t instruction = 0;
     };
 
+    struct cp15_emulation_info {
+        std::uint32_t pc = 0;
+        std::uint32_t instruction = 0;
+        std::uint32_t value = 0;
+    };
+
     struct probe_result {
         rom_header_info header{};
         std::uint32_t instruction_budget = 0;
@@ -53,10 +59,13 @@ namespace eka2l1::machine::rh29 {
         std::optional<unresolved_access> unresolved{};
         std::optional<cpu_exception_info> exception{};
         std::optional<cp15_access_info> cp15{};
+        std::optional<cp15_emulation_info> cp15_emulated{};
+        std::uint32_t cp15_emulated_count = 0;
         std::string detail{};
     };
 
     bool is_arm_cp15_instruction(std::uint32_t instruction);
+    bool is_observed_arm920t_control_write(std::uint32_t instruction, std::uint32_t value);
     bool arm_condition_passed(std::uint32_t instruction, std::uint32_t cpsr);
     probe_result run_probe(const std::string &rom_path, const probe_options &options);
     std::string format_report(const probe_result &result);

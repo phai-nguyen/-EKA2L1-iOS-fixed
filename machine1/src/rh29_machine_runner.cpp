@@ -64,6 +64,15 @@ namespace eka2l1::machine::rh29 {
         return (instruction & 0x0F000000u) == 0x0E000000u;
     }
 
+    bool is_observed_arm920t_control_write(const std::uint32_t instruction,
+                                            const std::uint32_t value) {
+        // DEVICE evidence from MACHINE1-B:
+        //   PC=0x00002DC8, instruction=0xEE010F10, R0=0x00001272.
+        // Decode: MCR p15,0,r0,c1,c0,0 (ARM920T CP15 control register write).
+        // Keep this deliberately exact. 0x1272 leaves MMU bit M (bit 0) clear.
+        return instruction == 0xEE010F10u && value == 0x00001272u;
+    }
+
     bool arm_condition_passed(const std::uint32_t instruction, const std::uint32_t cpsr) {
         const std::uint32_t cond = instruction >> 28;
         const bool n = (cpsr & (1u << 31)) != 0;
@@ -93,7 +102,7 @@ namespace eka2l1::machine::rh29 {
 
     std::string format_report(const probe_result &result) {
         std::ostringstream out;
-        out << "RH29_MACHINE1_B\n";
+        out << "RH29_MACHINE1_C\n";
         write_hex(out, "ROM_BASE", result.header.rom_base);
         write_hex(out, "ROM_SIZE", result.header.rom_size);
         write_hex(out, "RESTART_VECTOR_WORD", result.header.restart_vector);
@@ -132,6 +141,14 @@ namespace eka2l1::machine::rh29 {
             out << "EXCEPTION_TYPE=" << result.exception->type << "\n";
             write_hex(out, "EXCEPTION_DATA", result.exception->data);
             out << "SYSTEM_CALL=" << (result.exception->system_call ? 1 : 0) << "\n";
+        }
+
+        out << "CP15_EMULATED_COUNT=" << result.cp15_emulated_count << "\n";
+        if (result.cp15_emulated) {
+            write_hex(out, "CP15_EMULATED_PC", result.cp15_emulated->pc);
+            write_hex(out, "CP15_EMULATED_INSTRUCTION", result.cp15_emulated->instruction);
+            write_hex(out, "CP15_EMULATED_VALUE", result.cp15_emulated->value);
+            out << "CP15_EMULATION_POLICY=observed_arm920t_c1_write_0x1272_mmu_off\n";
         }
 
         if (result.cp15) {
@@ -199,7 +216,7 @@ namespace eka2l1::machine::rh29 {
         }
 
         // TRomHeader::restart_vector is the 32-bit instruction word stored at
-        // header offset 0x7C, not a guest address. MACHINE1-B probes the ARM
+        // header offset 0x7C, not a guest address. MACHINE1-C probes the ARM
         // cold-reset PC (0x00000000) and exposes canonical ROM bytes there via
         // an explicitly-labelled synthetic alias hypothesis.
         result.reset_pc = cold_reset_pc;
@@ -308,7 +325,7 @@ namespace eka2l1::machine::rh29 {
 
         std::uint32_t remaining = options.instruction_budget;
         while (remaining > 0 && !bus.first_unresolved() && !exception && !cp15) {
-            // MACHINE1-B must not let Dyncom's ARM11/MPCore CP15 model answer
+            // MACHINE1-C must not let Dyncom's ARM11/MPCore CP15 model answer
             // RH-29 hardware questions. Inspect the next A32 instruction while
             // it is still only ROM data and stop before any p15 operation runs.
             if (!cpu->is_thumb_mode()) {
@@ -320,6 +337,17 @@ namespace eka2l1::machine::rh29 {
                 }
                 if (is_arm_cp15_instruction(instruction)
                     && arm_condition_passed(instruction, cpu->get_cpsr())) {
+                    const std::uint32_t rd = (instruction >> 12) & 0xFu;
+                    const std::uint32_t value = rd <= 15 ? cpu->get_reg(rd) : 0;
+                    if (remaining > 0 && is_observed_arm920t_control_write(instruction, value)) {
+                        result.cp15_emulated = cp15_emulation_info{pc, instruction, value};
+                        ++result.cp15_emulated_count;
+                        ++result.executed_instructions;
+                        --remaining;
+                        cpu->set_pc(pc + 4);
+                        continue;
+                    }
+
                     cp15 = cp15_access_info{pc, instruction};
                     break;
                 }
