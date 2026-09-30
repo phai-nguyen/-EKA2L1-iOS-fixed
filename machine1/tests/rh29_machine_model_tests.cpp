@@ -18,7 +18,7 @@ static void put_u32(std::vector<std::uint8_t> &buf, std::size_t off, std::uint32
 
 static std::vector<std::uint8_t> valid_rom(std::size_t size = 0x1000) {
     std::vector<std::uint8_t> rom(size, 0);
-    put_u32(rom, 0x7C, 0x50000100);
+    put_u32(rom, 0x7C, 0x00000000);
     put_u32(rom, 0x8C, 0x50000000);
     put_u32(rom, 0x90, static_cast<std::uint32_t>(size));
     put_u32(rom, 0x94, 0x50000200);
@@ -31,7 +31,7 @@ static void test_parse_valid_header() {
     auto rom = valid_rom();
     const auto result = parse_rom_header(rom.data(), rom.size());
     assert(result.ok);
-    assert(result.header.restart_vector == 0x50000100);
+    assert(result.header.restart_vector == 0x00000000);
     assert(result.header.rom_base == 0x50000000);
     assert(result.header.rom_size == rom.size());
     assert(result.header.rom_root_dir_list == 0x50000200);
@@ -102,6 +102,23 @@ static void test_bus_reads_little_endian_inside_rom() {
     assert(u16 == 0x2211);
     assert(u32 == 0x44332211);
     assert(u64 == 0x8877665544332211ULL);
+    assert(!bus.first_unresolved().has_value());
+}
+
+static void test_bus_reset_alias_reads_same_rom_bytes() {
+    auto rom = valid_rom();
+    rom[0] = 0x78;
+    rom[1] = 0x56;
+    rom[2] = 0x34;
+    rom[3] = 0x12;
+
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc);
+    std::uint32_t canonical = 0;
+    std::uint32_t aliased = 0;
+    assert(bus.read(access_kind::code_read, 0x50000000, &canonical, sizeof(canonical), 0x50000000, 0));
+    assert(bus.read(access_kind::code_read, cold_reset_pc, &aliased, sizeof(aliased), cold_reset_pc, 0));
+    assert(canonical == 0x12345678u);
+    assert(aliased == canonical);
     assert(!bus.first_unresolved().has_value());
 }
 
@@ -181,6 +198,7 @@ int main() {
     test_parse_rejects_size_beyond_file();
     test_parse_rejects_32bit_range_overflow();
     test_bus_reads_little_endian_inside_rom();
+    test_bus_reset_alias_reads_same_rom_bytes();
     test_bus_rejects_cross_rom_end();
     test_bus_records_rom_write();
     test_bus_records_unmapped_data_read();

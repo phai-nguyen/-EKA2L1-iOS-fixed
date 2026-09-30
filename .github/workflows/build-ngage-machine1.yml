@@ -1,4 +1,4 @@
-name: Build NGAGE-MACHINE1-A
+name: Build NGAGE-MACHINE1-B
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ngage-machine1-a
+  group: ngage-machine1-b
   cancel-in-progress: true
 
 jobs:
@@ -46,7 +46,7 @@ jobs:
           {
             echo "controller_head=$(git rev-parse HEAD)"
             echo "branch=ngage-machine1"
-            echo "milestone=MACHINE1-A"
+            echo "milestone=MACHINE1-B"
             echo "target=Nokia N-Gage QD RH-29"
             echo "rom=RH-29 V04.10 SYM.ROM"
             echo "rom_status=DEVICE PASS (HLE import/boot/apps + FIFA 05 playable)"
@@ -79,7 +79,7 @@ jobs:
       - name: Apply Vietnamese localization
         run: python3 control/scripts/apply_vietnamese_ios.py source
 
-      - name: Apply NGAGE MACHINE1-A
+      - name: Apply NGAGE MACHINE1-B
         run: python3 control/scripts/apply_ngage_machine1.py source
 
       - name: Static contract
@@ -93,8 +93,8 @@ jobs:
           grep -q 'installDeviceWithVplPath' source/src/emu/ios/Bridge/IosEmulator.h
           grep -q '"vi"' source/src/emu/ios/Resources/Localizable.xcstrings
 
-          # MACHINE1-A must be present only as an opt-in RH-29 research path.
-          grep -q 'RH29_MACHINE1_A' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
+          # MACHINE1-B must be present only as an opt-in RH-29 research path.
+          grep -q 'RH29_MACHINE1_B' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q 'runRH29MachineProbeWithInstructionBudget' source/src/emu/ios/Bridge/IosEmulator.h
           grep -q 'caseInsensitiveCompare:@"RH-29"' source/src/emu/ios/Bridge/IosEmulator.mm
           grep -q 'roms/rh-29/SYM.ROM' source/src/emu/ios/Bridge/IosEmulator.mm
@@ -105,10 +105,13 @@ jobs:
           grep -q 'ARMul_State>(this, initial_mode)' source/src/emu/cpu/src/dyncom/arm_dyncom.cpp
           grep -q 'SVC32MODE' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q '0x000000D3u' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
-          grep -q 'RH29_MACHINE1_A.txt' source/src/emu/ios/App/RH29MachineProbeView.swift
+          grep -q 'cold_reset_pc' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
+          grep -q 'synthetic_rom_alias_hypothesis' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
+          grep -q '@State private var instructionBudget: UInt32 = 1_000' source/src/emu/ios/App/RH29MachineProbeView.swift
+          grep -q 'RH29_MACHINE1_B.txt' source/src/emu/ios/App/RH29MachineProbeView.swift
 
           git -C source diff --check
-          echo "HYBRIDHOME3 + VPL + Vietnamese + MACHINE1-A static contract PASS"
+          echo "HYBRIDHOME3 + VPL + Vietnamese + MACHINE1-B static contract PASS"
 
       - name: Install and configure ccache
         run: |
@@ -144,7 +147,7 @@ jobs:
           path: source/src/external/ffmpeg/ios/device
           key: hybridhome-upstream1-ffmpeg-ios-device-v1
 
-      - name: Build upstream iOS + MACHINE1-A
+      - name: Build upstream iOS + MACHINE1-B
         working-directory: source
         env:
           EKA2L1_IOS_DEPLOYMENT_TARGET: "16.0"
@@ -175,18 +178,18 @@ jobs:
           cp -R "${app}" out/Payload/
           (
             cd out
-            zip -qry EKA2L1-NGAGE-MACHINE1-A-unsigned.ipa Payload
+            zip -qry EKA2L1-NGAGE-MACHINE1-B-unsigned.ipa Payload
           )
-          shasum -a 256 out/EKA2L1-NGAGE-MACHINE1-A-unsigned.ipa | tee out/SHA256.txt
+          shasum -a 256 out/EKA2L1-NGAGE-MACHINE1-B-unsigned.ipa | tee out/SHA256.txt
           cp UPSTREAM-BASELINE.txt out/
           cp MACHINE1-BASELINE.txt out/
 
-      - name: Upload NGAGE MACHINE1-A IPA
+      - name: Upload NGAGE MACHINE1-B IPA
         uses: actions/upload-artifact@v7
         with:
-          name: EKA2L1-NGAGE-MACHINE1-A-IPA
+          name: EKA2L1-NGAGE-MACHINE1-B-IPA
           path: |
-            out/EKA2L1-NGAGE-MACHINE1-A-unsigned.ipa
+            out/EKA2L1-NGAGE-MACHINE1-B-unsigned.ipa
             out/SHA256.txt
             out/UPSTREAM-BASELINE.txt
             out/MACHINE1-BASELINE.txt

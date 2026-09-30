@@ -64,27 +64,40 @@ namespace eka2l1::machine::rh29 {
 
     strict_bus::strict_bus(const std::uint8_t *rom_data,
                            const std::size_t rom_size,
-                           const std::uint32_t rom_base)
+                           const std::uint32_t rom_base,
+                           const std::optional<std::uint32_t> read_alias_base)
         : rom_data_(rom_data)
         , rom_size_(rom_size)
-        , rom_base_(rom_base) {
+        , rom_base_(rom_base)
+        , read_alias_base_(read_alias_base) {
     }
 
-    bool strict_bus::range_inside_rom(const std::uint32_t address,
-                                      const std::size_t width,
-                                      std::size_t &offset) const {
-        if (!rom_data_ || width == 0 || address < rom_base_) {
+    bool strict_bus::range_inside_mapping(const std::uint32_t address,
+                                          const std::size_t width,
+                                          std::size_t &offset) const {
+        if (!rom_data_ || width == 0) {
             return false;
         }
 
-        const std::uint64_t off64 = static_cast<std::uint64_t>(address) - rom_base_;
-        const std::uint64_t end64 = off64 + static_cast<std::uint64_t>(width);
-        if (end64 < off64 || end64 > rom_size_) {
-            return false;
-        }
+        const auto check_range = [&](const std::uint32_t base) {
+            if (address < base) {
+                return false;
+            }
 
-        offset = static_cast<std::size_t>(off64);
-        return true;
+            const std::uint64_t off64 = static_cast<std::uint64_t>(address) - base;
+            const std::uint64_t end64 = off64 + static_cast<std::uint64_t>(width);
+            if (end64 < off64 || end64 > rom_size_) {
+                return false;
+            }
+
+            offset = static_cast<std::size_t>(off64);
+            return true;
+        };
+
+        if (check_range(rom_base_)) {
+            return true;
+        }
+        return read_alias_base_ && check_range(*read_alias_base_);
     }
 
     void strict_bus::record_unresolved(const access_kind kind,
@@ -107,7 +120,7 @@ namespace eka2l1::machine::rh29 {
                           const std::uint32_t pc,
                           const std::uint32_t lr) {
         std::size_t offset = 0;
-        if (!out || !range_inside_rom(address, width, offset)) {
+        if (!out || !range_inside_mapping(address, width, offset)) {
             record_unresolved(kind, width, address, pc, lr, 0);
             return false;
         }

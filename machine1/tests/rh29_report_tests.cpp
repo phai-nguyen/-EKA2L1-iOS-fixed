@@ -16,12 +16,16 @@ static void require_contains(const std::string &text, const std::string &needle)
 
 static probe_result sample_result() {
     probe_result result{};
-    result.header.restart_vector = 0x50000100;
+    result.header.restart_vector = 0x00000000;
     result.header.rom_base = 0x50000000;
     result.header.rom_size = 0x01170000;
     result.header.kern_data_address = 0x80001000;
     result.header.kern_limit = 0x80002000;
     result.instruction_budget = 10000;
+    result.reset_pc = cold_reset_pc;
+    result.synthetic_reset_alias = true;
+    result.reset_alias_base = cold_reset_pc;
+    result.reset_alias_size = result.header.rom_size;
     result.executed_instructions = 37;
     result.stop_reason = probe_stop_reason::unresolved_access;
     for (std::size_t i = 0; i < result.registers.r.size(); ++i) {
@@ -38,10 +42,15 @@ static probe_result sample_result() {
 
 static void test_report_contains_probe_identity_and_rom_header() {
     const auto text = format_report(sample_result());
-    require_contains(text, "RH29_MACHINE1_A");
+    require_contains(text, "RH29_MACHINE1_B");
     require_contains(text, "ROM_BASE=0x50000000");
     require_contains(text, "ROM_SIZE=0x01170000");
-    require_contains(text, "RESTART_VECTOR=0x50000100");
+    require_contains(text, "RESTART_VECTOR_WORD=0x00000000");
+    require_contains(text, "RESET_PC=0x00000000");
+    require_contains(text, "RESET_ALIAS_MODE=synthetic_rom_alias_hypothesis");
+    require_contains(text, "RESET_ALIAS_BASE=0x00000000");
+    require_contains(text, "RESET_ALIAS_SIZE=0x01170000");
+    require_contains(text, "RESET_ALIAS_SOURCE_BASE=0x50000000");
     require_contains(text, "KERN_DATA_ADDRESS=0x80001000");
     require_contains(text, "KERN_LIMIT=0x80002000");
 }
@@ -122,6 +131,11 @@ static void test_report_contains_cp15_barrier() {
     require_contains(text, "CP15_INSTRUCTION=0xEE110F10");
 }
 
+static void test_machine1_b_defaults_to_1k() {
+    probe_options options{};
+    assert(options.instruction_budget == 1000);
+}
+
 static void test_arm_condition_passed_matches_a32_flags() {
     // EQ: execute only when Z is set.
     assert(!arm_condition_passed(0x0E110F10u, 0x00000000u));
@@ -149,6 +163,7 @@ int main() {
     test_report_contains_error_detail();
     test_cp15_classifier_blocks_all_a32_p15_coprocessor_classes();
     test_report_contains_cp15_barrier();
+    test_machine1_b_defaults_to_1k();
     test_arm_condition_passed_matches_a32_flags();
     std::cout << "rh29_report_tests: PASS\n";
     return 0;

@@ -93,10 +93,15 @@ namespace eka2l1::machine::rh29 {
 
     std::string format_report(const probe_result &result) {
         std::ostringstream out;
-        out << "RH29_MACHINE1_A\n";
+        out << "RH29_MACHINE1_B\n";
         write_hex(out, "ROM_BASE", result.header.rom_base);
         write_hex(out, "ROM_SIZE", result.header.rom_size);
-        write_hex(out, "RESTART_VECTOR", result.header.restart_vector);
+        write_hex(out, "RESTART_VECTOR_WORD", result.header.restart_vector);
+        write_hex(out, "RESET_PC", result.reset_pc);
+        out << "RESET_ALIAS_MODE=" << (result.synthetic_reset_alias ? "synthetic_rom_alias_hypothesis" : "none") << "\n";
+        write_hex(out, "RESET_ALIAS_BASE", result.reset_alias_base);
+        write_hex(out, "RESET_ALIAS_SIZE", result.reset_alias_size);
+        write_hex(out, "RESET_ALIAS_SOURCE_BASE", result.header.rom_base);
         write_hex(out, "KERN_DATA_ADDRESS", result.header.kern_data_address);
         write_hex(out, "KERN_LIMIT", result.header.kern_limit);
         out << "INSTRUCTION_BUDGET=" << result.instruction_budget << "\n";
@@ -193,15 +198,15 @@ namespace eka2l1::machine::rh29 {
             return result;
         }
 
-        if (parsed.header.restart_vector < parsed.header.rom_base
-            || static_cast<std::uint64_t>(parsed.header.restart_vector) + 4ULL
-                > static_cast<std::uint64_t>(parsed.header.rom_base) + parsed.header.rom_size) {
-            result.stop_reason = probe_stop_reason::invalid_rom;
-            result.detail = "restart vector is outside mapped ROM";
-            return result;
-        }
-
-        strict_bus bus(rom.data(), parsed.header.rom_size, parsed.header.rom_base);
+        // TRomHeader::restart_vector is the 32-bit instruction word stored at
+        // header offset 0x7C, not a guest address. MACHINE1-B probes the ARM
+        // cold-reset PC (0x00000000) and exposes canonical ROM bytes there via
+        // an explicitly-labelled synthetic alias hypothesis.
+        result.reset_pc = cold_reset_pc;
+        result.synthetic_reset_alias = true;
+        result.reset_alias_base = cold_reset_pc;
+        result.reset_alias_size = parsed.header.rom_size;
+        strict_bus bus(rom.data(), parsed.header.rom_size, parsed.header.rom_base, cold_reset_pc);
         auto monitor = arm::create_exclusive_monitor(arm_emulator_type::dyncom, 1);
         if (!monitor) {
             result.stop_reason = probe_stop_reason::cpu_exception;
@@ -299,11 +304,11 @@ namespace eka2l1::machine::rh29 {
         cpu->set_sp(0);
         cpu->set_lr(0);
         cpu->set_cpsr(0x000000D3u);
-        cpu->set_pc(parsed.header.restart_vector);
+        cpu->set_pc(result.reset_pc);
 
         std::uint32_t remaining = options.instruction_budget;
         while (remaining > 0 && !bus.first_unresolved() && !exception && !cp15) {
-            // MACHINE1-A must not let Dyncom's ARM11/MPCore CP15 model answer
+            // MACHINE1-B must not let Dyncom's ARM11/MPCore CP15 model answer
             // RH-29 hardware questions. Inspect the next A32 instruction while
             // it is still only ROM data and stop before any p15 operation runs.
             if (!cpu->is_thumb_mode()) {

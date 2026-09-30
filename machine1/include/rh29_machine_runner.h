@@ -18,7 +18,7 @@ namespace eka2l1::machine::rh29 {
     };
 
     struct probe_options {
-        std::uint32_t instruction_budget = 10000;
+        std::uint32_t instruction_budget = 1000;
     };
 
     struct register_snapshot {
@@ -44,6 +44,10 @@ namespace eka2l1::machine::rh29 {
         rom_header_info header{};
         std::uint32_t instruction_budget = 0;
         std::uint32_t executed_instructions = 0;
+        std::uint32_t reset_pc = cold_reset_pc;
+        bool synthetic_reset_alias = false;
+        std::uint32_t reset_alias_base = 0;
+        std::uint32_t reset_alias_size = 0;
         probe_stop_reason stop_reason = probe_stop_reason::io_error;
         register_snapshot registers{};
         std::optional<unresolved_access> unresolved{};
