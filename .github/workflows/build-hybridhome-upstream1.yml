@@ -20,6 +20,7 @@ jobs:
       EKA2L1_IOS_CONFIGURATION: Release
       EKA2L1_IOS_DYNARMIC: "OFF"
       UPSTREAM_REF: c5ae62d9c667f6e7060d76be58a2614122a629a4
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
 
     steps:
       - name: Checkout Hybrid Home control repo
@@ -57,13 +58,20 @@ jobs:
           grep -q 'app.lavender1865.valley8348' source/src/emu/ios/CMakeLists.txt
           echo "HYBRIDHOME-UPSTREAM1 static contract PASS"
 
-      - name: Install ccache
-        run: brew install ccache
+      - name: Install and configure ccache
+        run: |
+          set -euo pipefail
+          brew install ccache
+          mkdir -p "$CCACHE_DIR"
+          ccache --set-config=cache_dir="$CCACHE_DIR"
+          ccache --set-config=max_size=1G
+          ccache --zero-stats
+          ccache --show-config | grep -E 'cache_dir|max_size'
 
       - name: Restore compiler cache
         uses: actions/cache@v6
         with:
-          path: ~/Library/Caches/ccache
+          path: ${{ env.CCACHE_DIR }}
           key: hybridhome-upstream1-ccache-${{ runner.os }}-ios16-dyncom-${{ env.UPSTREAM_REF }}-${{ github.sha }}
           restore-keys: |
             hybridhome-upstream1-ccache-${{ runner.os }}-ios16-dyncom-${{ env.UPSTREAM_REF }}-
@@ -88,6 +96,12 @@ jobs:
           EKA2L1_IOS_DEPLOYMENT_TARGET: "16.0"
           EKA2L1_IOS_CONFIGURATION: Release
         run: ./scripts/build_ios.sh device
+
+      - name: Report compiler cache
+        if: always()
+        run: |
+          ccache --show-stats || true
+          du -sh "$CCACHE_DIR" || true
 
       - name: Package unsigned IPA
         run: |
