@@ -55,7 +55,7 @@ jobs:
       - name: Static contract
         run: |
           set -euo pipefail
-          grep -q 'HYBRIDHOME2' source/src/emu/ios/App/S60HybridHomeView.swift
+          grep -q 'HYBRIDHOME3' source/src/emu/ios/App/S60HybridHomeView.swift
           grep -q 'firmwareCode.caseInsensitiveCompare("RM-356")' source/src/emu/ios/App/ContentView.swift
           grep -q 'S60HybridHomeView.swift' source/src/emu/ios/CMakeLists.txt
           grep -q '0x102750F0' source/src/emu/ios/App/S60HybridHomeView.swift
@@ -64,6 +64,8 @@ jobs:
           grep -q '0x100058C5' source/src/emu/ios/App/S60HybridHomeView.swift
           grep -q 'NavigationLink(destination: EmulatorView(uid: app.uid))' source/src/emu/ios/App/S60HybridHomeView.swift
           grep -q 'AppGridCell(uid: app.uid, name: app.name)' source/src/emu/ios/App/S60HybridHomeView.swift
+          grep -q 'TextField(String(localized: "hybridhome.search")' source/src/emu/ios/App/S60HybridHomeView.swift
+          grep -q 'localizedCaseInsensitiveContains' source/src/emu/ios/App/S60HybridHomeView.swift
           grep -q 'app.lavender1865.valley8348' source/src/emu/ios/CMakeLists.txt
           grep -q 'import.source.vpl' source/src/emu/ios/App/ContentView.swift
           grep -q 'installDevice(vplPath:' source/src/emu/ios/App/EKA2L1Bridge.swift
@@ -73,7 +75,7 @@ jobs:
           grep -q 'nonisolated private static func stageFirmwareFiles' source/src/emu/ios/App/ContentView.swift
           grep -q '"vi"' source/src/emu/ios/Resources/Localizable.xcstrings
           grep -q '"vi"' source/src/emu/ios/Resources/InfoPlist.xcstrings
-          echo "HYBRIDHOME2 + VPL + Vietnamese static contract PASS"
+          echo "HYBRIDHOME3 + VPL + Vietnamese static contract PASS"
 
       - name: Install and configure ccache
         run: |

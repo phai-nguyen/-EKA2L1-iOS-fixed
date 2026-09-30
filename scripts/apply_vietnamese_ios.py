@@ -54,6 +54,34 @@ for key, value in direct.items():
             "stringUnit": {"state": "translated", "value": value}
         }
 
+# HYBRIDHOME3 host-shell strings are introduced by the build-time patcher.
+# Create both English and Vietnamese localizations so the shell follows the
+# app language instead of hard-coding Vietnamese UI text.
+hybrid_strings = {
+    "hybridhome.shortcuts": ("Shortcuts", "Lối tắt"),
+    "hybridhome.openMenu": ("Open application menu", "Mở Menu ứng dụng"),
+    "hybridhome.backendHint": (
+        "Applications and icons come from the firmware AppList/AppArc registry.",
+        "Ứng dụng và biểu tượng được lấy từ AppList/AppArc của firmware."
+    ),
+    "hybridhome.menuTitle": ("Applications", "Menu ứng dụng"),
+    "hybridhome.home": ("Home", "Trang chủ"),
+    "hybridhome.menu": ("Menu", "Menu"),
+    "hybridhome.phone": ("Phone", "Điện thoại"),
+    "hybridhome.contacts": ("Contacts", "Danh bạ"),
+    "hybridhome.search": ("Search applications or UID", "Tìm ứng dụng hoặc UID"),
+    "hybridhome.noResults": ("No matching applications", "Không tìm thấy ứng dụng phù hợp"),
+    "hybridhome.refresh": ("Refresh applications", "Làm mới ứng dụng"),
+}
+for key, (en_value, vi_value) in hybrid_strings.items():
+    entry = loc["strings"].setdefault(key, {"localizations": {}})
+    entry.setdefault("localizations", {})["en"] = {
+        "stringUnit": {"state": "translated", "value": en_value}
+    }
+    entry["localizations"]["vi"] = {
+        "stringUnit": {"state": "translated", "value": vi_value}
+    }
+
 # Vietnamese uses a single plural form here, so "other" is sufficient.
 plural = {
     "home.banner.installedPackages %lld": "Đã cài đặt %lld gói.",
@@ -63,7 +91,26 @@ plural = {
     "home.ngage2.imported %lld": "Đã nhập %lld gói. Mở trình khởi chạy N-Gage để tiếp tục.",
     "home.ngage2.importing %lld": "Đang nhập %lld gói N-Gage 2.0...",
     "import.vpl.fileCount %lld": "Đã chọn %lld tệp firmware.",
+    "hybridhome.appCount %lld": "%lld ứng dụng Symbian",
 }
+if "hybridhome.appCount %lld" not in loc["strings"]:
+    loc["strings"]["hybridhome.appCount %lld"] = {
+        "localizations": {
+            "en": {
+                "variations": {
+                    "plural": {
+                        "other": {
+                            "stringUnit": {
+                                "state": "translated",
+                                "value": "%lld Symbian applications"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 for key, value in plural.items():
     if key in loc["strings"]:
         loc["strings"][key].setdefault("localizations", {})["vi"] = {

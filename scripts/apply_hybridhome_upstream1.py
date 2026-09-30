@@ -74,7 +74,7 @@ cmake_path.write_text(cmake, encoding="utf-8")
 
 home = r'''import SwiftUI
 
-// HYBRIDHOME2
+// HYBRIDHOME3
 //
 // Host-rendered Nokia 5800 RM-356 Home + Menu shell.
 // All application metadata, icons and launched processes still come from the
@@ -86,6 +86,7 @@ struct S60HybridHomeView: View {
     let onRefresh: () async -> Void
 
     @State private var showingLauncher = false
+    @State private var searchText = ""
 
     private let realNokiaHomeUID: UInt32 = 0x102750F0
     private let telephoneUID: UInt32 = 0x100058B3
@@ -99,6 +100,15 @@ struct S60HybridHomeView: View {
             .sorted {
                 $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
             }
+    }
+
+    private var launcherApps: [EKA2L1AppItem] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return visibleApps }
+        return visibleApps.filter {
+            $0.name.localizedCaseInsensitiveContains(query)
+            || String(format: "0x%08X", $0.uid).localizedCaseInsensitiveContains(query)
+        }
     }
 
     private var homeShortcuts: [EKA2L1AppItem] {
@@ -137,7 +147,7 @@ struct S60HybridHomeView: View {
             }
         }
         .onAppear {
-            NSLog("[HYBRIDHOME2][SHOW] device=%@ apps=%ld shortcuts=%ld",
+            NSLog("[HYBRIDHOME3][SHOW] device=%@ apps=%ld shortcuts=%ld",
                   deviceName, visibleApps.count, homeShortcuts.count)
         }
     }
@@ -204,7 +214,7 @@ struct S60HybridHomeView: View {
                     Text(deviceName)
                         .font(.subheadline.weight(.semibold))
 
-                    Text("RM-356 · Hybrid Home 2")
+                    Text("RM-356 · Hybrid Home 3")
                         .font(.caption2)
                         .opacity(0.78)
                 }
@@ -213,7 +223,7 @@ struct S60HybridHomeView: View {
 
                 if !homeShortcuts.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Lối tắt")
+                        Text("hybridhome.shortcuts")
                             .font(.caption.bold())
                             .foregroundStyle(.white.opacity(0.9))
 
@@ -229,11 +239,11 @@ struct S60HybridHomeView: View {
 
                 Button {
                     showingLauncher = true
-                    NSLog("[HYBRIDHOME2][OPEN_MENU] apps=%ld", visibleApps.count)
+                    NSLog("[HYBRIDHOME3][OPEN_MENU] apps=%ld", visibleApps.count)
                 } label: {
                     HStack {
                         Image(systemName: "square.grid.3x3.fill")
-                        Text("Mở Menu ứng dụng")
+                        Text("hybridhome.openMenu")
                             .fontWeight(.semibold)
                         Spacer()
                         Text("\(visibleApps.count)")
@@ -246,7 +256,7 @@ struct S60HybridHomeView: View {
                 }
                 .buttonStyle(.plain)
 
-                Text("Ứng dụng và biểu tượng được lấy từ AppList/AppArc của firmware.")
+                Text("hybridhome.backendHint")
                     .font(.caption2)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white.opacity(0.70))
@@ -256,7 +266,7 @@ struct S60HybridHomeView: View {
             .padding(.bottom, 20)
         }
         .refreshable {
-            NSLog("[HYBRIDHOME2][REFRESH_HOME]")
+            NSLog("[HYBRIDHOME3][REFRESH_HOME]")
             await onRefresh()
         }
     }
@@ -266,9 +276,9 @@ struct S60HybridHomeView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Menu ứng dụng")
+                        Text("hybridhome.menuTitle")
                             .font(.headline)
-                        Text("\(visibleApps.count) ứng dụng Symbian")
+                        Text(String(localized: "hybridhome.appCount \(visibleApps.count)"))
                             .font(.caption2)
                             .opacity(0.72)
                     }
@@ -276,10 +286,24 @@ struct S60HybridHomeView: View {
                     Spacer()
 
                     Button {
-                        showingLauncher = false
-                        NSLog("[HYBRIDHOME2][CLOSE_MENU]")
+                        Task {
+                            NSLog("[HYBRIDHOME3][REFRESH_BUTTON]")
+                            await onRefresh()
+                        }
                     } label: {
-                        Label("Trang chủ", systemImage: "house.fill")
+                        Image(systemName: "arrow.clockwise")
+                            .font(.caption.bold())
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.white.opacity(0.22))
+                    .accessibilityLabel(Text("hybridhome.refresh"))
+
+                    Button {
+                        showingLauncher = false
+                        searchText = ""
+                        NSLog("[HYBRIDHOME3][CLOSE_MENU]")
+                    } label: {
+                        Label("hybridhome.home", systemImage: "house.fill")
                             .font(.caption.bold())
                     }
                     .buttonStyle(.bordered)
@@ -288,9 +312,43 @@ struct S60HybridHomeView: View {
                 .foregroundStyle(.white)
                 .padding(.top, 10)
 
-                LazyVGrid(columns: launcherColumns, spacing: 8) {
-                    ForEach(visibleApps) { app in
-                        appLink(app, marker: "LAUNCHER")
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.white.opacity(0.72))
+                    TextField(String(localized: "hybridhome.search"), text: $searchText)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .foregroundStyle(.white)
+                    if !searchText.isEmpty {
+                        Button {
+                            searchText = ""
+                            NSLog("[HYBRIDHOME3][SEARCH_CLEAR]")
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.white.opacity(0.72))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .frame(height: 40)
+                .background(.black.opacity(0.30), in: RoundedRectangle(cornerRadius: 10))
+
+                if launcherApps.isEmpty {
+                    VStack(spacing: 10) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.title2)
+                        Text("hybridhome.noResults")
+                            .font(.subheadline)
+                    }
+                    .foregroundStyle(.white.opacity(0.72))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 36)
+                } else {
+                    LazyVGrid(columns: launcherColumns, spacing: 8) {
+                        ForEach(launcherApps) { app in
+                            appLink(app, marker: "LAUNCHER")
+                        }
                     }
                 }
             }
@@ -298,7 +356,7 @@ struct S60HybridHomeView: View {
             .padding(.bottom, 20)
         }
         .refreshable {
-            NSLog("[HYBRIDHOME2][REFRESH_MENU]")
+            NSLog("[HYBRIDHOME3][REFRESH_MENU]")
             await onRefresh()
         }
     }
@@ -312,7 +370,7 @@ struct S60HybridHomeView: View {
         .buttonStyle(.plain)
         .simultaneousGesture(
             TapGesture().onEnded {
-                NSLog("[HYBRIDHOME2][%@] uid=0x%08X name=%@",
+                NSLog("[HYBRIDHOME3][%@] uid=0x%08X name=%@",
                       marker, app.uid, app.name)
             }
         )
@@ -322,27 +380,27 @@ struct S60HybridHomeView: View {
         HStack(spacing: 8) {
             if let telephone = app(telephoneUID) {
                 NavigationLink(destination: EmulatorView(uid: telephone.uid)) {
-                    Label("Điện thoại", systemImage: "phone.fill")
+                    Label("hybridhome.phone", systemImage: "phone.fill")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.plain)
                 .simultaneousGesture(
                     TapGesture().onEnded {
-                        NSLog("[HYBRIDHOME2][SOFTKEY_PHONE] uid=0x%08X", telephone.uid)
+                        NSLog("[HYBRIDHOME3][SOFTKEY_PHONE] uid=0x%08X", telephone.uid)
                     }
                 )
             } else {
-                Text("Điện thoại")
+                Text("hybridhome.phone")
                     .frame(maxWidth: .infinity)
                     .opacity(0.45)
             }
 
             Button {
                 showingLauncher.toggle()
-                NSLog("[HYBRIDHOME2][SOFTKEY_MENU] launcher=%@",
+                NSLog("[HYBRIDHOME3][SOFTKEY_MENU] launcher=%@",
                       showingLauncher ? "YES" : "NO")
             } label: {
-                Label(showingLauncher ? "Trang chủ" : "Menu",
+                Label(showingLauncher ? String(localized: "hybridhome.home") : String(localized: "hybridhome.menu"),
                       systemImage: showingLauncher ? "house.fill" : "square.grid.3x3.fill")
                     .frame(maxWidth: .infinity)
             }
@@ -350,17 +408,17 @@ struct S60HybridHomeView: View {
 
             if let contacts = app(contactsUID) {
                 NavigationLink(destination: EmulatorView(uid: contacts.uid)) {
-                    Label("Danh bạ", systemImage: "person.crop.circle.fill")
+                    Label("hybridhome.contacts", systemImage: "person.crop.circle.fill")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.plain)
                 .simultaneousGesture(
                     TapGesture().onEnded {
-                        NSLog("[HYBRIDHOME2][SOFTKEY_CONTACTS] uid=0x%08X", contacts.uid)
+                        NSLog("[HYBRIDHOME3][SOFTKEY_CONTACTS] uid=0x%08X", contacts.uid)
                     }
                 )
             } else {
-                Text("Danh bạ")
+                Text("hybridhome.contacts")
                     .frame(maxWidth: .infinity)
                     .opacity(0.45)
             }
