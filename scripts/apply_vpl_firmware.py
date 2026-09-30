@@ -332,7 +332,7 @@ import_view = r'''struct ImportDeviceView: View {
         }
     }
 
-    private static func findVPL(in folder: URL) -> String? {
+    nonisolated private static func findVPL(in folder: URL) -> String? {
         let fm = FileManager.default
         guard let items = try? fm.contentsOfDirectory(at: folder,
                                                       includingPropertiesForKeys: nil,
@@ -344,7 +344,7 @@ import_view = r'''struct ImportDeviceView: View {
         })?.path
     }
 
-    private static func stageFirmwareFiles(_ files: [URL]) -> URL? {
+    nonisolated private static func stageFirmwareFiles(_ files: [URL]) -> URL? {
         let fm = FileManager.default
         let folder = fm.temporaryDirectory
             .appendingPathComponent("eka2l1-vpl-\(UUID().uuidString)", isDirectory: true)
