@@ -111,7 +111,7 @@ namespace eka2l1::machine::rh29 {
 
     std::string format_report(const probe_result &result) {
         std::ostringstream out;
-        out << "RH29_MACHINE1_F\n";
+        out << "RH29_MACHINE1_G\n";
         write_hex(out, "ROM_BASE", result.header.rom_base);
         write_hex(out, "ROM_SIZE", result.header.rom_size);
         write_hex(out, "RESTART_VECTOR_WORD", result.header.restart_vector);
@@ -140,6 +140,12 @@ namespace eka2l1::machine::rh29 {
         out << "FLASH_ALLOW_WIDTH_BITS=" << (observed_flash_command_width * 8) << "\n";
         write_hex(out, "FLASH_ALLOW_VALUE", observed_flash_command_value, 4);
         out << "FLASH_ACCEPTED_COMMAND_COUNT=" << result.exact_observed_flash_command_count << "\n";
+        out << "FLASH_ID_ENTRY_POLICY=" << (result.exact_observed_flash_id_entry_enabled
+            ? "exact_observed_write_only" : "disabled") << "\n";
+        write_hex(out, "FLASH_ID_ENTRY_ADDRESS", observed_flash_id_entry_address);
+        out << "FLASH_ID_ENTRY_WIDTH_BITS=" << (observed_flash_id_entry_width * 8) << "\n";
+        write_hex(out, "FLASH_ID_ENTRY_VALUE", observed_flash_id_entry_value, 4);
+        out << "FLASH_ID_ENTRY_ACCEPTED_COUNT=" << result.exact_observed_flash_id_entry_count << "\n";
         write_hex(out, "KERN_DATA_ADDRESS", result.header.kern_data_address);
         write_hex(out, "KERN_LIMIT", result.header.kern_limit);
         out << "INSTRUCTION_BUDGET=" << result.instruction_budget << "\n";
@@ -246,7 +252,7 @@ namespace eka2l1::machine::rh29 {
         }
 
         // TRomHeader::restart_vector is the 32-bit instruction word stored at
-        // header offset 0x7C, not a guest address. MACHINE1-F probes the ARM
+        // header offset 0x7C, not a guest address. MACHINE1-G probes the ARM
         // cold-reset PC (0x00000000) and exposes canonical ROM bytes there via
         // an explicitly-labelled synthetic alias hypothesis.
         result.reset_pc = cold_reset_pc;
@@ -258,6 +264,7 @@ namespace eka2l1::machine::rh29 {
         result.candidate_sdram_size_bytes = static_cast<std::uint32_t>(candidate_sdram_size);
         result.exact_observed_mmio_write_enabled = true;
         result.exact_observed_flash_command_enabled = true;
+        result.exact_observed_flash_id_entry_enabled = true;
         strict_bus bus(rom.data(), parsed.header.rom_size, parsed.header.rom_base, cold_reset_pc,
                        candidate_sdram_base, candidate_sdram_size);
         auto monitor = arm::create_exclusive_monitor(arm_emulator_type::dyncom, 1);
@@ -369,7 +376,7 @@ namespace eka2l1::machine::rh29 {
 
         std::uint32_t remaining = options.instruction_budget;
         while (remaining > 0 && !bus.first_unresolved() && !exception && !cp15) {
-            // MACHINE1-F must not let Dyncom's ARM11/MPCore CP15 model answer
+            // MACHINE1-G must not let Dyncom's ARM11/MPCore CP15 model answer
             // RH-29 hardware questions. Inspect the next A32 instruction while
             // it is still only ROM data and stop before any p15 operation runs.
             if (!cpu->is_thumb_mode()) {
@@ -415,6 +422,7 @@ namespace eka2l1::machine::rh29 {
         result.candidate_sdram_initialized_bytes = bus.ram_initialized_bytes();
         result.exact_observed_mmio_write_count = bus.observed_mmio_write_count();
         result.exact_observed_flash_command_count = bus.observed_flash_command_count();
+        result.exact_observed_flash_id_entry_count = bus.observed_flash_id_entry_count();
 
         if (result.unresolved) {
             result.stop_reason = probe_stop_reason::unresolved_access;

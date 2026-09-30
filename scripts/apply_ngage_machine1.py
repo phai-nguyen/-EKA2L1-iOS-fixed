@@ -167,7 +167,7 @@ probe_method = r'''
 - (EKA2L1MachineProbeReport *)runRH29MachineProbeWithInstructionBudget:(uint32_t)budget {
     EKA2L1MachineProbeReport *report = [[EKA2L1MachineProbeReport alloc] init];
     report.succeeded = NO;
-    report.text = @"RH29_MACHINE1_F\nSTOP_REASON=io_error\nDETAIL=emulator is not ready\n";
+    report.text = @"RH29_MACHINE1_G\nSTOP_REASON=io_error\nDETAIL=emulator is not ready\n";
 
     std::string storage;
     std::string firmware;
@@ -191,12 +191,12 @@ probe_method = r'''
 
     NSString *firmwareCode = [NSString stringWithUTF8String:firmware.c_str()];
     if (!firmwareCode || [firmwareCode caseInsensitiveCompare:@"RH-29"] != NSOrderedSame) {
-        report.text = @"RH29_MACHINE1_F\nSTOP_REASON=io_error\nDETAIL=current device is not RH-29\n";
+        report.text = @"RH29_MACHINE1_G\nSTOP_REASON=io_error\nDETAIL=current device is not RH-29\n";
         return report;
     }
 
     const std::string rom_path = eka2l1::add_path(storage, "roms/rh-29/SYM.ROM");
-    LOG_INFO(eka2l1::FRONTEND_CMDLINE, "[RH29_MACHINE1_F] start budget={} rom={}", budget, rom_path);
+    LOG_INFO(eka2l1::FRONTEND_CMDLINE, "[RH29_MACHINE1_G] start budget={} rom={}", budget, rom_path);
     eka2l1::machine::rh29::probe_options options{};
     options.instruction_budget = budget;
     const auto result = eka2l1::machine::rh29::run_probe(rom_path, options);
@@ -206,7 +206,7 @@ probe_method = r'''
         result.stop_reason != eka2l1::machine::rh29::probe_stop_reason::invalid_rom
         && result.stop_reason != eka2l1::machine::rh29::probe_stop_reason::io_error);
     LOG_INFO(eka2l1::FRONTEND_CMDLINE,
-        "[RH29_MACHINE1_F] stop succeeded={} executed={}",
+        "[RH29_MACHINE1_G] stop succeeded={} executed={}",
         report.succeeded, result.executed_instructions);
     return report;
 }
@@ -290,4 +290,4 @@ if 'firmwareCode.caseInsensitiveCompare("RH-29")' not in content:
     content = content.replace(settings_button, settings_button + probe_button, 1)
 content_path.write_text(content, encoding="utf-8")
 
-print("MACHINE1-F sources + iOS probe integration staged")
+print("MACHINE1-G sources + iOS probe integration staged")

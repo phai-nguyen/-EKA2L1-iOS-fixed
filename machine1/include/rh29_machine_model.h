@@ -28,6 +28,13 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::size_t observed_flash_command_width = 2u;
     static constexpr std::uint16_t observed_flash_command_value = 0x00FFu;
 
+    // MACHINE1-F device evidence. 0x90 is strongly consistent with entering
+    // flash identification/autoselect mode, but G still accepts only this
+    // exact observed bus transaction and does not synthesize an ID response.
+    static constexpr std::uint32_t observed_flash_id_entry_address = 0x0200AAAAu;
+    static constexpr std::size_t observed_flash_id_entry_width = 2u;
+    static constexpr std::uint16_t observed_flash_id_entry_value = 0x0090u;
+
     enum class parse_error {
         none = 0,
         truncated_header,
@@ -96,6 +103,7 @@ namespace eka2l1::machine::rh29 {
         std::size_t ram_initialized_bytes() const;
         std::uint64_t observed_mmio_write_count() const;
         std::uint64_t observed_flash_command_count() const;
+        std::uint64_t observed_flash_id_entry_count() const;
 
     private:
         bool range_inside_rom_mapping(std::uint32_t address, std::size_t width, std::size_t &offset) const;
@@ -115,6 +123,7 @@ namespace eka2l1::machine::rh29 {
         std::size_t ram_initialized_bytes_ = 0;
         std::uint64_t observed_mmio_write_count_ = 0;
         std::uint64_t observed_flash_command_count_ = 0;
+        std::uint64_t observed_flash_id_entry_count_ = 0;
         std::optional<unresolved_access> first_unresolved_{};
     };
 }
