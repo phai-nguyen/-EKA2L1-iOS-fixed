@@ -1,0 +1,193 @@
+name: Build NGAGE-MACHINE1-A
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ngage-machine1
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ngage-machine1-a
+  cancel-in-progress: true
+
+jobs:
+  build-ios:
+    runs-on: macos-26
+    env:
+      EKA2L1_IOS_CONFIGURATION: Release
+      EKA2L1_IOS_DYNARMIC: "OFF"
+      UPSTREAM_REF: c5ae62d9c667f6e7060d76be58a2614122a629a4
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+
+    steps:
+      - name: Checkout MACHINE1 control repo
+        uses: actions/checkout@v7
+        with:
+          path: control
+
+      - name: Checkout EKA2L1 upstream baseline
+        uses: actions/checkout@v7
+        with:
+          repository: EKA2L1/EKA2L1
+          ref: ${{ env.UPSTREAM_REF }}
+          fetch-depth: 1
+          submodules: recursive
+          path: source
+
+      - name: Record baselines
+        run: |
+          set -euo pipefail
+          cd source
+          echo "upstream_head=$(git rev-parse HEAD)" | tee ../UPSTREAM-BASELINE.txt
+          cd ../control
+          {
+            echo "controller_head=$(git rev-parse HEAD)"
+            echo "branch=ngage-machine1"
+            echo "milestone=MACHINE1-A"
+            echo "target=Nokia N-Gage QD RH-29"
+            echo "rom=RH-29 V04.10 SYM.ROM"
+            echo "rom_status=DEVICE PASS (HLE import/boot/apps + FIFA 05 playable)"
+          } | tee ../MACHINE1-BASELINE.txt
+
+      - name: Run MACHINE1 controller tests
+        working-directory: control
+        run: |
+          set -euo pipefail
+          python3 -m unittest tests.test_apply_ngage_machine1 -v
+          c++ -std=c++17 -Wall -Wextra -pedantic -Imachine1/include \
+            machine1/src/rh29_machine_model.cpp \
+            machine1/tests/rh29_machine_model_tests.cpp \
+            -o /tmp/rh29_machine_model_tests
+          /tmp/rh29_machine_model_tests
+          c++ -std=c++17 -Wall -Wextra -pedantic -Imachine1/include \
+            machine1/src/rh29_machine_model.cpp \
+            machine1/src/rh29_machine_runner.cpp \
+            machine1/tests/rh29_report_tests.cpp \
+            -DRH29_MACHINE1_REPORT_ONLY \
+            -o /tmp/rh29_report_tests
+          /tmp/rh29_report_tests
+
+      - name: Apply HYBRIDHOME-UPSTREAM1
+        run: python3 control/scripts/apply_hybridhome_upstream1.py source
+
+      - name: Apply VPL firmware importer
+        run: python3 control/scripts/apply_vpl_firmware.py source
+
+      - name: Apply Vietnamese localization
+        run: python3 control/scripts/apply_vietnamese_ios.py source
+
+      - name: Apply NGAGE MACHINE1-A
+        run: python3 control/scripts/apply_ngage_machine1.py source
+
+      - name: Static contract
+        run: |
+          set -euo pipefail
+
+          # Preserve known-good product path.
+          grep -q 'HYBRIDHOME3' source/src/emu/ios/App/S60HybridHomeView.swift
+          grep -q 'firmwareCode.caseInsensitiveCompare("RM-356")' source/src/emu/ios/App/ContentView.swift
+          grep -q 'app.lavender1865.valley8348' source/src/emu/ios/CMakeLists.txt
+          grep -q 'installDeviceWithVplPath' source/src/emu/ios/Bridge/IosEmulator.h
+          grep -q '"vi"' source/src/emu/ios/Resources/Localizable.xcstrings
+
+          # MACHINE1-A must be present only as an opt-in RH-29 research path.
+          grep -q 'RH29_MACHINE1_A' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
+          grep -q 'runRH29MachineProbeWithInstructionBudget' source/src/emu/ios/Bridge/IosEmulator.h
+          grep -q 'caseInsensitiveCompare:@"RH-29"' source/src/emu/ios/Bridge/IosEmulator.mm
+          grep -q 'roms/rh-29/SYM.ROM' source/src/emu/ios/Bridge/IosEmulator.mm
+          grep -q 'firmwareCode.caseInsensitiveCompare("RH-29")' source/src/emu/ios/App/ContentView.swift
+          grep -q 'RH29MachineProbeView.swift' source/src/emu/ios/CMakeLists.txt
+          grep -q 'PrivilegeMode initial_mode' source/src/emu/cpu/include/cpu/dyncom/arm_dyncom.h
+          grep -q 'dyncom_core(monitor, page_bits, USER32MODE)' source/src/emu/cpu/src/dyncom/arm_dyncom.cpp
+          grep -q 'ARMul_State>(this, initial_mode)' source/src/emu/cpu/src/dyncom/arm_dyncom.cpp
+          grep -q 'SVC32MODE' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
+          grep -q '0x000000D3u' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
+          grep -q 'RH29_MACHINE1_A.txt' source/src/emu/ios/App/RH29MachineProbeView.swift
+
+          git -C source diff --check
+          echo "HYBRIDHOME3 + VPL + Vietnamese + MACHINE1-A static contract PASS"
+
+      - name: Install and configure ccache
+        run: |
+          set -euo pipefail
+          brew install ccache
+          mkdir -p "$CCACHE_DIR"
+          ccache --set-config=cache_dir="$CCACHE_DIR"
+          ccache --set-config=max_size=1G
+          ccache --zero-stats
+          ccache --show-config | grep -E 'cache_dir|max_size'
+
+      - name: Restore compiler cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ngage-machine1-ccache-${{ runner.os }}-ios16-dyncom-${{ env.UPSTREAM_REF }}-${{ github.sha }}
+          restore-keys: |
+            ngage-machine1-ccache-${{ runner.os }}-ios16-dyncom-${{ env.UPSTREAM_REF }}-
+            hybridhome-upstream1-ccache-${{ runner.os }}-ios16-dyncom-${{ env.UPSTREAM_REF }}-
+
+      - name: Restore incremental Xcode build
+        uses: actions/cache@v6
+        with:
+          path: source/build/ios-device
+          key: ngage-machine1-xcode-${{ runner.os }}-ios16-dyncom-${{ env.UPSTREAM_REF }}-${{ github.sha }}
+          restore-keys: |
+            ngage-machine1-xcode-${{ runner.os }}-ios16-dyncom-${{ env.UPSTREAM_REF }}-
+            hybridhome-upstream1-xcode-${{ runner.os }}-ios16-dyncom-${{ env.UPSTREAM_REF }}-
+
+      - name: Cache iOS ffmpeg
+        uses: actions/cache@v6
+        with:
+          path: source/src/external/ffmpeg/ios/device
+          key: hybridhome-upstream1-ffmpeg-ios-device-v1
+
+      - name: Build upstream iOS + MACHINE1-A
+        working-directory: source
+        env:
+          EKA2L1_IOS_DEPLOYMENT_TARGET: "16.0"
+          EKA2L1_IOS_CONFIGURATION: Release
+        run: ./scripts/build_ios.sh device
+
+      - name: Verify Vietnamese resources
+        run: |
+          set -euo pipefail
+          APP="source/build/ios-device/src/emu/ios/Release-iphoneos/EKA2L1.app"
+          test -f "$APP/vi.lproj/Localizable.strings"
+          test -f "$APP/vi.lproj/InfoPlist.strings"
+          /usr/bin/plutil -p "$APP/vi.lproj/Localizable.strings" | grep -q 'Thiết bị'
+          echo "Vietnamese resources PASS"
+
+      - name: Report compiler cache
+        if: always()
+        run: |
+          ccache --show-stats || true
+          du -sh "$CCACHE_DIR" || true
+
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          app="source/build/ios-device/src/emu/ios/Release-iphoneos/EKA2L1.app"
+          test -d "${app}"
+          mkdir -p out/Payload
+          cp -R "${app}" out/Payload/
+          (
+            cd out
+            zip -qry EKA2L1-NGAGE-MACHINE1-A-unsigned.ipa Payload
+          )
+          shasum -a 256 out/EKA2L1-NGAGE-MACHINE1-A-unsigned.ipa | tee out/SHA256.txt
+          cp UPSTREAM-BASELINE.txt out/
+          cp MACHINE1-BASELINE.txt out/
+
+      - name: Upload NGAGE MACHINE1-A IPA
+        uses: actions/upload-artifact@v7
+        with:
+          name: EKA2L1-NGAGE-MACHINE1-A-IPA
+          path: |
+            out/EKA2L1-NGAGE-MACHINE1-A-unsigned.ipa
+            out/SHA256.txt
+            out/UPSTREAM-BASELINE.txt
+            out/MACHINE1-BASELINE.txt
+          if-no-files-found: error
