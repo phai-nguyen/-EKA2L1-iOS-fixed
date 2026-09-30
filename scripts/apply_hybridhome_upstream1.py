@@ -74,19 +74,24 @@ cmake_path.write_text(cmake, encoding="utf-8")
 
 home = r'''import SwiftUI
 
-// HYBRIDHOME-UPSTREAM1
+// HYBRIDHOME2
 //
-// Host-rendered S60-style home surface for Nokia 5800 RM-356.
-// The emulator backend, application registry, icons and launched processes all
-// remain the real upstream EKA2L1 implementations. The original Nokia Home UID
-// is excluded from this proof because the point is to avoid depending on its
-// startup chain while preserving the rest of the Symbian environment.
+// Host-rendered Nokia 5800 RM-356 Home + Menu shell.
+// All application metadata, icons and launched processes still come from the
+// real EKA2L1 AppList/AppArc bridge. The original Nokia Home UID is excluded
+// because this shell replaces only the blocked Home surface, not the backend.
 struct S60HybridHomeView: View {
     let deviceName: String
     let apps: [EKA2L1AppItem]
     let onRefresh: () async -> Void
 
+    @State private var showingLauncher = false
+
     private let realNokiaHomeUID: UInt32 = 0x102750F0
+    private let telephoneUID: UInt32 = 0x100058B3
+    private let contactsUID: UInt32 = 0x101F4CCE
+    private let messagingUID: UInt32 = 0x100058C5
+    private let menuUID: UInt32 = 0x101F4CD2
 
     private var visibleApps: [EKA2L1AppItem] {
         apps
@@ -96,66 +101,77 @@ struct S60HybridHomeView: View {
             }
     }
 
-    private let columns = Array(
+    private var homeShortcuts: [EKA2L1AppItem] {
+        [telephoneUID, contactsUID, messagingUID]
+            .compactMap { uid in apps.first { $0.uid == uid } }
+    }
+
+    private func app(_ uid: UInt32) -> EKA2L1AppItem? {
+        apps.first { $0.uid == uid }
+    }
+
+    private let launcherColumns = Array(
         repeating: GridItem(.flexible(minimum: 68, maximum: 96), spacing: 8),
         count: 4
     )
 
+    private let shortcutColumns = Array(
+        repeating: GridItem(.flexible(minimum: 86, maximum: 112), spacing: 10),
+        count: 3
+    )
+
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.08, green: 0.18, blue: 0.27),
-                    Color(red: 0.20, green: 0.34, blue: 0.42),
-                    Color(red: 0.55, green: 0.64, blue: 0.65)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            wallpaper
 
             VStack(spacing: 0) {
                 statusBar
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        header
-
-                        LazyVGrid(columns: columns, spacing: 8) {
-                            ForEach(visibleApps) { app in
-                                NavigationLink(destination: EmulatorView(uid: app.uid)) {
-                                    AppGridCell(uid: app.uid, name: app.name)
-                                        .foregroundStyle(.white)
-                                }
-                                .buttonStyle(.plain)
-                                .simultaneousGesture(
-                                    TapGesture().onEnded {
-                                        NSLog("[HYBRIDHOME-UPSTREAM1][LAUNCH] uid=0x%08X name=%@",
-                                              app.uid, app.name)
-                                    }
-                                )
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 20)
-                }
-                .refreshable {
-                    NSLog("[HYBRIDHOME-UPSTREAM1][REFRESH]")
-                    await onRefresh()
+                if showingLauncher {
+                    launcherSurface
+                } else {
+                    homeSurface
                 }
 
                 softkeyBar
             }
         }
         .onAppear {
-            NSLog("[HYBRIDHOME-UPSTREAM1][SHOW] device=%@ apps=%ld",
-                  deviceName, visibleApps.count)
+            NSLog("[HYBRIDHOME2][SHOW] device=%@ apps=%ld shortcuts=%ld",
+                  deviceName, visibleApps.count, homeShortcuts.count)
         }
     }
 
+    private var wallpaper: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(red: 0.04, green: 0.18, blue: 0.26),
+                    Color(red: 0.06, green: 0.36, blue: 0.43),
+                    Color(red: 0.42, green: 0.65, blue: 0.64)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            Circle()
+                .fill(.white.opacity(0.06))
+                .frame(width: 260, height: 260)
+                .offset(x: 120, y: -180)
+
+            Circle()
+                .stroke(.white.opacity(0.08), lineWidth: 18)
+                .frame(width: 330, height: 330)
+                .offset(x: -130, y: 210)
+        }
+        .ignoresSafeArea()
+    }
+
     private var statusBar: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 7) {
+            Image(systemName: "antenna.radiowaves.left.and.right")
+                .font(.caption2)
+
             Text("NOKIA")
                 .font(.caption.bold())
 
@@ -166,9 +182,6 @@ struct S60HybridHomeView: View {
                     .font(.caption.monospacedDigit())
             }
 
-            Image(systemName: "antenna.radiowaves.left.and.right")
-                .font(.caption2)
-
             Image(systemName: "battery.75percent")
                 .font(.caption)
         }
@@ -178,36 +191,185 @@ struct S60HybridHomeView: View {
         .background(.black.opacity(0.38))
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(deviceName)
-                .font(.headline)
+    private var homeSurface: some View {
+        ScrollView {
+            VStack(spacing: 18) {
+                VStack(spacing: 4) {
+                    TimelineView(.periodic(from: .now, by: 30)) { context in
+                        Text(context.date.formatted(date: .omitted, time: .shortened))
+                            .font(.system(size: 46, weight: .light, design: .rounded))
+                            .monospacedDigit()
+                    }
+
+                    Text(deviceName)
+                        .font(.subheadline.weight(.semibold))
+
+                    Text("RM-356 · Hybrid Home 2")
+                        .font(.caption2)
+                        .opacity(0.78)
+                }
                 .foregroundStyle(.white)
+                .padding(.top, 24)
 
-            Text("Hybrid Home · backend Symbian thật")
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.82))
+                if !homeShortcuts.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Lối tắt")
+                            .font(.caption.bold())
+                            .foregroundStyle(.white.opacity(0.9))
 
-            Text("\(visibleApps.count) ứng dụng từ AppList/AppArc")
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.68))
+                        LazyVGrid(columns: shortcutColumns, spacing: 10) {
+                            ForEach(homeShortcuts) { app in
+                                appLink(app, marker: "SHORTCUT")
+                            }
+                        }
+                    }
+                    .padding(12)
+                    .background(.black.opacity(0.22), in: RoundedRectangle(cornerRadius: 12))
+                }
+
+                Button {
+                    showingLauncher = true
+                    NSLog("[HYBRIDHOME2][OPEN_MENU] apps=%ld", visibleApps.count)
+                } label: {
+                    HStack {
+                        Image(systemName: "square.grid.3x3.fill")
+                        Text("Mở Menu ứng dụng")
+                            .fontWeight(.semibold)
+                        Spacer()
+                        Text("\(visibleApps.count)")
+                            .font(.caption.monospacedDigit())
+                            .opacity(0.75)
+                    }
+                    .foregroundStyle(.white)
+                    .padding(14)
+                    .background(.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+
+                Text("Ứng dụng và biểu tượng được lấy từ AppList/AppArc của firmware.")
+                    .font(.caption2)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.white.opacity(0.70))
+                    .padding(.horizontal, 18)
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 20)
         }
-        .padding(.top, 12)
+        .refreshable {
+            NSLog("[HYBRIDHOME2][REFRESH_HOME]")
+            await onRefresh()
+        }
+    }
+
+    private var launcherSurface: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Menu ứng dụng")
+                            .font(.headline)
+                        Text("\(visibleApps.count) ứng dụng Symbian")
+                            .font(.caption2)
+                            .opacity(0.72)
+                    }
+
+                    Spacer()
+
+                    Button {
+                        showingLauncher = false
+                        NSLog("[HYBRIDHOME2][CLOSE_MENU]")
+                    } label: {
+                        Label("Trang chủ", systemImage: "house.fill")
+                            .font(.caption.bold())
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.white.opacity(0.22))
+                }
+                .foregroundStyle(.white)
+                .padding(.top, 10)
+
+                LazyVGrid(columns: launcherColumns, spacing: 8) {
+                    ForEach(visibleApps) { app in
+                        appLink(app, marker: "LAUNCHER")
+                    }
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.bottom, 20)
+        }
+        .refreshable {
+            NSLog("[HYBRIDHOME2][REFRESH_MENU]")
+            await onRefresh()
+        }
+    }
+
+    @ViewBuilder
+    private func appLink(_ app: EKA2L1AppItem, marker: String) -> some View {
+        NavigationLink(destination: EmulatorView(uid: app.uid)) {
+            AppGridCell(uid: app.uid, name: app.name)
+                .foregroundStyle(.white)
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                NSLog("[HYBRIDHOME2][%@] uid=0x%08X name=%@",
+                      marker, app.uid, app.name)
+            }
+        )
     }
 
     private var softkeyBar: some View {
-        HStack {
-            Text("Điện thoại")
-            Spacer()
-            Text("Menu")
-            Spacer()
-            Text("Tuỳ chọn")
+        HStack(spacing: 8) {
+            if let telephone = app(telephoneUID) {
+                NavigationLink(destination: EmulatorView(uid: telephone.uid)) {
+                    Label("Điện thoại", systemImage: "phone.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+                .simultaneousGesture(
+                    TapGesture().onEnded {
+                        NSLog("[HYBRIDHOME2][SOFTKEY_PHONE] uid=0x%08X", telephone.uid)
+                    }
+                )
+            } else {
+                Text("Điện thoại")
+                    .frame(maxWidth: .infinity)
+                    .opacity(0.45)
+            }
+
+            Button {
+                showingLauncher.toggle()
+                NSLog("[HYBRIDHOME2][SOFTKEY_MENU] launcher=%@",
+                      showingLauncher ? "YES" : "NO")
+            } label: {
+                Label(showingLauncher ? "Trang chủ" : "Menu",
+                      systemImage: showingLauncher ? "house.fill" : "square.grid.3x3.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.plain)
+
+            if let contacts = app(contactsUID) {
+                NavigationLink(destination: EmulatorView(uid: contacts.uid)) {
+                    Label("Danh bạ", systemImage: "person.crop.circle.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+                .simultaneousGesture(
+                    TapGesture().onEnded {
+                        NSLog("[HYBRIDHOME2][SOFTKEY_CONTACTS] uid=0x%08X", contacts.uid)
+                    }
+                )
+            } else {
+                Text("Danh bạ")
+                    .frame(maxWidth: .infinity)
+                    .opacity(0.45)
+            }
         }
         .font(.caption.bold())
         .foregroundStyle(.white)
-        .padding(.horizontal, 12)
-        .frame(height: 36)
-        .background(.black.opacity(0.48))
+        .padding(.horizontal, 8)
+        .frame(height: 42)
+        .background(.black.opacity(0.54))
     }
 }
 '''
