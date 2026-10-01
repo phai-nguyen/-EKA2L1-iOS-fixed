@@ -76,7 +76,11 @@ namespace eka2l1::machine::rh29 {
         , ram_data_(ram_base && ram_size ? ram_size : 0, 0)
         , ram_initialized_(ram_base && ram_size ? ram_size : 0, 0)
         , candidate_ram_probe_data_(candidate_ram_probe_size * candidate_ram_probe_loop_windows, 0)
-        , candidate_post_probe_workspace_data_(candidate_post_probe_workspace_size, 0) {
+        , candidate_post_probe_workspace_data_(candidate_post_probe_workspace_size, 0)
+        , low_vector_shadow_data_(low_vector_shadow_size, 0) {
+        if (rom_data_ && rom_size_ >= low_vector_shadow_size) {
+            std::memcpy(low_vector_shadow_data_.data(), rom_data_, low_vector_shadow_size);
+        }
     }
 
     bool strict_bus::range_inside_rom_mapping(const std::uint32_t address,
@@ -166,6 +170,24 @@ namespace eka2l1::machine::rh29 {
         return true;
     }
 
+    bool strict_bus::range_inside_low_vector_shadow(const std::uint32_t address,
+                                                    const std::size_t width,
+                                                    std::size_t &offset) const {
+        if (!read_alias_base_ || *read_alias_base_ != low_vector_shadow_base
+            || width == 0 || address < low_vector_shadow_base) {
+            return false;
+        }
+
+        const std::uint64_t off64 = static_cast<std::uint64_t>(address) - low_vector_shadow_base;
+        const std::uint64_t end64 = off64 + static_cast<std::uint64_t>(width);
+        if (end64 < off64 || end64 > low_vector_shadow_data_.size()) {
+            return false;
+        }
+
+        offset = static_cast<std::size_t>(off64);
+        return true;
+    }
+
     void strict_bus::record_unresolved(const access_kind kind,
                                        const std::size_t width,
                                        const std::uint32_t address,
@@ -214,6 +236,12 @@ namespace eka2l1::machine::rh29 {
         }
 
         std::size_t offset = 0;
+        if (range_inside_low_vector_shadow(address, width, offset)) {
+            std::memcpy(out, low_vector_shadow_data_.data() + offset, width);
+            ++low_vector_shadow_read_count_;
+            return true;
+        }
+
         if (range_inside_rom_mapping(address, width, offset)) {
             std::memcpy(out, rom_data_ + offset, width);
             return true;
@@ -324,6 +352,15 @@ namespace eka2l1::machine::rh29 {
         }
 
         std::size_t offset = 0;
+        if (value
+            && width == low_vector_shadow_write_width
+            && (address & (low_vector_shadow_write_width - 1u)) == 0
+            && range_inside_low_vector_shadow(address, width, offset)) {
+            std::memcpy(low_vector_shadow_data_.data() + offset, value, width);
+            ++low_vector_shadow_write_count_;
+            return true;
+        }
+
         if (value && range_inside_ram(address, width, offset)) {
             std::memcpy(ram_data_.data() + offset, value, width);
             for (std::size_t i = 0; i < width; ++i) {
@@ -426,5 +463,13 @@ namespace eka2l1::machine::rh29 {
 
     std::uint64_t strict_bus::candidate_post_probe_workspace_write_count() const {
         return candidate_post_probe_workspace_write_count_;
+    }
+
+    std::uint64_t strict_bus::low_vector_shadow_read_count() const {
+        return low_vector_shadow_read_count_;
+    }
+
+    std::uint64_t strict_bus::low_vector_shadow_write_count() const {
+        return low_vector_shadow_write_count_;
     }
 }

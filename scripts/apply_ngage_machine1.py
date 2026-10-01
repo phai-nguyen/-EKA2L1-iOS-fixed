@@ -65,9 +65,9 @@ for source, destination in source_map:
         text = text.replace('#include "rh29_machine_model.h"', '#include "RH29MachineModel.h"', 1)
     elif destination.name == "RH29MachineRunner.cpp":
         text = text.replace('#include "rh29_machine_runner.h"', '#include "RH29MachineRunner.h"', 1)
-        text = text.replace("RH29_MACHINE1_O", "RH29_MACHINE1_S")
-        text = text.replace("MACHINE1-O probes", "MACHINE1-S probes")
-        text = text.replace("MACHINE1-O must not let Dyncom", "MACHINE1-S must not let Dyncom")
+        text = text.replace("RH29_MACHINE1_O", "RH29_MACHINE1_T")
+        text = text.replace("MACHINE1-O probes", "MACHINE1-T probes")
+        text = text.replace("MACHINE1-O must not let Dyncom", "MACHINE1-T must not let Dyncom")
 
         report_anchor = '        out << "FLASH_UNLOCK_STAGE_AT_STOP=" << result.flash_unlock_stage_at_stop << "\\n";\n        write_hex(out, "KERN_DATA_ADDRESS", result.header.kern_data_address);\n'
         report_insert = (
@@ -84,42 +84,52 @@ for source, destination in source_map:
             '        out << "POST_RAM_WORKSPACE_SIZE=" << candidate_post_probe_workspace_size << "\\n";\n'
             '        out << "POST_RAM_WORKSPACE_READ_COUNT=" << result.candidate_post_probe_workspace_read_count << "\\n";\n'
             '        out << "POST_RAM_WORKSPACE_WRITE_COUNT=" << result.candidate_post_probe_workspace_write_count << "\\n";\n'
+            '        out << "LOW_VECTOR_SHADOW_POLICY=" << (result.low_vector_shadow_enabled\n'
+            '            ? "arm_low_vectors_32byte_rom_seeded_mutable_write32" : "disabled") << "\\n";\n'
+            '        write_hex(out, "LOW_VECTOR_SHADOW_BASE", low_vector_shadow_base);\n'
+            '        out << "LOW_VECTOR_SHADOW_SIZE=" << low_vector_shadow_size << "\\n";\n'
+            '        out << "LOW_VECTOR_SHADOW_WRITE_WIDTH_BITS=" << (low_vector_shadow_write_width * 8u) << "\\n";\n'
+            '        out << "LOW_VECTOR_SHADOW_READ_COUNT=" << result.low_vector_shadow_read_count << "\\n";\n'
+            '        out << "LOW_VECTOR_SHADOW_WRITE_COUNT=" << result.low_vector_shadow_write_count << "\\n";\n'
             '        write_hex(out, "KERN_DATA_ADDRESS", result.header.kern_data_address);\n'
         )
         if report_anchor not in text:
-            raise SystemExit("MACHINE1-S runner report anchor not found")
+            raise SystemExit("MACHINE1-T runner report anchor not found")
         text = text.replace(report_anchor, report_insert, 1)
 
         enable_anchor = '        result.flash_unlock_autoselect_enabled = true;\n        strict_bus bus(rom.data(), parsed.header.rom_size, parsed.header.rom_base, cold_reset_pc,\n'
         if enable_anchor not in text:
-            raise SystemExit("MACHINE1-S runner enable anchor not found")
+            raise SystemExit("MACHINE1-T runner enable anchor not found")
         text = text.replace(
             enable_anchor,
             '        result.flash_unlock_autoselect_enabled = true;\n'
             '        result.candidate_ram_probe_enabled = true;\n'
             '        result.candidate_post_probe_workspace_enabled = true;\n'
+            '        result.low_vector_shadow_enabled = true;\n'
             '        strict_bus bus(rom.data(), parsed.header.rom_size, parsed.header.rom_base, cold_reset_pc,\n',
             1,
         )
 
         capture_anchor = '        result.flash_unlock_autoselect_count = bus.observed_flash_unlock_autoselect_count();\n        result.flash_unlock_stage_at_stop = bus.flash_unlock_stage();\n'
         if capture_anchor not in text:
-            raise SystemExit("MACHINE1-S runner capture anchor not found")
+            raise SystemExit("MACHINE1-T runner capture anchor not found")
         text = text.replace(
             capture_anchor,
             capture_anchor
             + '        result.candidate_ram_probe_read_count = bus.candidate_ram_probe_read_count();\n'
             + '        result.candidate_ram_probe_write_count = bus.candidate_ram_probe_write_count();\n'
             + '        result.candidate_post_probe_workspace_read_count = bus.candidate_post_probe_workspace_read_count();\n'
-            + '        result.candidate_post_probe_workspace_write_count = bus.candidate_post_probe_workspace_write_count();\n',
+            + '        result.candidate_post_probe_workspace_write_count = bus.candidate_post_probe_workspace_write_count();\n'
+            + '        result.low_vector_shadow_read_count = bus.low_vector_shadow_read_count();\n'
+            + '        result.low_vector_shadow_write_count = bus.low_vector_shadow_write_count();\n',
             1,
         )
     elif destination.name == "RH29MachineProbeView.swift":
-        text = text.replace("MACHINE1-O", "MACHINE1-S")
-        text = text.replace("RH29_MACHINE1_O.txt", "RH29_MACHINE1_S.txt")
+        text = text.replace("MACHINE1-O", "MACHINE1-T")
+        text = text.replace("RH29_MACHINE1_O.txt", "RH29_MACHINE1_T.txt")
         text = text.replace(
             "Probe giữ nguyên model MACHINE1-M và không giả lập 0x0A000000. Bản O ghi 64 lệnh A32 cuối cùng cùng R0/R1/R2/R3/R4/R8/R9/R10/SP/LR để lần ngược nguồn gốc con trỏ 0x0A000000.",
-            "R xác nhận đủ 8 probe đã hoàn tất. Sau đó bootstrap gọi routine mới với base 0x0A0001E0 và tham số 0x20; S chỉ mở workspace chẩn đoán đúng 32 byte này, zero-seeded mutable, không mở rộng thành RAM bank."
+            "S vượt workspace 0x20 rồi bootstrap ghi word vector ROM đầu tiên EA0000C9 về địa chỉ 0. T chỉ thêm shadow 32 byte cho 8 low vectors ARM, seed từ ROM và chỉ cho write32; từ 0x20 trở lên vẫn fail-closed."
         )
     destination.write_text(text, encoding="utf-8")
 
@@ -223,7 +233,7 @@ probe_method = r'''
 - (EKA2L1MachineProbeReport *)runRH29MachineProbeWithInstructionBudget:(uint32_t)budget {
     EKA2L1MachineProbeReport *report = [[EKA2L1MachineProbeReport alloc] init];
     report.succeeded = NO;
-    report.text = @"RH29_MACHINE1_S\nSTOP_REASON=io_error\nDETAIL=emulator is not ready\n";
+    report.text = @"RH29_MACHINE1_T\nSTOP_REASON=io_error\nDETAIL=emulator is not ready\n";
 
     std::string storage;
     std::string firmware;
@@ -247,12 +257,12 @@ probe_method = r'''
 
     NSString *firmwareCode = [NSString stringWithUTF8String:firmware.c_str()];
     if (!firmwareCode || [firmwareCode caseInsensitiveCompare:@"RH-29"] != NSOrderedSame) {
-        report.text = @"RH29_MACHINE1_S\nSTOP_REASON=io_error\nDETAIL=current device is not RH-29\n";
+        report.text = @"RH29_MACHINE1_T\nSTOP_REASON=io_error\nDETAIL=current device is not RH-29\n";
         return report;
     }
 
     const std::string rom_path = eka2l1::add_path(storage, "roms/rh-29/SYM.ROM");
-    LOG_INFO(eka2l1::FRONTEND_CMDLINE, "[RH29_MACHINE1_S] start budget={} rom={}", budget, rom_path);
+    LOG_INFO(eka2l1::FRONTEND_CMDLINE, "[RH29_MACHINE1_T] start budget={} rom={}", budget, rom_path);
     eka2l1::machine::rh29::probe_options options{};
     options.instruction_budget = budget;
     const auto result = eka2l1::machine::rh29::run_probe(rom_path, options);
@@ -262,7 +272,7 @@ probe_method = r'''
         result.stop_reason != eka2l1::machine::rh29::probe_stop_reason::invalid_rom
         && result.stop_reason != eka2l1::machine::rh29::probe_stop_reason::io_error);
     LOG_INFO(eka2l1::FRONTEND_CMDLINE,
-        "[RH29_MACHINE1_S] stop succeeded={} executed={}",
+        "[RH29_MACHINE1_T] stop succeeded={} executed={}",
         report.succeeded, result.executed_instructions);
     return report;
 }
@@ -346,4 +356,4 @@ if 'firmwareCode.caseInsensitiveCompare("RH-29")' not in content:
     content = content.replace(settings_button, settings_button + probe_button, 1)
 content_path.write_text(content, encoding="utf-8")
 
-print("MACHINE1-S sources + iOS probe integration staged")
+print("MACHINE1-T sources + iOS probe integration staged")

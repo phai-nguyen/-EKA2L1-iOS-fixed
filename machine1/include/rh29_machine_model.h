@@ -33,6 +33,15 @@ namespace eka2l1::machine::rh29 {
             * static_cast<std::uint32_t>(candidate_ram_probe_loop_windows);
     static constexpr std::size_t candidate_post_probe_workspace_size = 0x20u;
 
+    // MACHINE1-S device evidence: after leaving the post-probe workspace,
+    // bootstrap copies the first ROM vector word (0xEA0000C9) to address 0.
+    // MACHINE1-T therefore exposes only the eight ARM low-vector words as a
+    // ROM-seeded mutable shadow. The rest of the synthetic low ROM alias stays
+    // read-only, so 0x20 and above still fail closed.
+    static constexpr std::uint32_t low_vector_shadow_base = 0x00000000u;
+    static constexpr std::size_t low_vector_shadow_size = 8u * sizeof(std::uint32_t);
+    static constexpr std::size_t low_vector_shadow_write_width = sizeof(std::uint32_t);
+
     // MACHINE1-D device evidence. Hardware identity is intentionally unknown:
     // allow only this exact observed write, never the surrounding MMIO range.
     static constexpr std::uint32_t observed_mmio_write_address = 0x0C150004u;
@@ -173,6 +182,8 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_ram_probe_write_count() const;
         std::uint64_t candidate_post_probe_workspace_read_count() const;
         std::uint64_t candidate_post_probe_workspace_write_count() const;
+        std::uint64_t low_vector_shadow_read_count() const;
+        std::uint64_t low_vector_shadow_write_count() const;
 
     private:
         bool range_inside_rom_mapping(std::uint32_t address, std::size_t width, std::size_t &offset) const;
@@ -182,6 +193,9 @@ namespace eka2l1::machine::rh29 {
         bool range_inside_candidate_post_probe_workspace(std::uint32_t address,
                                                         std::size_t width,
                                                         std::size_t &offset) const;
+        bool range_inside_low_vector_shadow(std::uint32_t address,
+                                            std::size_t width,
+                                            std::size_t &offset) const;
         void record_unresolved(access_kind kind, std::size_t width, std::uint32_t address,
                                std::uint32_t pc, std::uint32_t lr, std::uint64_t value,
                                unresolved_cause cause);
@@ -212,6 +226,9 @@ namespace eka2l1::machine::rh29 {
         std::vector<std::uint8_t> candidate_post_probe_workspace_data_{};
         std::uint64_t candidate_post_probe_workspace_read_count_ = 0;
         std::uint64_t candidate_post_probe_workspace_write_count_ = 0;
+        std::vector<std::uint8_t> low_vector_shadow_data_{};
+        std::uint64_t low_vector_shadow_read_count_ = 0;
+        std::uint64_t low_vector_shadow_write_count_ = 0;
         std::optional<unresolved_access> first_unresolved_{};
     };
 }

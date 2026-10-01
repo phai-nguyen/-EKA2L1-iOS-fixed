@@ -103,6 +103,9 @@ namespace eka2l1::machine::rh29 {
         bool candidate_post_probe_workspace_enabled = false;
         std::uint64_t candidate_post_probe_workspace_read_count = 0;
         std::uint64_t candidate_post_probe_workspace_write_count = 0;
+        bool low_vector_shadow_enabled = false;
+        std::uint64_t low_vector_shadow_read_count = 0;
+        std::uint64_t low_vector_shadow_write_count = 0;
         std::array<a32_trace_entry, a32_trace_capacity> a32_trace{};
         std::uint32_t a32_trace_count = 0;
         probe_stop_reason stop_reason = probe_stop_reason::io_error;
