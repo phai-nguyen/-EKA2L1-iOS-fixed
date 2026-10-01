@@ -1,17 +1,19 @@
 # CURRENT HANDOFF
 
 Current:
-`docs/handoff/NEWCHAT-NGAGE-QD-MACHINE1-V-2026-10-01.md`
+`docs/handoff/NEWCHAT-NGAGE-QD-MACHINE1-X-2026-10-01.md`
 
 Active branch: `ngage-machine1`
 
 Latest state:
-- MACHINE1-V build #56 / run `36850283187`: SUCCESS.
-- Device log `RH29_MACHINE1_V.txt` fully analyzed.
-- Exact early setup fingerprint recovered for `0x08000000` writes and `STRH 0x0080 -> 0x0C150004`.
-- Identity of `0x08000000` and `0x0C150004` remains unproven; do not label either as remap/MMIO controller without corroboration.
-- Synthetic ROM alias at low address 0 is likely wrong for later data access: ROM opcode `0xEA0000C9` is consumed as data and produces bogus copy count `0x28000326`.
-- Current blocker remains write32 `0x00000020` at PC `0x2344`, LR `0x3C8`, cause `rom_write`.
-- Do not extend low shadow blindly.
-- MACHINE1-W is not implemented.
-- Next step: targeted RH-29 / DCT4 / UPP-WD2 research using exact V fingerprint; if still unresolved, build W-DIAG only.
+- MACHINE1-X build #69 / run `36875051410`: SUCCESS.
+- Baseline code SHA before HANDOFF: `3f15f6156971df13f0e2ae59dc6717aef234beea`.
+- Artifact: `EKA2L1-NGAGE-MACHINE1-X-IPA`, ID `11169086924`, size `10,105,136` bytes.
+- X low-vector shadow is 36 bytes / 9 words; exact observed write at `0x20` is admitted.
+- `0x24+` remains fail-closed.
+- RH-29 Machine Probe menu is always visible again; backend still rejects non-RH29 execution.
+- W diagnostics remain enabled in X.
+- Do not infer `0x0C150004` is a remap register; semantics remain unknown.
+- No MACHINE1-X device log has been received yet.
+- Next step: install X, run Probe, export `RH29_MACHINE1_X.txt`.
+- If X stops at `0x24`, trace R2/copy-count provenance before any further low-shadow expansion.
