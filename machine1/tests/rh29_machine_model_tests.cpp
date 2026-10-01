@@ -212,7 +212,7 @@ static void test_exact_observed_flash_command_is_allowlisted_only_at_fl1_base() 
     assert(bus.observed_flash_command_count() == 1);
     assert(!bus.first_unresolved().has_value());
 
-    const std::uint16_t wrong = 0x00F0u;
+    const std::uint16_t wrong = 0x00F1u;
     assert(!bus.write(observed_flash_command_address, &wrong, sizeof(wrong), 0x00000984, 0x00000AFC));
     assert(bus.first_unresolved().has_value());
     assert(bus.first_unresolved()->address == observed_flash_command_address);
