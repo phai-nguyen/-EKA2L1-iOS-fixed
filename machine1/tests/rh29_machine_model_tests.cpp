@@ -521,15 +521,14 @@ static void test_eight_step_candidate_probe_loop_is_exact_and_sparse() {
     assert(bus.first_unresolved().has_value());
 }
 
-static void test_ninth_stride_candidate_remains_unmapped() {
+static void test_gap_before_post_probe_workspace_remains_unmapped() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc, candidate_sdram_base, 0x100);
-    const std::uint32_t ninth_base = candidate_ram_probe_base
-        + candidate_ram_probe_stride * static_cast<std::uint32_t>(candidate_ram_probe_loop_windows);
+    const std::uint32_t gap_address = candidate_post_probe_workspace_base - 4u;
     std::uint32_t out = 0;
-    assert(!bus.read(access_kind::data_read, ninth_base, &out, sizeof(out), 0x00002664, 0x000024C4));
+    assert(!bus.read(access_kind::data_read, gap_address, &out, sizeof(out), 0x00000380, 0x0000241C));
     assert(bus.first_unresolved().has_value());
-    assert(bus.first_unresolved()->address == ninth_base);
+    assert(bus.first_unresolved()->address == gap_address);
 }
 
 static void test_post_probe_workspace_is_zero_seeded_mutable_and_bounded() {
@@ -652,7 +651,7 @@ int main() {
     test_unlock_autoselect_command_allowlist_is_exact();
     test_candidate_probe_window_reads_zero();
     test_eight_step_candidate_probe_loop_is_exact_and_sparse();
-    test_ninth_stride_candidate_remains_unmapped();
+    test_gap_before_post_probe_workspace_remains_unmapped();
     test_post_probe_workspace_is_zero_seeded_mutable_and_bounded();
     test_candidate_probe_window_is_mutable_and_bounded();
     test_bus_records_unmapped_data_read();
