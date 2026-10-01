@@ -182,7 +182,7 @@ namespace eka2l1::arm {
         self.assertIn("POST_RAM_WORKSPACE_READ_COUNT", runner)
         self.assertIn("arm_low_vectors_36byte_rom_seeded_mutable_write32", runner)
         self.assertIn("LOW_VECTOR_SHADOW_WRITE_COUNT", runner)
-        self.assertIn("LOW_VECTOR_SHADOW_STATUS=diagnostic_hypothesis_disproved_as_complete_mapping_by_T_write_at_0x20", runner)
+        self.assertIn("LOW_VECTOR_SHADOW_STATUS=X_admits_only_W_observed_write_at_0x20_0x24_plus_fail_closed", runner)
         self.assertIn("SDRAM_WRITE_TRACE_POLICY=first_16_exact_transactions_no_new_mapping", runner)
         self.assertIn('prefix << "SDRAM_WRITE_TRACE_"', runner)
         self.assertIn("EARLY_SETUP_TRACE_POLICY=pc_0x00000B00_0x00000B7F_all_r0_r12_no_model_change", runner)
