@@ -437,6 +437,58 @@ static void test_flash_unlock_cycle2_allowlist_is_exact() {
     assert(bus.first_unresolved()->value == wrong);
 }
 
+static void test_unlock_sequence_enters_autoselect_only_after_stage2() {
+    auto rom = valid_rom();
+
+    strict_bus early(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                     candidate_sdram_base, 0x100);
+    const std::uint16_t cmd = observed_flash_unlock_autoselect_value;
+    assert(!early.write(observed_flash_unlock_autoselect_address, &cmd, sizeof(cmd),
+                        0x00000A04, 0x00000AFC));
+    assert(early.first_unresolved().has_value());
+
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+    const std::uint16_t unlock1 = observed_flash_unlock1_value;
+    const std::uint16_t unlock2 = observed_flash_unlock2_value;
+    assert(bus.write(observed_flash_unlock1_address, &unlock1, sizeof(unlock1),
+                     0x000009EC, 0x00000AFC));
+    assert(bus.write(observed_flash_unlock2_address, &unlock2, sizeof(unlock2),
+                     0x000009F8, 0x00000AFC));
+    assert(bus.flash_unlock_stage() == 2);
+    assert(!bus.flash_autoselect_active());
+
+    assert(bus.write(observed_flash_unlock_autoselect_address, &cmd, sizeof(cmd),
+                     0x00000A04, 0x00000AFC));
+    assert(bus.observed_flash_unlock_autoselect_count() == 1);
+    assert(bus.flash_unlock_stage() == 0);
+    assert(bus.flash_autoselect_active());
+    assert(!bus.first_unresolved().has_value());
+
+    std::uint16_t manufacturer = 0;
+    assert(bus.read(access_kind::data_read, amd_reference_manufacturer_id_address,
+                    &manufacturer, sizeof(manufacturer), 0x00000A0C, 0x00000AFC));
+    assert(manufacturer == amd_reference_manufacturer_id);
+}
+
+static void test_unlock_autoselect_command_allowlist_is_exact() {
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+    const std::uint16_t unlock1 = observed_flash_unlock1_value;
+    const std::uint16_t unlock2 = observed_flash_unlock2_value;
+    assert(bus.write(observed_flash_unlock1_address, &unlock1, sizeof(unlock1),
+                     0x000009EC, 0x00000AFC));
+    assert(bus.write(observed_flash_unlock2_address, &unlock2, sizeof(unlock2),
+                     0x000009F8, 0x00000AFC));
+    const std::uint16_t wrong = 0x0091u;
+    assert(!bus.write(observed_flash_unlock_autoselect_address, &wrong, sizeof(wrong),
+                      0x00000A04, 0x00000AFC));
+    assert(bus.first_unresolved().has_value());
+    assert(bus.first_unresolved()->address == observed_flash_unlock_autoselect_address);
+    assert(bus.first_unresolved()->value == wrong);
+}
+
 static void test_bus_records_unmapped_data_read() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000);
@@ -508,6 +560,8 @@ int main() {
     test_flash_f0_resets_unlock_stage();
     test_flash_unlock_cycle2_requires_stage1_and_matches_observed_transaction();
     test_flash_unlock_cycle2_allowlist_is_exact();
+    test_unlock_sequence_enters_autoselect_only_after_stage2();
+    test_unlock_autoselect_command_allowlist_is_exact();
     test_bus_records_unmapped_data_read();
     test_bus_records_unmapped_code_read();
     test_bus_keeps_first_unresolved();

@@ -66,6 +66,12 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::size_t observed_flash_unlock2_width = 2u;
     static constexpr std::uint16_t observed_flash_unlock2_value = 0x0055u;
 
+    // MACHINE1-L device evidence: after AA/55 unlock stages, firmware writes
+    // command 0x0090 back to word address 0x555 (byte offset 0xAAA).
+    static constexpr std::uint32_t observed_flash_unlock_autoselect_address = observed_flash_unlock1_address;
+    static constexpr std::size_t observed_flash_unlock_autoselect_width = 2u;
+    static constexpr std::uint16_t observed_flash_unlock_autoselect_value = 0x0090u;
+
     enum class parse_error {
         none = 0,
         truncated_header,
@@ -141,6 +147,7 @@ namespace eka2l1::machine::rh29 {
         bool flash_autoselect_active() const;
         std::uint64_t observed_flash_unlock1_count() const;
         std::uint64_t observed_flash_unlock2_count() const;
+        std::uint64_t observed_flash_unlock_autoselect_count() const;
         std::uint32_t flash_unlock_stage() const;
 
     private:
@@ -168,6 +175,7 @@ namespace eka2l1::machine::rh29 {
         bool flash_autoselect_active_ = false;
         std::uint64_t observed_flash_unlock1_count_ = 0;
         std::uint64_t observed_flash_unlock2_count_ = 0;
+        std::uint64_t observed_flash_unlock_autoselect_count_ = 0;
         std::uint32_t flash_unlock_stage_ = 0;
         std::optional<unresolved_access> first_unresolved_{};
     };

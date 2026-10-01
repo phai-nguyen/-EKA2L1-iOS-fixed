@@ -251,6 +251,18 @@ namespace eka2l1::machine::rh29 {
             return true;
         }
 
+        if (value
+            && !flash_autoselect_active_
+            && flash_unlock_stage_ == 2
+            && address == observed_flash_unlock_autoselect_address
+            && width == observed_flash_unlock_autoselect_width
+            && write_value == observed_flash_unlock_autoselect_value) {
+            ++observed_flash_unlock_autoselect_count_;
+            flash_autoselect_active_ = true;
+            flash_unlock_stage_ = 0;
+            return true;
+        }
+
         std::size_t offset = 0;
         if (value && range_inside_ram(address, width, offset)) {
             std::memcpy(ram_data_.data() + offset, value, width);
@@ -318,6 +330,10 @@ namespace eka2l1::machine::rh29 {
 
     std::uint64_t strict_bus::observed_flash_unlock2_count() const {
         return observed_flash_unlock2_count_;
+    }
+
+    std::uint64_t strict_bus::observed_flash_unlock_autoselect_count() const {
+        return observed_flash_unlock_autoselect_count_;
     }
 
     std::uint32_t strict_bus::flash_unlock_stage() const {
