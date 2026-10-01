@@ -13,6 +13,14 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::uint32_t candidate_sdram_base = 0x08000000u;
     static constexpr std::size_t candidate_sdram_size = 16u * 1024u * 1024u;
 
+    // MACHINE1-O shows the boot code selecting 0x0A000000 from a 16-byte
+    // configuration record, switching to FIQ mode, then executing
+    // LDMIA r8,{r4-r7}. MACHINE1-P exposes only those 16 observed bytes as a
+    // zero-seeded mutable RAM-probe window. This is not a claim that the full
+    // bank size or hardware identity is known.
+    static constexpr std::uint32_t candidate_ram_probe_base = 0x0A000000u;
+    static constexpr std::size_t candidate_ram_probe_size = 16u;
+
     // MACHINE1-D device evidence. Hardware identity is intentionally unknown:
     // allow only this exact observed write, never the surrounding MMIO range.
     static constexpr std::uint32_t observed_mmio_write_address = 0x0C150004u;
@@ -149,10 +157,14 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t observed_flash_unlock2_count() const;
         std::uint64_t observed_flash_unlock_autoselect_count() const;
         std::uint32_t flash_unlock_stage() const;
+        std::uint64_t candidate_ram_probe_read_count() const;
+        std::uint64_t candidate_ram_probe_write_count() const;
 
     private:
         bool range_inside_rom_mapping(std::uint32_t address, std::size_t width, std::size_t &offset) const;
         bool range_inside_ram(std::uint32_t address, std::size_t width, std::size_t &offset) const;
+        bool range_inside_candidate_ram_probe(std::uint32_t address, std::size_t width,
+                                              std::size_t &offset) const;
         void record_unresolved(access_kind kind, std::size_t width, std::uint32_t address,
                                std::uint32_t pc, std::uint32_t lr, std::uint64_t value,
                                unresolved_cause cause);
@@ -177,6 +189,9 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t observed_flash_unlock2_count_ = 0;
         std::uint64_t observed_flash_unlock_autoselect_count_ = 0;
         std::uint32_t flash_unlock_stage_ = 0;
+        std::vector<std::uint8_t> candidate_ram_probe_data_{};
+        std::uint64_t candidate_ram_probe_read_count_ = 0;
+        std::uint64_t candidate_ram_probe_write_count_ = 0;
         std::optional<unresolved_access> first_unresolved_{};
     };
 }

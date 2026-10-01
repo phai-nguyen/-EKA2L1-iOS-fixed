@@ -74,7 +74,8 @@ namespace eka2l1::machine::rh29 {
         , read_alias_base_(read_alias_base)
         , ram_base_(ram_base)
         , ram_data_(ram_base && ram_size ? ram_size : 0, 0)
-        , ram_initialized_(ram_base && ram_size ? ram_size : 0, 0) {
+        , ram_initialized_(ram_base && ram_size ? ram_size : 0, 0)
+        , candidate_ram_probe_data_(candidate_ram_probe_size, 0) {
     }
 
     bool strict_bus::range_inside_rom_mapping(const std::uint32_t address,
@@ -114,6 +115,21 @@ namespace eka2l1::machine::rh29 {
         const std::uint64_t off64 = static_cast<std::uint64_t>(address) - *ram_base_;
         const std::uint64_t end64 = off64 + static_cast<std::uint64_t>(width);
         if (end64 < off64 || end64 > ram_data_.size()) {
+            return false;
+        }
+        offset = static_cast<std::size_t>(off64);
+        return true;
+    }
+
+    bool strict_bus::range_inside_candidate_ram_probe(const std::uint32_t address,
+                                                         const std::size_t width,
+                                                         std::size_t &offset) const {
+        if (width == 0 || address < candidate_ram_probe_base) {
+            return false;
+        }
+        const std::uint64_t off64 = static_cast<std::uint64_t>(address) - candidate_ram_probe_base;
+        const std::uint64_t end64 = off64 + static_cast<std::uint64_t>(width);
+        if (end64 < off64 || end64 > candidate_ram_probe_data_.size()) {
             return false;
         }
         offset = static_cast<std::size_t>(off64);
@@ -181,6 +197,13 @@ namespace eka2l1::machine::rh29 {
                 }
             }
             std::memcpy(out, ram_data_.data() + offset, width);
+            return true;
+        }
+
+        if (kind == access_kind::data_read
+            && range_inside_candidate_ram_probe(address, width, offset)) {
+            std::memcpy(out, candidate_ram_probe_data_.data() + offset, width);
+            ++candidate_ram_probe_read_count_;
             return true;
         }
 
@@ -276,6 +299,12 @@ namespace eka2l1::machine::rh29 {
             return true;
         }
 
+        if (value && range_inside_candidate_ram_probe(address, width, offset)) {
+            std::memcpy(candidate_ram_probe_data_.data() + offset, value, width);
+            ++candidate_ram_probe_write_count_;
+            return true;
+        }
+
         const auto cause = range_inside_rom_mapping(address, width, offset)
             ? unresolved_cause::rom_write
             : unresolved_cause::unmapped;
@@ -338,5 +367,13 @@ namespace eka2l1::machine::rh29 {
 
     std::uint32_t strict_bus::flash_unlock_stage() const {
         return flash_unlock_stage_;
+    }
+
+    std::uint64_t strict_bus::candidate_ram_probe_read_count() const {
+        return candidate_ram_probe_read_count_;
+    }
+
+    std::uint64_t strict_bus::candidate_ram_probe_write_count() const {
+        return candidate_ram_probe_write_count_;
     }
 }

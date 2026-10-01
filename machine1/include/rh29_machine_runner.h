@@ -97,6 +97,9 @@ namespace eka2l1::machine::rh29 {
         bool flash_unlock_autoselect_enabled = false;
         std::uint64_t flash_unlock_autoselect_count = 0;
         std::uint32_t flash_unlock_stage_at_stop = 0;
+        bool candidate_ram_probe_enabled = false;
+        std::uint64_t candidate_ram_probe_read_count = 0;
+        std::uint64_t candidate_ram_probe_write_count = 0;
         std::array<a32_trace_entry, a32_trace_capacity> a32_trace{};
         std::uint32_t a32_trace_count = 0;
         probe_stop_reason stop_reason = probe_stop_reason::io_error;

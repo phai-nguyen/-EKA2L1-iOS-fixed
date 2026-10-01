@@ -489,6 +489,28 @@ static void test_unlock_autoselect_command_allowlist_is_exact() {
     assert(bus.first_unresolved()->value == wrong);
 }
 
+static void test_candidate_probe_window_reads_zero() {
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc, candidate_sdram_base, 0x100);
+    std::uint32_t out = 0xFFFFFFFFu;
+    assert(bus.read(access_kind::data_read, candidate_ram_probe_base, &out, sizeof(out), 0x00002664, 0x000024C4));
+    assert(out == 0);
+    assert(bus.candidate_ram_probe_read_count() == 1);
+}
+
+static void test_candidate_probe_window_is_mutable_and_bounded() {
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc, candidate_sdram_base, 0x100);
+    const std::uint32_t value = 0x55AA55AAu;
+    assert(bus.write(candidate_ram_probe_base + 4, &value, sizeof(value), 0x00002670, 0x000024C4));
+    assert(bus.candidate_ram_probe_write_count() == 1);
+    std::uint32_t out = 0;
+    assert(bus.read(access_kind::data_read, candidate_ram_probe_base + 4, &out, sizeof(out), 0x00002674, 0x000024C4));
+    assert(out == value);
+    std::uint32_t neighbor = 0;
+    assert(!bus.read(access_kind::data_read, candidate_ram_probe_base + 16, &neighbor, sizeof(neighbor), 0x00002680, 0x000024C4));
+    assert(bus.first_unresolved().has_value());
+}
 static void test_bus_records_unmapped_data_read() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000);
@@ -562,6 +584,8 @@ int main() {
     test_flash_unlock_cycle2_allowlist_is_exact();
     test_unlock_sequence_enters_autoselect_only_after_stage2();
     test_unlock_autoselect_command_allowlist_is_exact();
+    test_candidate_probe_window_reads_zero();
+    test_candidate_probe_window_is_mutable_and_bounded();
     test_bus_records_unmapped_data_read();
     test_bus_records_unmapped_code_read();
     test_bus_keeps_first_unresolved();
