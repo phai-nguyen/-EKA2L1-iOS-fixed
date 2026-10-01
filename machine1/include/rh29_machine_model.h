@@ -13,15 +13,15 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::uint32_t candidate_sdram_base = 0x08000000u;
     static constexpr std::size_t candidate_sdram_size = 16u * 1024u * 1024u;
 
-    // MACHINE1-O/P device evidence: bootstrap probes 16 bytes at 0x0A000000,
-    // restores them, advances R8 by 0x3C, decrements an 8-step counter, then
-    // attempts the next 16-byte probe at 0x0A00003C. MACHINE1-Q exposes only
-    // those two observed probe islands; the gap and later predicted islands
-    // remain unmapped until observed.
+    // MACHINE1-P/Q device evidence proves a deterministic RAM-probe loop:
+    // 16-byte probe, restore, R8 += 0x3C, R10--, repeat while R10 != 0.
+    // R10 starts at 8 and Q confirms the third address 0x0A000078. MACHINE1-R
+    // models the complete eight-island loop while keeping all inter-island gaps
+    // unmapped. This still does not claim a contiguous RAM bank.
     static constexpr std::uint32_t candidate_ram_probe_base = 0x0A000000u;
     static constexpr std::size_t candidate_ram_probe_size = 16u;
     static constexpr std::uint32_t candidate_ram_probe_stride = 0x0000003Cu;
-    static constexpr std::size_t candidate_ram_probe_observed_windows = 2u;
+    static constexpr std::size_t candidate_ram_probe_loop_windows = 8u;
 
     // MACHINE1-D device evidence. Hardware identity is intentionally unknown:
     // allow only this exact observed write, never the surrounding MMIO range.
