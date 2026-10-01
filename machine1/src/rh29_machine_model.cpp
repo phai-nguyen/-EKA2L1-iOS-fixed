@@ -146,7 +146,7 @@ namespace eka2l1::machine::rh29 {
         }
 
         if (out
-            && observed_flash_id_entry_count_ > 0
+            && flash_autoselect_active_
             && kind == access_kind::data_read
             && address == amd_reference_manufacturer_id_address
             && width == amd_reference_manufacturer_id_width) {
@@ -157,7 +157,7 @@ namespace eka2l1::machine::rh29 {
         }
 
         if (out
-            && observed_flash_id_entry_count_ > 0
+            && flash_autoselect_active_
             && kind == access_kind::data_read
             && address == amd_reference_device_id_address
             && width == amd_reference_device_id_width) {
@@ -215,6 +215,16 @@ namespace eka2l1::machine::rh29 {
             && width == observed_flash_id_entry_width
             && write_value == observed_flash_id_entry_value) {
             ++observed_flash_id_entry_count_;
+            flash_autoselect_active_ = true;
+            return true;
+        }
+
+        if (value
+            && address == observed_flash_id_exit_address
+            && width == observed_flash_id_exit_width
+            && write_value == observed_flash_id_exit_value) {
+            ++observed_flash_id_exit_count_;
+            flash_autoselect_active_ = false;
             return true;
         }
 
@@ -269,5 +279,13 @@ namespace eka2l1::machine::rh29 {
 
     std::uint64_t strict_bus::amd_reference_device_read_count() const {
         return amd_reference_device_read_count_;
+    }
+
+    std::uint64_t strict_bus::observed_flash_id_exit_count() const {
+        return observed_flash_id_exit_count_;
+    }
+
+    bool strict_bus::flash_autoselect_active() const {
+        return flash_autoselect_active_;
     }
 }

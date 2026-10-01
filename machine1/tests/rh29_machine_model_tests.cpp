@@ -320,6 +320,45 @@ static void test_amd_reference_device_id_read_is_exact_width() {
     assert(bus.first_unresolved().has_value());
 }
 
+static void test_flash_id_exit_f0_disables_autoselect_state() {
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+
+    const std::uint16_t entry = observed_flash_id_entry_value;
+    assert(bus.write(observed_flash_id_entry_address, &entry, sizeof(entry),
+                     0x00000994, 0x00000AFC));
+    assert(bus.flash_autoselect_active());
+
+    std::uint16_t manufacturer = 0;
+    assert(bus.read(access_kind::data_read, amd_reference_manufacturer_id_address,
+                    &manufacturer, sizeof(manufacturer), 0x0000099C, 0x00000AFC));
+    assert(manufacturer == amd_reference_manufacturer_id);
+
+    const std::uint16_t exit = observed_flash_id_exit_value;
+    assert(bus.write(observed_flash_id_exit_address, &exit, sizeof(exit),
+                     0x000009DC, 0x00000AFC));
+    assert(bus.observed_flash_id_exit_count() == 1);
+    assert(!bus.flash_autoselect_active());
+    assert(!bus.first_unresolved().has_value());
+
+    std::uint16_t after = 0;
+    assert(!bus.read(access_kind::data_read, amd_reference_manufacturer_id_address,
+                     &after, sizeof(after), 0x000009E0, 0x00000AFC));
+    assert(bus.first_unresolved().has_value());
+}
+
+static void test_flash_id_exit_allowlist_is_exact() {
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+    const std::uint16_t wrong = 0x00F1u;
+    assert(!bus.write(observed_flash_id_exit_address, &wrong, sizeof(wrong),
+                      0x000009DC, 0x00000AFC));
+    assert(bus.first_unresolved().has_value());
+    assert(bus.first_unresolved()->value == wrong);
+}
+
 static void test_bus_records_unmapped_data_read() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000);
@@ -384,6 +423,8 @@ int main() {
     test_amd_reference_manufacturer_id_read_after_id_entry();
     test_amd_reference_device_id_read_after_id_entry();
     test_amd_reference_device_id_read_is_exact_width();
+    test_flash_id_exit_f0_disables_autoselect_state();
+    test_flash_id_exit_allowlist_is_exact();
     test_bus_records_unmapped_data_read();
     test_bus_records_unmapped_code_read();
     test_bus_keeps_first_unresolved();

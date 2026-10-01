@@ -69,6 +69,9 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t amd_reference_manufacturer_read_count = 0;
         bool amd_reference_device_id_enabled = false;
         std::uint64_t amd_reference_device_read_count = 0;
+        bool flash_id_exit_enabled = false;
+        std::uint64_t flash_id_exit_count = 0;
+        bool flash_autoselect_active_at_stop = false;
         probe_stop_reason stop_reason = probe_stop_reason::io_error;
         register_snapshot registers{};
         std::optional<unresolved_access> unresolved{};

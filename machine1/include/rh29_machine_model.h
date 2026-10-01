@@ -48,6 +48,12 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::size_t amd_reference_device_id_width = 2u;
     static constexpr std::uint16_t amd_reference_device_id = 0x277Eu;
 
+    // MACHINE1-I device evidence plus AMD command-set documentation:
+    // 0xF0 exits Autoselect and returns the flash to Read Array mode.
+    static constexpr std::uint32_t observed_flash_id_exit_address = second_flash_base;
+    static constexpr std::size_t observed_flash_id_exit_width = 2u;
+    static constexpr std::uint16_t observed_flash_id_exit_value = 0x00F0u;
+
     enum class parse_error {
         none = 0,
         truncated_header,
@@ -119,6 +125,8 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t observed_flash_id_entry_count() const;
         std::uint64_t amd_reference_manufacturer_read_count() const;
         std::uint64_t amd_reference_device_read_count() const;
+        std::uint64_t observed_flash_id_exit_count() const;
+        bool flash_autoselect_active() const;
 
     private:
         bool range_inside_rom_mapping(std::uint32_t address, std::size_t width, std::size_t &offset) const;
@@ -141,6 +149,8 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t observed_flash_id_entry_count_ = 0;
         std::uint64_t amd_reference_manufacturer_read_count_ = 0;
         std::uint64_t amd_reference_device_read_count_ = 0;
+        std::uint64_t observed_flash_id_exit_count_ = 0;
+        bool flash_autoselect_active_ = false;
         std::optional<unresolved_access> first_unresolved_{};
     };
 }
