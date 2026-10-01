@@ -180,7 +180,7 @@ namespace eka2l1::arm {
         self.assertIn("symbian_boot_eight_step_sparse_loop_stride_0x3c", runner)
         self.assertIn("post_probe_0x20_candidate_zero_seeded_mutable", runner)
         self.assertIn("POST_RAM_WORKSPACE_READ_COUNT", runner)
-        self.assertIn("arm_low_vectors_32byte_rom_seeded_mutable_write32", runner)
+        self.assertIn("arm_low_vectors_36byte_rom_seeded_mutable_write32", runner)
         self.assertIn("LOW_VECTOR_SHADOW_WRITE_COUNT", runner)
         self.assertIn("LOW_VECTOR_SHADOW_STATUS=diagnostic_hypothesis_disproved_as_complete_mapping_by_T_write_at_0x20", runner)
         self.assertIn("SDRAM_WRITE_TRACE_POLICY=first_16_exact_transactions_no_new_mapping", runner)
