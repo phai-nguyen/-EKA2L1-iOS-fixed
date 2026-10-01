@@ -36,11 +36,12 @@ namespace eka2l1::machine::rh29 {
 
     // MACHINE1-S device evidence: after leaving the post-probe workspace,
     // bootstrap copies the first ROM vector word (0xEA0000C9) to address 0.
-    // MACHINE1-T therefore exposes only the eight ARM low-vector words as a
-    // ROM-seeded mutable shadow. The rest of the synthetic low ROM alias stays
-    // read-only, so 0x20 and above still fail closed.
+    // MACHINE1-W proves the copy loop continues with an exact 32-bit write at
+    // 0x20. MACHINE1-X advances only that one newly observed word: nine words
+    // total. 0x24 and above remain fail-closed so the huge R2 count cannot turn
+    // this evidence into an invented broad low-memory mapping.
     static constexpr std::uint32_t low_vector_shadow_base = 0x00000000u;
-    static constexpr std::size_t low_vector_shadow_size = 8u * sizeof(std::uint32_t);
+    static constexpr std::size_t low_vector_shadow_size = 9u * sizeof(std::uint32_t);
     static constexpr std::size_t low_vector_shadow_write_width = sizeof(std::uint32_t);
 
     // MACHINE1-D device evidence. Hardware identity is intentionally unknown:
