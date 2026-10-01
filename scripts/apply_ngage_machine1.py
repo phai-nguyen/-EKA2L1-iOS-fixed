@@ -65,9 +65,9 @@ for source, destination in source_map:
         text = text.replace('#include "rh29_machine_model.h"', '#include "RH29MachineModel.h"', 1)
     elif destination.name == "RH29MachineRunner.cpp":
         text = text.replace('#include "rh29_machine_runner.h"', '#include "RH29MachineRunner.h"', 1)
-        text = text.replace("RH29_MACHINE1_O", "RH29_MACHINE1_V")
-        text = text.replace("MACHINE1-O probes", "MACHINE1-V probes")
-        text = text.replace("MACHINE1-O must not let Dyncom", "MACHINE1-V must not let Dyncom")
+        text = text.replace("RH29_MACHINE1_O", "RH29_MACHINE1_W")
+        text = text.replace("MACHINE1-O probes", "MACHINE1-W probes")
+        text = text.replace("MACHINE1-O must not let Dyncom", "MACHINE1-W must not let Dyncom")
 
         report_anchor = '        out << "FLASH_UNLOCK_STAGE_AT_STOP=" << result.flash_unlock_stage_at_stop << "\\n";\n        write_hex(out, "KERN_DATA_ADDRESS", result.header.kern_data_address);\n'
         report_insert = (
@@ -125,12 +125,12 @@ for source, destination in source_map:
             '        write_hex(out, "KERN_DATA_ADDRESS", result.header.kern_data_address);\n'
         )
         if report_anchor not in text:
-            raise SystemExit("MACHINE1-V runner report anchor not found")
+            raise SystemExit("MACHINE1-W runner report anchor not found")
         text = text.replace(report_anchor, report_insert, 1)
 
         enable_anchor = '        result.flash_unlock_autoselect_enabled = true;\n        strict_bus bus(rom.data(), parsed.header.rom_size, parsed.header.rom_base, cold_reset_pc,\n'
         if enable_anchor not in text:
-            raise SystemExit("MACHINE1-V runner enable anchor not found")
+            raise SystemExit("MACHINE1-W runner enable anchor not found")
         text = text.replace(
             enable_anchor,
             '        result.flash_unlock_autoselect_enabled = true;\n'
@@ -143,7 +143,7 @@ for source, destination in source_map:
 
         capture_anchor = '        result.flash_unlock_autoselect_count = bus.observed_flash_unlock_autoselect_count();\n        result.flash_unlock_stage_at_stop = bus.flash_unlock_stage();\n'
         if capture_anchor not in text:
-            raise SystemExit("MACHINE1-V runner capture anchor not found")
+            raise SystemExit("MACHINE1-W runner capture anchor not found")
         text = text.replace(
             capture_anchor,
             capture_anchor
@@ -158,63 +158,12 @@ for source, destination in source_map:
             1,
         )
 
-        early_trace_anchor = (
-            '                push_a32_trace(a32_trace_entry{\n'
-            '                    pc,\n'
-            '                    instruction,\n'
-            '                    cpu->get_cpsr(),\n'
-            '                    cpu->get_reg(0),\n'
-            '                    cpu->get_reg(1),\n'
-            '                    cpu->get_reg(2),\n'
-            '                    cpu->get_reg(3),\n'
-            '                    cpu->get_reg(4),\n'
-            '                    cpu->get_reg(8),\n'
-            '                    cpu->get_reg(9),\n'
-            '                    cpu->get_reg(10),\n'
-            '                    cpu->get_sp(),\n'
-            '                    cpu->get_lr()\n'
-            '                });\n'
-            '                if (is_arm_cp15_instruction(instruction)\n'
-        )
-        early_trace_insert = (
-            '                push_a32_trace(a32_trace_entry{\n'
-            '                    pc,\n'
-            '                    instruction,\n'
-            '                    cpu->get_cpsr(),\n'
-            '                    cpu->get_reg(0),\n'
-            '                    cpu->get_reg(1),\n'
-            '                    cpu->get_reg(2),\n'
-            '                    cpu->get_reg(3),\n'
-            '                    cpu->get_reg(4),\n'
-            '                    cpu->get_reg(8),\n'
-            '                    cpu->get_reg(9),\n'
-            '                    cpu->get_reg(10),\n'
-            '                    cpu->get_sp(),\n'
-            '                    cpu->get_lr()\n'
-            '                });\n'
-            '                if (pc >= early_setup_trace_pc_begin && pc < early_setup_trace_pc_end\n'
-            '                    && result.early_setup_trace_count < result.early_setup_trace.size()) {\n'
-            '                    auto &early = result.early_setup_trace[result.early_setup_trace_count++];\n'
-            '                    early.pc = pc;\n'
-            '                    early.instruction = instruction;\n'
-            '                    early.cpsr = cpu->get_cpsr();\n'
-            '                    for (std::size_t reg = 0; reg < early.r.size(); ++reg) {\n'
-            '                        early.r[reg] = cpu->get_reg(reg);\n'
-            '                    }\n'
-            '                    early.sp = cpu->get_sp();\n'
-            '                    early.lr = cpu->get_lr();\n'
-            '                }\n'
-            '                if (is_arm_cp15_instruction(instruction)\n'
-        )
-        if early_trace_anchor not in text:
-            raise SystemExit("MACHINE1-V early setup trace anchor not found")
-        text = text.replace(early_trace_anchor, early_trace_insert, 1)
     elif destination.name == "RH29MachineProbeView.swift":
-        text = text.replace("MACHINE1-O", "MACHINE1-V")
-        text = text.replace("RH29_MACHINE1_O.txt", "RH29_MACHINE1_V.txt")
+        text = text.replace("MACHINE1-O", "MACHINE1-W")
+        text = text.replace("RH29_MACHINE1_O.txt", "RH29_MACHINE1_W.txt")
         text = text.replace(
             "Probe giữ nguyên model MACHINE1-M và không giả lập 0x0A000000. Bản O ghi 64 lệnh A32 cuối cùng cùng R0/R1/R2/R3/R4/R8/R9/R10/SP/LR để lần ngược nguồn gốc con trỏ 0x0A000000.",
-            "U xác nhận 5 write SDRAM thuộc pha setup sớm nhưng chưa đủ để kết luận remap. V giữ nguyên model U và ghi full R0-R12 cho PC 0xB00–0xB7F để lần ra nguồn 5 giá trị SDRAM cùng vai trò write 0x0080 -> 0x0C150004."
+            "V xác nhận setup là hard-coded, còn log flasher RH-29 thật xác nhận flash0 tồn tại tại 0x00000000 với word đầu 0xEA0000C9. W giữ nguyên model V, không remap; trace toàn bộ guest access low 4 KiB, callsite 0x300–0x37F, literal pool 0xB90–0xBC0, mốc B68 và mọi CP15 gặp trước barrier."
         )
     destination.write_text(text, encoding="utf-8")
 
@@ -318,7 +267,7 @@ probe_method = r'''
 - (EKA2L1MachineProbeReport *)runRH29MachineProbeWithInstructionBudget:(uint32_t)budget {
     EKA2L1MachineProbeReport *report = [[EKA2L1MachineProbeReport alloc] init];
     report.succeeded = NO;
-    report.text = @"RH29_MACHINE1_V\nSTOP_REASON=io_error\nDETAIL=emulator is not ready\n";
+    report.text = @"RH29_MACHINE1_W\nSTOP_REASON=io_error\nDETAIL=emulator is not ready\n";
 
     std::string storage;
     std::string firmware;
@@ -342,12 +291,12 @@ probe_method = r'''
 
     NSString *firmwareCode = [NSString stringWithUTF8String:firmware.c_str()];
     if (!firmwareCode || [firmwareCode caseInsensitiveCompare:@"RH-29"] != NSOrderedSame) {
-        report.text = @"RH29_MACHINE1_V\nSTOP_REASON=io_error\nDETAIL=current device is not RH-29\n";
+        report.text = @"RH29_MACHINE1_W\nSTOP_REASON=io_error\nDETAIL=current device is not RH-29\n";
         return report;
     }
 
     const std::string rom_path = eka2l1::add_path(storage, "roms/rh-29/SYM.ROM");
-    LOG_INFO(eka2l1::FRONTEND_CMDLINE, "[RH29_MACHINE1_V] start budget={} rom={}", budget, rom_path);
+    LOG_INFO(eka2l1::FRONTEND_CMDLINE, "[RH29_MACHINE1_W] start budget={} rom={}", budget, rom_path);
     eka2l1::machine::rh29::probe_options options{};
     options.instruction_budget = budget;
     const auto result = eka2l1::machine::rh29::run_probe(rom_path, options);
@@ -357,7 +306,7 @@ probe_method = r'''
         result.stop_reason != eka2l1::machine::rh29::probe_stop_reason::invalid_rom
         && result.stop_reason != eka2l1::machine::rh29::probe_stop_reason::io_error);
     LOG_INFO(eka2l1::FRONTEND_CMDLINE,
-        "[RH29_MACHINE1_V] stop succeeded={} executed={}",
+        "[RH29_MACHINE1_W] stop succeeded={} executed={}",
         report.succeeded, result.executed_instructions);
     return report;
 }
@@ -441,4 +390,4 @@ if 'firmwareCode.caseInsensitiveCompare("RH-29")' not in content:
     content = content.replace(settings_button, settings_button + probe_button, 1)
 content_path.write_text(content, encoding="utf-8")
 
-print("MACHINE1-V sources + iOS probe integration staged")
+print("MACHINE1-W diagnostic sources + iOS probe integration staged")

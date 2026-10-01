@@ -79,6 +79,46 @@ namespace eka2l1::machine::rh29 {
         std::uint32_t lr = 0;
     };
 
+    // MACHINE1-W is diagnostic-only. These traces observe the already-existing
+    // guest bus/CPU path without changing any memory response or remap state.
+    enum class low_page_trace_kind {
+        code_read,
+        data_read,
+        data_write
+    };
+
+    static constexpr std::uint32_t low_page_trace_begin = 0x00000000u;
+    static constexpr std::uint32_t low_page_trace_end = 0x00001000u;
+    static constexpr std::size_t low_page_trace_capacity = 4096u;
+    static constexpr std::uint32_t callsite_trace_pc_begin = 0x00000300u;
+    static constexpr std::uint32_t callsite_trace_pc_end = 0x00000380u;
+    static constexpr std::size_t callsite_trace_capacity = 64u;
+    static constexpr std::uint32_t setup_literal_pool_begin = 0x00000B90u;
+    static constexpr std::uint32_t setup_literal_pool_end = 0x00000BC4u;
+    static constexpr std::size_t setup_literal_pool_word_count =
+        (setup_literal_pool_end - setup_literal_pool_begin) / sizeof(std::uint32_t);
+    static constexpr std::size_t cp15_trace_capacity = 16u;
+
+    struct low_page_trace_entry {
+        std::uint64_t sequence = 0;
+        std::uint32_t instruction_index = 0;
+        low_page_trace_kind kind = low_page_trace_kind::data_read;
+        std::uint32_t address = 0;
+        std::uint32_t width_bits = 0;
+        std::uint64_t value = 0;
+        std::uint32_t pc = 0;
+        std::uint32_t lr = 0;
+        bool success = false;
+    };
+
+    struct cp15_trace_entry {
+        std::uint32_t pc = 0;
+        std::uint32_t instruction = 0;
+        std::uint32_t rd = 0;
+        std::uint32_t value = 0;
+        bool emulated = false;
+    };
+
     struct probe_result {
         rom_header_info header{};
         std::uint32_t instruction_budget = 0;
@@ -127,6 +167,18 @@ namespace eka2l1::machine::rh29 {
         std::uint32_t a32_trace_count = 0;
         std::array<full_a32_trace_entry, early_setup_trace_capacity> early_setup_trace{};
         std::uint32_t early_setup_trace_count = 0;
+        std::array<full_a32_trace_entry, callsite_trace_capacity> callsite_trace{};
+        std::uint32_t callsite_trace_count = 0;
+        std::array<std::uint32_t, setup_literal_pool_word_count> setup_literal_pool_words{};
+        std::uint32_t setup_literal_pool_words_valid = 0;
+        std::array<low_page_trace_entry, low_page_trace_capacity> low_page_trace{};
+        std::uint32_t low_page_trace_count = 0;
+        std::uint64_t low_page_trace_total_count = 0;
+        std::array<cp15_trace_entry, cp15_trace_capacity> cp15_trace{};
+        std::uint32_t cp15_trace_count = 0;
+        bool setup_b68_observed = false;
+        std::uint32_t setup_b68_instruction_index_before = 0;
+        std::uint32_t setup_b68_instruction_index_after = 0;
         probe_stop_reason stop_reason = probe_stop_reason::io_error;
         register_snapshot registers{};
         std::optional<unresolved_access> unresolved{};

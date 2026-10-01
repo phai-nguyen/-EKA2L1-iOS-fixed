@@ -39,6 +39,15 @@ namespace eka2l1::machine::rh29 {
             return "unknown";
         }
 
+        const char *low_page_trace_kind_name(const low_page_trace_kind kind) {
+            switch (kind) {
+            case low_page_trace_kind::code_read: return "code_read";
+            case low_page_trace_kind::data_read: return "data_read";
+            case low_page_trace_kind::data_write: return "data_write";
+            }
+            return "unknown";
+        }
+
         const char *unresolved_cause_name(const unresolved_cause cause) {
             switch (cause) {
             case unresolved_cause::unmapped: return "unmapped";
@@ -211,6 +220,66 @@ namespace eka2l1::machine::rh29 {
             write_hex(out, (p + "LR").c_str(), entry.lr);
         }
 
+        out << "MACHINE1_W_DIAG_POLICY=no_memory_response_change_no_remap_assumption\n";
+        out << "CALLSITE_TRACE_POLICY=pc_0x00000300_0x0000037F_all_r0_r12\n";
+        out << "CALLSITE_TRACE_COUNT=" << result.callsite_trace_count << "\n";
+        for (std::size_t i = 0; i < result.callsite_trace_count && i < result.callsite_trace.size(); ++i) {
+            const auto &e = result.callsite_trace[i];
+            std::ostringstream prefix;
+            prefix << "CALLSITE_TRACE_" << std::setfill('0') << std::setw(2) << i << "_";
+            const std::string p = prefix.str();
+            write_hex(out, (p + "PC").c_str(), e.pc);
+            write_hex(out, (p + "INSTRUCTION").c_str(), e.instruction);
+            write_hex(out, (p + "CPSR").c_str(), e.cpsr);
+            for (std::size_t reg = 0; reg < e.r.size(); ++reg) {
+                const std::string name = p + "R" + std::to_string(reg);
+                write_hex(out, name.c_str(), e.r[reg]);
+            }
+            write_hex(out, (p + "SP").c_str(), e.sp);
+            write_hex(out, (p + "LR").c_str(), e.lr);
+        }
+        out << "SETUP_LITERAL_POOL_POLICY=raw_rom_words_0x00000B90_0x00000BC0_no_semantic_label\n";
+        out << "SETUP_LITERAL_POOL_WORDS_VALID=" << result.setup_literal_pool_words_valid << "\n";
+        for (std::size_t i = 0; i < result.setup_literal_pool_words_valid && i < result.setup_literal_pool_words.size(); ++i) {
+            std::ostringstream p;
+            p << "SETUP_LITERAL_POOL_" << std::setfill('0') << std::setw(2) << i << "_";
+            const std::string prefix = p.str();
+            write_hex(out, (prefix + "ADDRESS").c_str(), setup_literal_pool_begin + static_cast<std::uint32_t>(i * 4u));
+            write_hex(out, (prefix + "VALUE").c_str(), result.setup_literal_pool_words[i]);
+        }
+        out << "SETUP_B68_OBSERVED=" << (result.setup_b68_observed ? 1 : 0) << "\n";
+        out << "SETUP_B68_INSTRUCTION_INDEX_BEFORE=" << result.setup_b68_instruction_index_before << "\n";
+        out << "SETUP_B68_INSTRUCTION_INDEX_AFTER=" << result.setup_b68_instruction_index_after << "\n";
+        out << "LOW_PAGE_TRACE_POLICY=low_4k_all_guest_bus_callbacks_no_response_change\n";
+        out << "LOW_PAGE_TRACE_TOTAL_COUNT=" << result.low_page_trace_total_count << "\n";
+        out << "LOW_PAGE_TRACE_CAPTURED_COUNT=" << result.low_page_trace_count << "\n";
+        for (std::size_t i = 0; i < result.low_page_trace_count && i < result.low_page_trace.size(); ++i) {
+            const auto &e = result.low_page_trace[i];
+            out << "LOW_PAGE_TRACE_" << std::setfill('0') << std::setw(4) << i
+                << "=seq:" << std::dec << e.sequence
+                << ",insn:" << e.instruction_index
+                << ",kind:" << low_page_trace_kind_name(e.kind)
+                << ",addr:0x" << std::uppercase << std::hex << std::setw(8) << std::setfill('0') << e.address
+                << ",width:" << std::dec << e.width_bits
+                << ",value:0x" << std::uppercase << std::hex << std::setw(16) << std::setfill('0') << e.value
+                << ",pc:0x" << std::setw(8) << e.pc
+                << ",lr:0x" << std::setw(8) << e.lr
+                << ",ok:" << std::dec << (e.success ? 1 : 0) << "\n";
+        }
+        out << "CP15_TRACE_POLICY=all_condition_passed_p15_seen_before_barrier\n";
+        out << "CP15_TRACE_COUNT=" << result.cp15_trace_count << "\n";
+        for (std::size_t i = 0; i < result.cp15_trace_count && i < result.cp15_trace.size(); ++i) {
+            const auto &e = result.cp15_trace[i];
+            std::ostringstream prefix;
+            prefix << "CP15_TRACE_" << std::setfill('0') << std::setw(2) << i << "_";
+            const std::string p = prefix.str();
+            write_hex(out, (p + "PC").c_str(), e.pc);
+            write_hex(out, (p + "INSTRUCTION").c_str(), e.instruction);
+            out << p << "RD=" << e.rd << "\n";
+            write_hex(out, (p + "VALUE").c_str(), e.value);
+            out << p << "EMULATED=" << (e.emulated ? 1 : 0) << "\n";
+        }
+
         for (std::size_t i = 0; i < result.registers.r.size(); ++i) {
             const std::string name = "R" + std::to_string(i);
             write_hex(out, name.c_str(), result.registers.r[i]);
@@ -310,6 +379,17 @@ namespace eka2l1::machine::rh29 {
             return result;
         }
 
+        for (std::size_t i = 0; i < result.setup_literal_pool_words.size(); ++i) {
+            const std::size_t offset = static_cast<std::size_t>(setup_literal_pool_begin) + i * 4u;
+            if (offset + 4u > rom.size()) break;
+            result.setup_literal_pool_words[i] =
+                static_cast<std::uint32_t>(rom[offset]) |
+                (static_cast<std::uint32_t>(rom[offset + 1u]) << 8u) |
+                (static_cast<std::uint32_t>(rom[offset + 2u]) << 16u) |
+                (static_cast<std::uint32_t>(rom[offset + 3u]) << 24u);
+            ++result.setup_literal_pool_words_valid;
+        }
+
         // TRomHeader::restart_vector is the 32-bit instruction word stored at
         // header offset 0x7C, not a guest address. MACHINE1-O probes the ARM
         // cold-reset PC (0x00000000) and exposes canonical ROM bytes there via
@@ -346,29 +426,68 @@ namespace eka2l1::machine::rh29 {
         arm::core *cpu_ptr = cpu.get();
         cpu_ptr->set_core_number(0);
 
+        std::uint64_t low_page_sequence = 0;
+        const auto trace_low_page = [&](const low_page_trace_kind kind, const std::uint32_t address,
+                                        const std::size_t width, const std::uint64_t value,
+                                        const bool success) {
+            if (address < low_page_trace_begin || address >= low_page_trace_end) return;
+            ++result.low_page_trace_total_count;
+            const std::uint64_t seq = low_page_sequence++;
+            if (result.low_page_trace_count >= result.low_page_trace.size()) return;
+            auto &e = result.low_page_trace[result.low_page_trace_count++];
+            e.sequence = seq;
+            e.instruction_index = result.executed_instructions;
+            e.kind = kind;
+            e.address = address;
+            e.width_bits = static_cast<std::uint32_t>(width * 8u);
+            e.value = value;
+            e.pc = cpu_ptr->get_pc();
+            e.lr = cpu_ptr->get_lr();
+            e.success = success;
+        };
+        const auto to_low_kind = [](const access_kind kind) {
+            return kind == access_kind::code_read ? low_page_trace_kind::code_read
+                 : low_page_trace_kind::data_read;
+        };
         auto read8 = [&](std::uint32_t a, std::uint8_t *v, access_kind k) {
-            return bus.read(k, a, v, sizeof(*v), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            const bool ok = bus.read(k, a, v, sizeof(*v), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            trace_low_page(to_low_kind(k), a, sizeof(*v), ok ? *v : 0u, ok);
+            return ok;
         };
         auto read16 = [&](std::uint32_t a, std::uint16_t *v, access_kind k) {
-            return bus.read(k, a, v, sizeof(*v), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            const bool ok = bus.read(k, a, v, sizeof(*v), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            trace_low_page(to_low_kind(k), a, sizeof(*v), ok ? *v : 0u, ok);
+            return ok;
         };
         auto read32 = [&](std::uint32_t a, std::uint32_t *v, access_kind k) {
-            return bus.read(k, a, v, sizeof(*v), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            const bool ok = bus.read(k, a, v, sizeof(*v), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            trace_low_page(to_low_kind(k), a, sizeof(*v), ok ? *v : 0u, ok);
+            return ok;
         };
         auto read64 = [&](std::uint32_t a, std::uint64_t *v, access_kind k) {
-            return bus.read(k, a, v, sizeof(*v), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            const bool ok = bus.read(k, a, v, sizeof(*v), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            trace_low_page(to_low_kind(k), a, sizeof(*v), ok ? *v : 0u, ok);
+            return ok;
         };
         auto write8 = [&](std::uint32_t a, std::uint8_t *v) {
-            return bus.write(a, v, sizeof(*v), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            const bool ok = bus.write(a, v, sizeof(*v), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            trace_low_page(low_page_trace_kind::data_write, a, sizeof(*v), *v, ok);
+            return ok;
         };
         auto write16 = [&](std::uint32_t a, std::uint16_t *v) {
-            return bus.write(a, v, sizeof(*v), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            const bool ok = bus.write(a, v, sizeof(*v), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            trace_low_page(low_page_trace_kind::data_write, a, sizeof(*v), *v, ok);
+            return ok;
         };
         auto write32 = [&](std::uint32_t a, std::uint32_t *v) {
-            return bus.write(a, v, sizeof(*v), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            const bool ok = bus.write(a, v, sizeof(*v), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            trace_low_page(low_page_trace_kind::data_write, a, sizeof(*v), *v, ok);
+            return ok;
         };
         auto write64 = [&](std::uint32_t a, std::uint64_t *v) {
-            return bus.write(a, v, sizeof(*v), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            const bool ok = bus.write(a, v, sizeof(*v), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            trace_low_page(low_page_trace_kind::data_write, a, sizeof(*v), *v, ok);
+            return ok;
         };
 
         cpu->read_8bit = [&](std::uint32_t a, std::uint8_t *v) { return read8(a, v, access_kind::data_read); };
@@ -394,22 +513,22 @@ namespace eka2l1::machine::rh29 {
             const bool ok = read64(a, v, access_kind::data_read); if (!ok) cpu_ptr->stop(); return ok;
         };
         monitor->write_8bit = [&](arm::core *, std::uint32_t a, std::uint8_t value, std::uint8_t) {
-            const bool ok = bus.write(a, &value, sizeof(value), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            const bool ok = write8(a, &value);
             if (!ok) cpu_ptr->stop();
             return 0;
         };
         monitor->write_16bit = [&](arm::core *, std::uint32_t a, std::uint16_t value, std::uint16_t) {
-            const bool ok = bus.write(a, &value, sizeof(value), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            const bool ok = write16(a, &value);
             if (!ok) cpu_ptr->stop();
             return 0;
         };
         monitor->write_32bit = [&](arm::core *, std::uint32_t a, std::uint32_t value, std::uint32_t) {
-            const bool ok = bus.write(a, &value, sizeof(value), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            const bool ok = write32(a, &value);
             if (!ok) cpu_ptr->stop();
             return 0;
         };
         monitor->write_64bit = [&](arm::core *, std::uint32_t a, std::uint64_t value, std::uint64_t) {
-            const bool ok = bus.write(a, &value, sizeof(value), cpu_ptr->get_pc(), cpu_ptr->get_lr());
+            const bool ok = write64(a, &value);
             if (!ok) cpu_ptr->stop();
             return 0;
         };
@@ -425,6 +544,32 @@ namespace eka2l1::machine::rh29 {
                 result.a32_trace[i - 1] = result.a32_trace[i];
             }
             result.a32_trace.back() = entry;
+        };
+        const auto capture_full_trace = [&](std::array<full_a32_trace_entry, early_setup_trace_capacity> &trace,
+                                            std::uint32_t &count, const std::uint32_t pc,
+                                            const std::uint32_t instruction) {
+            if (count >= trace.size()) return;
+            auto &entry = trace[count++];
+            entry.pc = pc;
+            entry.instruction = instruction;
+            entry.cpsr = cpu->get_cpsr();
+            for (std::size_t reg = 0; reg < entry.r.size(); ++reg) {
+                entry.r[reg] = cpu->get_reg(reg);
+            }
+            entry.sp = cpu->get_sp();
+            entry.lr = cpu->get_lr();
+        };
+        const auto capture_callsite_trace = [&](const std::uint32_t pc, const std::uint32_t instruction) {
+            if (result.callsite_trace_count >= result.callsite_trace.size()) return;
+            auto &entry = result.callsite_trace[result.callsite_trace_count++];
+            entry.pc = pc;
+            entry.instruction = instruction;
+            entry.cpsr = cpu->get_cpsr();
+            for (std::size_t reg = 0; reg < entry.r.size(); ++reg) {
+                entry.r[reg] = cpu->get_reg(reg);
+            }
+            entry.sp = cpu->get_sp();
+            entry.lr = cpu->get_lr();
         };
         cpu->exception_handler = [&](arm::exception_type type, std::uint32_t data) {
             // A failed bus callback already carries the more precise unresolved-access record.
@@ -476,11 +621,26 @@ namespace eka2l1::machine::rh29 {
                     cpu->get_sp(),
                     cpu->get_lr()
                 });
+                if (pc >= early_setup_trace_pc_begin && pc < early_setup_trace_pc_end) {
+                    capture_full_trace(result.early_setup_trace, result.early_setup_trace_count, pc, instruction);
+                }
+                if (pc >= callsite_trace_pc_begin && pc < callsite_trace_pc_end) {
+                    capture_callsite_trace(pc, instruction);
+                }
                 if (is_arm_cp15_instruction(instruction)
                     && arm_condition_passed(instruction, cpu->get_cpsr())) {
                     const std::uint32_t rd = (instruction >> 12) & 0xFu;
                     const std::uint32_t value = rd <= 15 ? cpu->get_reg(rd) : 0;
+                    cp15_trace_entry *cp15_trace = nullptr;
+                    if (result.cp15_trace_count < result.cp15_trace.size()) {
+                        cp15_trace = &result.cp15_trace[result.cp15_trace_count++];
+                        cp15_trace->pc = pc;
+                        cp15_trace->instruction = instruction;
+                        cp15_trace->rd = rd;
+                        cp15_trace->value = value;
+                    }
                     if (remaining > 0 && is_observed_arm920t_control_write(instruction, value)) {
+                        if (cp15_trace) cp15_trace->emulated = true;
                         result.cp15_emulated = cp15_emulation_info{pc, instruction, value};
                         ++result.cp15_emulated_count;
                         ++result.executed_instructions;
@@ -494,6 +654,11 @@ namespace eka2l1::machine::rh29 {
                 }
             }
 
+            const std::uint32_t step_pc = cpu->get_pc();
+            const bool stepping_b68 = !cpu->is_thumb_mode() && step_pc == 0x00000B68u;
+            if (stepping_b68 && !result.setup_b68_observed) {
+                result.setup_b68_instruction_index_before = result.executed_instructions;
+            }
             cpu->step();
             const std::uint32_t progressed = cpu->get_num_instruction_executed();
             if (progressed == 0) {
@@ -502,6 +667,10 @@ namespace eka2l1::machine::rh29 {
             const std::uint32_t consumed = std::min(progressed, remaining);
             result.executed_instructions += consumed;
             remaining -= consumed;
+            if (stepping_b68 && !result.setup_b68_observed) {
+                result.setup_b68_observed = true;
+                result.setup_b68_instruction_index_after = result.executed_instructions;
+            }
         }
 
         snapshot_registers(cpu.get(), result.registers);

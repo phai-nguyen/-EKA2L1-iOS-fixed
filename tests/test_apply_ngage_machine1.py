@@ -191,8 +191,15 @@ namespace eka2l1::arm {
         self.assertIn("early_setup_trace_pc_begin = 0x00000B00u", staged_runner_h)
         self.assertIn("early_setup_trace_pc_end = 0x00000B80u", staged_runner_h)
         self.assertIn("full_a32_trace_entry", staged_runner_h)
+        self.assertIn("low_page_trace_capacity = 4096u", staged_runner_h)
+        self.assertIn("callsite_trace_pc_begin = 0x00000300u", staged_runner_h)
+        self.assertIn("setup_literal_pool_begin = 0x00000B90u", staged_runner_h)
+        self.assertIn("MACHINE1_W_DIAG_POLICY=no_memory_response_change_no_remap_assumption", runner)
+        self.assertIn("LOW_PAGE_TRACE_POLICY=low_4k_all_guest_bus_callbacks_no_response_change", runner)
+        self.assertIn("CP15_TRACE_POLICY=all_condition_passed_p15_seen_before_barrier", runner)
+        self.assertIn("SETUP_B68_INSTRUCTION_INDEX_BEFORE", runner)
         self.assertIn("RAM_PROBE_READ_COUNT", runner)
-        self.assertIn("RH29_MACHINE1_V", runner)
+        self.assertIn("RH29_MACHINE1_W", runner)
 
     def test_adds_cmake_sources_exactly_once_and_is_idempotent(self):
         td, root = self.make_upstream()
@@ -217,7 +224,7 @@ namespace eka2l1::arm {
         self.assertIn("NS_SWIFT_NAME(runRH29MachineProbe(instructionBudget:))", header)
         self.assertIn('caseInsensitiveCompare:@"RH-29"', impl)
         self.assertIn('roms/rh-29/SYM.ROM', impl)
-        self.assertIn("[RH29_MACHINE1_V]", impl)
+        self.assertIn("[RH29_MACHINE1_W]", impl)
         self.assertNotIn("reset(false", impl)
         self.assertNotIn("set_device(", impl)
 
@@ -242,12 +249,12 @@ namespace eka2l1::arm {
         self.assertEqual(result.returncode, 0, result.stdout)
         view = (root / "src/emu/ios/App/RH29MachineProbeView.swift").read_text()
         self.assertIn("Task.detached(priority: .userInitiated)", view)
-        self.assertIn("RH29_MACHINE1_V.txt", view)
+        self.assertIn("RH29_MACHINE1_W.txt", view)
         self.assertIn("ShareLink", view)
         self.assertIn(".textSelection(.enabled)", view)
         self.assertIn("[1_000, 10_000, 100_000, 1_000_000]", view)
         self.assertIn("@State private var instructionBudget: UInt32 = 10_000", view)
-        self.assertIn("MACHINE1-V", view)
+        self.assertIn("MACHINE1-W", view)
         self.assertNotIn("RH29_MACHINE1_R.txt", view)
 
     def test_adds_probe_only_svc_dyncom_constructor_without_changing_default_mode(self):
