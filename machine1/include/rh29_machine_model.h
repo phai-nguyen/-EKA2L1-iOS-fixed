@@ -42,6 +42,12 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::size_t amd_reference_manufacturer_id_width = 2u;
     static constexpr std::uint16_t amd_reference_manufacturer_id = 0x0001u;
 
+    // RH-29 flashing logs identify the second flash as Amd 29BDS064J with
+    // composite ID 0001:277E. MACHINE1-I exposes only the first Device-ID word.
+    static constexpr std::uint32_t amd_reference_device_id_address = second_flash_base + 0x2u;
+    static constexpr std::size_t amd_reference_device_id_width = 2u;
+    static constexpr std::uint16_t amd_reference_device_id = 0x277Eu;
+
     enum class parse_error {
         none = 0,
         truncated_header,
@@ -112,6 +118,7 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t observed_flash_command_count() const;
         std::uint64_t observed_flash_id_entry_count() const;
         std::uint64_t amd_reference_manufacturer_read_count() const;
+        std::uint64_t amd_reference_device_read_count() const;
 
     private:
         bool range_inside_rom_mapping(std::uint32_t address, std::size_t width, std::size_t &offset) const;
@@ -133,6 +140,7 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t observed_flash_command_count_ = 0;
         std::uint64_t observed_flash_id_entry_count_ = 0;
         std::uint64_t amd_reference_manufacturer_read_count_ = 0;
+        std::uint64_t amd_reference_device_read_count_ = 0;
         std::optional<unresolved_access> first_unresolved_{};
     };
 }

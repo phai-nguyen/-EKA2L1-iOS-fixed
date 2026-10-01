@@ -156,6 +156,17 @@ namespace eka2l1::machine::rh29 {
             return true;
         }
 
+        if (out
+            && observed_flash_id_entry_count_ > 0
+            && kind == access_kind::data_read
+            && address == amd_reference_device_id_address
+            && width == amd_reference_device_id_width) {
+            const std::uint16_t id = amd_reference_device_id;
+            std::memcpy(out, &id, sizeof(id));
+            ++amd_reference_device_read_count_;
+            return true;
+        }
+
         std::size_t offset = 0;
         if (range_inside_rom_mapping(address, width, offset)) {
             std::memcpy(out, rom_data_ + offset, width);
@@ -254,5 +265,9 @@ namespace eka2l1::machine::rh29 {
 
     std::uint64_t strict_bus::amd_reference_manufacturer_read_count() const {
         return amd_reference_manufacturer_read_count_;
+    }
+
+    std::uint64_t strict_bus::amd_reference_device_read_count() const {
+        return amd_reference_device_read_count_;
     }
 }

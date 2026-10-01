@@ -285,6 +285,41 @@ static void test_amd_reference_manufacturer_id_read_after_id_entry() {
     assert(bus.first_unresolved().has_value());
 }
 
+static void test_amd_reference_device_id_read_after_id_entry() {
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+
+    const std::uint16_t entry = observed_flash_id_entry_value;
+    assert(bus.write(observed_flash_id_entry_address, &entry, sizeof(entry),
+                     0x00000994, 0x00000AFC));
+
+    std::uint16_t manufacturer = 0;
+    assert(bus.read(access_kind::data_read, amd_reference_manufacturer_id_address,
+                    &manufacturer, sizeof(manufacturer), 0x0000099C, 0x00000AFC));
+    assert(manufacturer == amd_reference_manufacturer_id);
+
+    std::uint16_t device = 0;
+    assert(bus.read(access_kind::data_read, amd_reference_device_id_address,
+                    &device, sizeof(device), 0x000009A4, 0x00000AFC));
+    assert(device == amd_reference_device_id);
+    assert(bus.amd_reference_device_read_count() == 1);
+    assert(!bus.first_unresolved().has_value());
+}
+
+static void test_amd_reference_device_id_read_is_exact_width() {
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+    const std::uint16_t entry = observed_flash_id_entry_value;
+    assert(bus.write(observed_flash_id_entry_address, &entry, sizeof(entry),
+                     0x00000994, 0x00000AFC));
+    std::uint32_t wide = 0;
+    assert(!bus.read(access_kind::data_read, amd_reference_device_id_address,
+                     &wide, sizeof(wide), 0x000009A4, 0x00000AFC));
+    assert(bus.first_unresolved().has_value());
+}
+
 static void test_bus_records_unmapped_data_read() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000);
@@ -347,6 +382,8 @@ int main() {
     test_flash_id_entry_allowlist_is_exact();
     test_amd_reference_manufacturer_id_requires_id_entry();
     test_amd_reference_manufacturer_id_read_after_id_entry();
+    test_amd_reference_device_id_read_after_id_entry();
+    test_amd_reference_device_id_read_is_exact_width();
     test_bus_records_unmapped_data_read();
     test_bus_records_unmapped_code_read();
     test_bus_keeps_first_unresolved();
