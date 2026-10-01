@@ -74,7 +74,7 @@ jobs:
             machine1/src/rh29_machine_model.cpp \
             machine1/src/rh29_machine_runner.cpp \
             machine1/tests/rh29_report_tests.cpp \
-            -DRH29_MACHINE1_SEPORT_ONLY \
+            -DRH29_MACHINE1_REPORT_ONLY \
             -o /tmp/rh29_report_tests
           /tmp/rh29_report_tests
 
