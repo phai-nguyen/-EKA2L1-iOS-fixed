@@ -167,6 +167,13 @@ namespace eka2l1::arm {
         self.assertIn('#include "RH29MachineModel.h"', (bridge / "RH29MachineModel.cpp").read_text())
         self.assertIn('#include "RH29MachineModel.h"', (bridge / "RH29MachineRunner.h").read_text())
         self.assertIn('#include "RH29MachineRunner.h"', (bridge / "RH29MachineRunner.cpp").read_text())
+        model = (bridge / "RH29MachineModel.h").read_text()
+        runner = (bridge / "RH29MachineRunner.cpp").read_text()
+        self.assertIn("candidate_ram_probe_base = 0x0A000000u", model)
+        self.assertIn("candidate_ram_probe_size = 16u", model)
+        self.assertIn("symbian_boot_candidate_16byte_zero_seeded_mutable", runner)
+        self.assertIn("RAM_PROBE_READ_COUNT", runner)
+        self.assertIn("RH29_MACHINE1_P", runner)
 
     def test_adds_cmake_sources_exactly_once_and_is_idempotent(self):
         td, root = self.make_upstream()
