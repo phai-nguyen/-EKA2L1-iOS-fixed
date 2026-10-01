@@ -13,13 +13,15 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::uint32_t candidate_sdram_base = 0x08000000u;
     static constexpr std::size_t candidate_sdram_size = 16u * 1024u * 1024u;
 
-    // MACHINE1-O shows the boot code selecting 0x0A000000 from a 16-byte
-    // configuration record, switching to FIQ mode, then executing
-    // LDMIA r8,{r4-r7}. MACHINE1-P exposes only those 16 observed bytes as a
-    // zero-seeded mutable RAM-probe window. This is not a claim that the full
-    // bank size or hardware identity is known.
+    // MACHINE1-O/P device evidence: bootstrap probes 16 bytes at 0x0A000000,
+    // restores them, advances R8 by 0x3C, decrements an 8-step counter, then
+    // attempts the next 16-byte probe at 0x0A00003C. MACHINE1-Q exposes only
+    // those two observed probe islands; the gap and later predicted islands
+    // remain unmapped until observed.
     static constexpr std::uint32_t candidate_ram_probe_base = 0x0A000000u;
     static constexpr std::size_t candidate_ram_probe_size = 16u;
+    static constexpr std::uint32_t candidate_ram_probe_stride = 0x0000003Cu;
+    static constexpr std::size_t candidate_ram_probe_observed_windows = 2u;
 
     // MACHINE1-D device evidence. Hardware identity is intentionally unknown:
     // allow only this exact observed write, never the surrounding MMIO range.
