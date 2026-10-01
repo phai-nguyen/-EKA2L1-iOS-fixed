@@ -532,6 +532,36 @@ static void test_ninth_stride_candidate_remains_unmapped() {
     assert(bus.first_unresolved()->address == ninth_base);
 }
 
+static void test_post_probe_workspace_is_zero_seeded_mutable_and_bounded() {
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+
+    std::uint32_t out = 0xFFFFFFFFu;
+    assert(bus.read(access_kind::data_read,
+                    candidate_post_probe_workspace_base + 8u,
+                    &out, sizeof(out), 0x00000388, 0x0000241C));
+    assert(out == 0);
+    assert(bus.candidate_post_probe_workspace_read_count() == 1);
+
+    const std::uint32_t value = 0x11223344u;
+    assert(bus.write(candidate_post_probe_workspace_base + 0x1Cu,
+                     &value, sizeof(value), 0x00000390, 0x0000241C));
+    assert(bus.candidate_post_probe_workspace_write_count() == 1);
+    out = 0;
+    assert(bus.read(access_kind::data_read,
+                    candidate_post_probe_workspace_base + 0x1Cu,
+                    &out, sizeof(out), 0x00000394, 0x0000241C));
+    assert(out == value);
+
+    std::uint32_t neighbor = 0;
+    assert(!bus.read(access_kind::data_read,
+                     candidate_post_probe_workspace_base
+                         + static_cast<std::uint32_t>(candidate_post_probe_workspace_size),
+                     &neighbor, sizeof(neighbor), 0x00000398, 0x0000241C));
+    assert(bus.first_unresolved().has_value());
+}
+
 static void test_candidate_probe_window_is_mutable_and_bounded() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc, candidate_sdram_base, 0x100);
@@ -621,6 +651,7 @@ int main() {
     test_candidate_probe_window_reads_zero();
     test_eight_step_candidate_probe_loop_is_exact_and_sparse();
     test_ninth_stride_candidate_remains_unmapped();
+    test_post_probe_workspace_is_zero_seeded_mutable_and_bounded();
     test_candidate_probe_window_is_mutable_and_bounded();
     test_bus_records_unmapped_data_read();
     test_bus_records_unmapped_code_read();
