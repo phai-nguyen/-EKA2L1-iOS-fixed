@@ -106,7 +106,7 @@ jobs:
           grep -q 'runRH29MachineProbeWithInstructionBudget' source/src/emu/ios/Bridge/IosEmulator.h
           grep -q 'caseInsensitiveCompare:@"RH-29"' source/src/emu/ios/Bridge/IosEmulator.mm
           grep -q 'roms/rh-29/SYM.ROM' source/src/emu/ios/Bridge/IosEmulator.mm
-          grep -q 'firmwareCode.caseInsensitiveCompare("RH-29")' source/src/emu/ios/App/ContentView.swift
+          grep -q 'RH-29 Machine Probe' source/src/emu/ios/App/ContentView.swift
           grep -q 'RH29MachineProbeView.swift' source/src/emu/ios/CMakeLists.txt
           grep -q 'PrivilegeMode initial_mode' source/src/emu/cpu/include/cpu/dyncom/arm_dyncom.h
           grep -q 'dyncom_core(monitor, page_bits, USER32MODE)' source/src/emu/cpu/src/dyncom/arm_dyncom.cpp
