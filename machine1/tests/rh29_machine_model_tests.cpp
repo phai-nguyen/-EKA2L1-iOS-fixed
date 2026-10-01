@@ -533,6 +533,8 @@ static void test_ninth_stride_candidate_remains_unmapped() {
 }
 
 static void test_post_probe_workspace_is_zero_seeded_mutable_and_bounded() {
+    static_assert(candidate_post_probe_workspace_base == 0x0A0001E0u);
+    static_assert(candidate_post_probe_workspace_size == 0x20u);
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
                    candidate_sdram_base, 0x100);
