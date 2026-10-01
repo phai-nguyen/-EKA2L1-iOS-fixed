@@ -1,4 +1,4 @@
-name: Build NGAGE-MACHINE1-N
+name: Build NGAGE-MACHINE1-O
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ngage-machine1-n
+  group: ngage-machine1-o
   cancel-in-progress: true
 
 jobs:
@@ -48,7 +48,7 @@ jobs:
           {
             echo "controller_head=$(git rev-parse HEAD)"
             echo "branch=ngage-machine1"
-            echo "milestone=MACHINE1-N"
+            echo "milestone=MACHINE1-O"
             echo "target=Nokia N-Gage QD RH-29"
             echo "rom=RH-29 V04.10 SYM.ROM"
             echo "rom_status=DEVICE PASS (HLE import/boot/apps + FIFA 05 playable)"
@@ -81,7 +81,7 @@ jobs:
       - name: Apply Vietnamese localization
         run: python3 control/scripts/apply_vietnamese_ios.py source
 
-      - name: Apply NGAGE MACHINE1-N
+      - name: Apply NGAGE MACHINE1-O
         run: python3 control/scripts/apply_ngage_machine1.py source
 
       - name: Static contract
@@ -95,8 +95,8 @@ jobs:
           grep -q 'installDeviceWithVplPath' source/src/emu/ios/Bridge/IosEmulator.h
           grep -q '"vi"' source/src/emu/ios/Resources/Localizable.xcstrings
 
-          # MACHINE1-N must be present only as an opt-in RH-29 research path.
-          grep -q 'RH29_MACHINE1_N' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
+          # MACHINE1-O must be present only as an opt-in RH-29 research path.
+          grep -q 'RH29_MACHINE1_O' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q 'runRH29MachineProbeWithInstructionBudget' source/src/emu/ios/Bridge/IosEmulator.h
           grep -q 'caseInsensitiveCompare:@"RH-29"' source/src/emu/ios/Bridge/IosEmulator.mm
           grep -q 'roms/rh-29/SYM.ROM' source/src/emu/ios/Bridge/IosEmulator.mm
@@ -139,13 +139,14 @@ jobs:
           grep -q 'observed_flash_unlock_autoselect_value = 0x0090u' source/src/emu/ios/Bridge/RH29MachineModel.h
           grep -q 'amd_x16_unlock_stage2_command_0x90' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q 'FLASH_UNLOCK_AUTOSELECT_ACCEPTED_COUNT' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
-          grep -q 'A32_TRACE_POLICY=last_16_before_stop_no_device_fabrication' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
-          grep -q 'a32_trace_capacity = 16' source/src/emu/ios/Bridge/RH29MachineRunner.h
-          grep -q 'RH29_MACHINE1_N.txt' source/src/emu/ios/App/RH29MachineProbeView.swift
+          grep -q 'A32_TRACE_POLICY=last_64_with_pointer_registers_no_device_fabrication' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
+          grep -q 'a32_trace_capacity = 64' source/src/emu/ios/Bridge/RH29MachineRunner.h
+          grep -q '(p + "R8")' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
+          grep -q 'RH29_MACHINE1_O.txt' source/src/emu/ios/App/RH29MachineProbeView.swift
           grep -q '@State private var instructionBudget: UInt32 = 1_000' source/src/emu/ios/App/RH29MachineProbeView.swift
 
           git -C source diff --check
-          echo "HYBRIDHOME3 + VPL + Vietnamese + MACHINE1-N static contract PASS"
+          echo "HYBRIDHOME3 + VPL + Vietnamese + MACHINE1-O static contract PASS"
 
       - name: Install and configure ccache
         run: |
@@ -181,7 +182,7 @@ jobs:
           path: source/src/external/ffmpeg/ios/device
           key: hybridhome-upstream1-ffmpeg-ios-device-v1
 
-      - name: Build upstream iOS + MACHINE1-N
+      - name: Build upstream iOS + MACHINE1-O
         working-directory: source
         env:
           EKA2L1_IOS_DEPLOYMENT_TARGET: "16.0"
@@ -220,12 +221,12 @@ jobs:
           cp -R "${app}" out/Payload/
           (
             cd out
-            zip -qry EKA2L1-NGAGE-MACHINE1-N-unsigned.ipa Payload
+            zip -qry EKA2L1-NGAGE-MACHINE1-O-unsigned.ipa Payload
           )
 
-      - name: Upload NGAGE MACHINE1-N IPA
+      - name: Upload NGAGE MACHINE1-O IPA
         uses: actions/upload-artifact@v7
         with:
-          name: EKA2L1-NGAGE-MACHINE1-N-IPA
-          path: out/EKA2L1-NGAGE-MACHINE1-N-unsigned.ipa
+          name: EKA2L1-NGAGE-MACHINE1-O-IPA
+          path: out/EKA2L1-NGAGE-MACHINE1-O-unsigned.ipa
           if-no-files-found: error

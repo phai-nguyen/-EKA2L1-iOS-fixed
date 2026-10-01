@@ -50,10 +50,19 @@ namespace eka2l1::machine::rh29 {
         std::uint32_t pc = 0;
         std::uint32_t instruction = 0;
         std::uint32_t cpsr = 0;
+        std::uint32_t r0 = 0;
+        std::uint32_t r1 = 0;
+        std::uint32_t r2 = 0;
+        std::uint32_t r3 = 0;
+        std::uint32_t r4 = 0;
+        std::uint32_t r8 = 0;
+        std::uint32_t r9 = 0;
+        std::uint32_t r10 = 0;
+        std::uint32_t sp = 0;
         std::uint32_t lr = 0;
     };
 
-    static constexpr std::size_t a32_trace_capacity = 16;
+    static constexpr std::size_t a32_trace_capacity = 64;
 
     struct probe_result {
         rom_header_info header{};

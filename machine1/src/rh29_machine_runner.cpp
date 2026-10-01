@@ -111,7 +111,7 @@ namespace eka2l1::machine::rh29 {
 
     std::string format_report(const probe_result &result) {
         std::ostringstream out;
-        out << "RH29_MACHINE1_N\n";
+        out << "RH29_MACHINE1_O\n";
         write_hex(out, "ROM_BASE", result.header.rom_base);
         write_hex(out, "ROM_SIZE", result.header.rom_size);
         write_hex(out, "RESTART_VECTOR_WORD", result.header.restart_vector);
@@ -189,7 +189,7 @@ namespace eka2l1::machine::rh29 {
         out << "INSTRUCTION_BUDGET=" << result.instruction_budget << "\n";
         out << "EXECUTED_INSTRUCTIONS=" << result.executed_instructions << "\n";
         out << "STOP_REASON=" << stop_reason_name(result.stop_reason) << "\n";
-        out << "A32_TRACE_POLICY=last_16_before_stop_no_device_fabrication\n";
+        out << "A32_TRACE_POLICY=last_64_with_pointer_registers_no_device_fabrication\n";
         out << "A32_TRACE_COUNT=" << result.a32_trace_count << "\n";
         for (std::size_t i = 0; i < result.a32_trace_count && i < result.a32_trace.size(); ++i) {
             const auto &entry = result.a32_trace[i];
@@ -199,6 +199,15 @@ namespace eka2l1::machine::rh29 {
             write_hex(out, (p + "PC").c_str(), entry.pc);
             write_hex(out, (p + "INSTRUCTION").c_str(), entry.instruction);
             write_hex(out, (p + "CPSR").c_str(), entry.cpsr);
+            write_hex(out, (p + "R0").c_str(), entry.r0);
+            write_hex(out, (p + "R1").c_str(), entry.r1);
+            write_hex(out, (p + "R2").c_str(), entry.r2);
+            write_hex(out, (p + "R3").c_str(), entry.r3);
+            write_hex(out, (p + "R4").c_str(), entry.r4);
+            write_hex(out, (p + "R8").c_str(), entry.r8);
+            write_hex(out, (p + "R9").c_str(), entry.r9);
+            write_hex(out, (p + "R10").c_str(), entry.r10);
+            write_hex(out, (p + "SP").c_str(), entry.sp);
             write_hex(out, (p + "LR").c_str(), entry.lr);
         }
 
@@ -302,7 +311,7 @@ namespace eka2l1::machine::rh29 {
         }
 
         // TRomHeader::restart_vector is the 32-bit instruction word stored at
-        // header offset 0x7C, not a guest address. MACHINE1-N probes the ARM
+        // header offset 0x7C, not a guest address. MACHINE1-O probes the ARM
         // cold-reset PC (0x00000000) and exposes canonical ROM bytes there via
         // an explicitly-labelled synthetic alias hypothesis.
         result.reset_pc = cold_reset_pc;
@@ -442,7 +451,7 @@ namespace eka2l1::machine::rh29 {
 
         std::uint32_t remaining = options.instruction_budget;
         while (remaining > 0 && !bus.first_unresolved() && !exception && !cp15) {
-            // MACHINE1-N must not let Dyncom's ARM11/MPCore CP15 model answer
+            // MACHINE1-O must not let Dyncom's ARM11/MPCore CP15 model answer
             // RH-29 hardware questions. Inspect the next A32 instruction while
             // it is still only ROM data and stop before any p15 operation runs.
             if (!cpu->is_thumb_mode()) {
@@ -452,7 +461,21 @@ namespace eka2l1::machine::rh29 {
                               pc, cpu->get_lr())) {
                     break;
                 }
-                push_a32_trace(a32_trace_entry{pc, instruction, cpu->get_cpsr(), cpu->get_lr()});
+                push_a32_trace(a32_trace_entry{
+                    pc,
+                    instruction,
+                    cpu->get_cpsr(),
+                    cpu->get_reg(0),
+                    cpu->get_reg(1),
+                    cpu->get_reg(2),
+                    cpu->get_reg(3),
+                    cpu->get_reg(4),
+                    cpu->get_reg(8),
+                    cpu->get_reg(9),
+                    cpu->get_reg(10),
+                    cpu->get_sp(),
+                    cpu->get_lr()
+                });
                 if (is_arm_cp15_instruction(instruction)
                     && arm_condition_passed(instruction, cpu->get_cpsr())) {
                     const std::uint32_t rd = (instruction >> 12) & 0xFu;
