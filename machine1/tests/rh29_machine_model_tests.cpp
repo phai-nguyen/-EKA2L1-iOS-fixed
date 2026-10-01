@@ -399,6 +399,44 @@ static void test_flash_f0_resets_unlock_stage() {
     assert(bus.flash_unlock_stage() == 0);
 }
 
+static void test_flash_unlock_cycle2_requires_stage1_and_matches_observed_transaction() {
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+
+    const std::uint16_t unlock2 = observed_flash_unlock2_value;
+    assert(!bus.write(observed_flash_unlock2_address, &unlock2, sizeof(unlock2),
+                      0x000009F8, 0x00000AFC));
+    assert(bus.first_unresolved().has_value());
+
+    strict_bus staged(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                      candidate_sdram_base, 0x100);
+    const std::uint16_t unlock1 = observed_flash_unlock1_value;
+    assert(staged.write(observed_flash_unlock1_address, &unlock1, sizeof(unlock1),
+                        0x000009EC, 0x00000AFC));
+    assert(staged.flash_unlock_stage() == 1);
+    assert(staged.write(observed_flash_unlock2_address, &unlock2, sizeof(unlock2),
+                        0x000009F8, 0x00000AFC));
+    assert(staged.observed_flash_unlock2_count() == 1);
+    assert(staged.flash_unlock_stage() == 2);
+    assert(!staged.first_unresolved().has_value());
+}
+
+static void test_flash_unlock_cycle2_allowlist_is_exact() {
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+    const std::uint16_t unlock1 = observed_flash_unlock1_value;
+    assert(bus.write(observed_flash_unlock1_address, &unlock1, sizeof(unlock1),
+                     0x000009EC, 0x00000AFC));
+    const std::uint16_t wrong = 0x0056u;
+    assert(!bus.write(observed_flash_unlock2_address, &wrong, sizeof(wrong),
+                      0x000009F8, 0x00000AFC));
+    assert(bus.first_unresolved().has_value());
+    assert(bus.first_unresolved()->address == observed_flash_unlock2_address);
+    assert(bus.first_unresolved()->value == wrong);
+}
+
 static void test_bus_records_unmapped_data_read() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000);
@@ -468,6 +506,8 @@ int main() {
     test_flash_unlock_cycle1_matches_observed_x16_transaction();
     test_flash_unlock_cycle1_allowlist_is_exact();
     test_flash_f0_resets_unlock_stage();
+    test_flash_unlock_cycle2_requires_stage1_and_matches_observed_transaction();
+    test_flash_unlock_cycle2_allowlist_is_exact();
     test_bus_records_unmapped_data_read();
     test_bus_records_unmapped_code_read();
     test_bus_keeps_first_unresolved();

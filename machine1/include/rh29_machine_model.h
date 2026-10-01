@@ -60,6 +60,12 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::size_t observed_flash_unlock1_width = 2u;
     static constexpr std::uint16_t observed_flash_unlock1_value = 0x00AAu;
 
+    // MACHINE1-K device evidence matches AMD x16 unlock cycle 2:
+    // word address 0x2AA => byte offset 0x554, data 0x0055.
+    static constexpr std::uint32_t observed_flash_unlock2_address = second_flash_base + 0x00000554u;
+    static constexpr std::size_t observed_flash_unlock2_width = 2u;
+    static constexpr std::uint16_t observed_flash_unlock2_value = 0x0055u;
+
     enum class parse_error {
         none = 0,
         truncated_header,
@@ -134,6 +140,7 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t observed_flash_id_exit_count() const;
         bool flash_autoselect_active() const;
         std::uint64_t observed_flash_unlock1_count() const;
+        std::uint64_t observed_flash_unlock2_count() const;
         std::uint32_t flash_unlock_stage() const;
 
     private:
@@ -160,6 +167,7 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t observed_flash_id_exit_count_ = 0;
         bool flash_autoselect_active_ = false;
         std::uint64_t observed_flash_unlock1_count_ = 0;
+        std::uint64_t observed_flash_unlock2_count_ = 0;
         std::uint32_t flash_unlock_stage_ = 0;
         std::optional<unresolved_access> first_unresolved_{};
     };
