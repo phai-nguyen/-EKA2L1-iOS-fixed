@@ -498,20 +498,22 @@ static void test_candidate_probe_window_reads_zero() {
     assert(bus.candidate_ram_probe_read_count() == 1);
 }
 
-static void test_second_observed_candidate_probe_window_is_exact() {
+static void test_eight_step_candidate_probe_loop_is_exact_and_sparse() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc, candidate_sdram_base, 0x100);
 
-    const std::uint32_t second_base = candidate_ram_probe_base + candidate_ram_probe_stride;
-    std::uint32_t out = 0xFFFFFFFFu;
-    assert(bus.read(access_kind::data_read, second_base, &out, sizeof(out), 0x00002664, 0x000024C4));
-    assert(out == 0);
+    for (std::uint32_t i = 0; i < candidate_ram_probe_loop_windows; ++i) {
+        const std::uint32_t base = candidate_ram_probe_base + candidate_ram_probe_stride * i;
+        std::uint32_t out = 0xFFFFFFFFu;
+        assert(bus.read(access_kind::data_read, base, &out, sizeof(out), 0x00002664, 0x000024C4));
+        assert(out == 0);
 
-    const std::uint32_t value = 0xAAAAAAAAu;
-    assert(bus.write(second_base + 12, &value, sizeof(value), 0x000026E0, 0x000024E4));
-    out = 0;
-    assert(bus.read(access_kind::data_read, second_base + 12, &out, sizeof(out), 0x000026E4, 0x000024E4));
-    assert(out == value);
+        const std::uint32_t value = 0xA5A50000u | i;
+        assert(bus.write(base + 12, &value, sizeof(value), 0x000026E0, 0x000024E4));
+        out = 0;
+        assert(bus.read(access_kind::data_read, base + 12, &out, sizeof(out), 0x000026E4, 0x000024E4));
+        assert(out == value);
+    }
 
     std::uint32_t gap = 0;
     assert(!bus.read(access_kind::data_read, candidate_ram_probe_base + 16,
@@ -519,14 +521,15 @@ static void test_second_observed_candidate_probe_window_is_exact() {
     assert(bus.first_unresolved().has_value());
 }
 
-static void test_third_stride_candidate_remains_unmapped() {
+static void test_ninth_stride_candidate_remains_unmapped() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc, candidate_sdram_base, 0x100);
-    const std::uint32_t third_base = candidate_ram_probe_base + candidate_ram_probe_stride * 2u;
+    const std::uint32_t ninth_base = candidate_ram_probe_base
+        + candidate_ram_probe_stride * static_cast<std::uint32_t>(candidate_ram_probe_loop_windows);
     std::uint32_t out = 0;
-    assert(!bus.read(access_kind::data_read, third_base, &out, sizeof(out), 0x00002664, 0x000024C4));
+    assert(!bus.read(access_kind::data_read, ninth_base, &out, sizeof(out), 0x00002664, 0x000024C4));
     assert(bus.first_unresolved().has_value());
-    assert(bus.first_unresolved()->address == third_base);
+    assert(bus.first_unresolved()->address == ninth_base);
 }
 
 static void test_candidate_probe_window_is_mutable_and_bounded() {
@@ -616,8 +619,8 @@ int main() {
     test_unlock_sequence_enters_autoselect_only_after_stage2();
     test_unlock_autoselect_command_allowlist_is_exact();
     test_candidate_probe_window_reads_zero();
-    test_second_observed_candidate_probe_window_is_exact();
-    test_third_stride_candidate_remains_unmapped();
+    test_eight_step_candidate_probe_loop_is_exact_and_sparse();
+    test_ninth_stride_candidate_remains_unmapped();
     test_candidate_probe_window_is_mutable_and_bounded();
     test_bus_records_unmapped_data_read();
     test_bus_records_unmapped_code_read();
