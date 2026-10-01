@@ -1,22 +1,19 @@
 # CURRENT HANDOFF
 
 Current:
-`docs/handoff/NEWCHAT-NGAGE-QD-MACHINE1-X-2026-10-01.md` (X baseline and device observation); MACHINE1-Y CPU banking experiment is in progress.
+`docs/handoff/NEWCHAT-NGAGE-QD-MACHINE1-X-2026-10-01.md` (historical X handoff); active implementation has advanced through Y to MACHINE1-Z.
 
 Active branch: `ngage-machine1`
 
 Latest state:
-- MACHINE1-X build #69 / run `36875051410`: SUCCESS.
-- Baseline code SHA before HANDOFF: `3f15f6156971df13f0e2ae59dc6717aef234beea`.
-- Artifact: `EKA2L1-NGAGE-MACHINE1-X-IPA`, ID `11169086924`, size `10,105,136` bytes.
-- X low-vector shadow is 36 bytes / 9 words; exact observed write at `0x20` is admitted.
-- `0x24+` remains fail-closed.
-- RH-29 Machine Probe menu is always visible again; backend still rejects non-RH29 execution.
-- W diagnostics remain enabled in X.
-- Do not infer `0x0C150004` is a remap register; semantics remain unknown.
-- Device log `RH29_MACHINE1_X.txt` received: 1,549 instructions; the `0x20` write passes and the 32-bit zero write at `0x24` fails closed at PC `0x2344`.
-- R2 provenance confirmed: low-address data read `[0x00]` at PC `0x12EC` returns ROM branch word `0xEA0000C9`; shift/OR/rounding produces `0x28000326` copy words. See `docs/research/RH29-MACHINE1-X-2026-10-01.md`.
-- The emulator response is understood; the RH-29 hardware data backing at address zero at this stage is not. Do not fabricate a value, infer a remap trigger, or expand the low shadow to `0x24`.
-- New ROM/source finding: SVC R11=`0x744` before the RAM probe; the guest changes to FIQ and sets FIQ R11=0. Pinned Dyncom `ChangePrivilegeMode()` does not preserve shared non-FIQ R8–R12 across FIQ, so SVC R11 becomes 0 and causes the spurious `[0x00]` read. See the follow-up section of `docs/research/RH29-MACHINE1-X-2026-10-01.md`.
-- Next isolated experiment: fix/test FIQ R8–R12 banking, keep X's memory response and 36-byte shadow unchanged, then capture actual R1/R2 and next fail-closed barrier. With correct banking, R1=`0x744` and R2=`0x42` are predictions to verify, not device results. Do not infer `0x0C150004` semantics.
-- MACHINE1-Y implementation patches Dyncom shared R8–R12 banking on SVC↔FIQ transitions, reports R11/R12 in the 64-entry A32 tail, and retains X's exact bus model. The host transition test verifies SVC and FIQ banks separately; device result pending. Export `RH29_MACHINE1_Y.txt` from the RH-29 probe at 10,000 instructions and compare `CALLSITE_TRACE` R11 near `0x37C`, A32 R11 around `0x3B8`, R2 around `0x2328`, and the next fail-closed access. Predictions are not observations.
+- MACHINE1-Y build #72 / run `36884157684`: SUCCESS.
+- Device log `RH29_MACHINE1_Y.txt` analyzed.
+- Y confirms the Dyncom FIQ banking fix: SVC R11 remains `0x744`; the false low-address `[0x00]` path from X disappears.
+- At PC `0x12EC`, R1=`0x744`, the guest reads `0x10`, derives `0x108`, then R2=`0x42` words before the copy loop.
+- Actual copy source is `0x744`; destination is `0x0A000000`.
+- Y blocker: write32 `0x32800021 -> 0x0A000010` at PC `0x2344`, LR `0x3C8`; this is the fifth word of the now-correct copy path.
+- Low-vector shadow stays 36 bytes and Y records zero low-vector writes. Do not expand or reinterpret low memory.
+- `0x0C150004` semantics remain unknown; do not infer remap.
+- MACHINE1-Z is the next evidence-gated model: only the exact `0x108`-byte copy footprint at `0x0A000000`, gated by PC/LR/width, with initialized-only readback. Earlier sparse RAM-probe behavior remains unchanged.
+- Z workflow also reuses the Y Xcode cache as a restore fallback to avoid another near-full 30-minute compile where possible.
+- Research note: `docs/research/RH29-MACHINE1-Z-2026-10-01.md`.

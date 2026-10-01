@@ -159,6 +159,10 @@ namespace eka2l1::machine::rh29 {
         bool candidate_ram_probe_enabled = false;
         std::uint64_t candidate_ram_probe_read_count = 0;
         std::uint64_t candidate_ram_probe_write_count = 0;
+        bool candidate_bootstrap_copy_enabled = false;
+        std::uint64_t candidate_bootstrap_copy_read_count = 0;
+        std::uint64_t candidate_bootstrap_copy_write_count = 0;
+        std::uint64_t candidate_bootstrap_copy_initialized_bytes = 0;
         bool candidate_post_probe_workspace_enabled = false;
         std::uint64_t candidate_post_probe_workspace_read_count = 0;
         std::uint64_t candidate_post_probe_workspace_write_count = 0;

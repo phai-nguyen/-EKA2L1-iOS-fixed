@@ -542,6 +542,60 @@ static void test_eight_step_candidate_probe_loop_is_exact_and_sparse() {
     assert(bus.first_unresolved().has_value());
 }
 
+static void test_y_observed_bootstrap_copy_is_exact_gated_and_initialized_only() {
+    static_assert(candidate_bootstrap_copy_source == 0x00000744u);
+    static_assert(candidate_bootstrap_copy_base == 0x0A000000u);
+    static_assert(candidate_bootstrap_copy_size == 0x108u);
+    static_assert(candidate_bootstrap_copy_write_width == 4u);
+    static_assert(candidate_bootstrap_copy_pc == 0x00002344u);
+    static_assert(candidate_bootstrap_copy_lr == 0x000003C8u);
+
+    auto rom = valid_rom();
+    strict_bus before(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                      candidate_sdram_base, 0x100);
+    std::uint32_t out = 0;
+    assert(!before.read(access_kind::data_read, candidate_bootstrap_copy_base + 0x10u,
+                        &out, sizeof(out), 0x00002414u, 0x00000384u));
+    assert(before.first_unresolved().has_value());
+
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+    const std::uint32_t probe_value = 0xAAAAAAAAu;
+    assert(bus.write(candidate_ram_probe_base, &probe_value, sizeof(probe_value),
+                     0x00002670u, 0x000024C4u));
+
+    for (std::uint32_t i = 0; i < candidate_bootstrap_copy_size / 4u; ++i) {
+        const std::uint32_t value = 0x10000000u | i;
+        const std::uint32_t address = candidate_bootstrap_copy_base + i * 4u;
+        assert(bus.write(address, &value, sizeof(value),
+                         candidate_bootstrap_copy_pc, candidate_bootstrap_copy_lr));
+    }
+    assert(bus.candidate_bootstrap_copy_write_count() == 0x42u);
+    assert(bus.candidate_bootstrap_copy_initialized_bytes() == candidate_bootstrap_copy_size);
+
+    out = 0;
+    assert(bus.read(access_kind::data_read, candidate_bootstrap_copy_base,
+                    &out, sizeof(out), 0x00002350u, 0x000003C8u));
+    assert(out == 0x10000000u);
+    out = 0;
+    assert(bus.read(access_kind::data_read,
+                    candidate_bootstrap_copy_base + static_cast<std::uint32_t>(candidate_bootstrap_copy_size - 4u),
+                    &out, sizeof(out), 0x00002350u, 0x000003C8u));
+    assert(out == (0x10000000u | 0x41u));
+    assert(bus.candidate_bootstrap_copy_read_count() == 2u);
+
+    const std::uint32_t extra = 0xDEADBEEFu;
+    assert(!bus.write(candidate_bootstrap_copy_base + static_cast<std::uint32_t>(candidate_bootstrap_copy_size),
+                      &extra, sizeof(extra), candidate_bootstrap_copy_pc, candidate_bootstrap_copy_lr));
+    assert(bus.first_unresolved().has_value());
+
+    strict_bus wrong_pc(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                         candidate_sdram_base, 0x100);
+    assert(!wrong_pc.write(candidate_bootstrap_copy_base + 0x10u, &extra, sizeof(extra),
+                           candidate_bootstrap_copy_pc + 4u, candidate_bootstrap_copy_lr));
+    assert(wrong_pc.first_unresolved().has_value());
+}
+
 static void test_gap_before_post_probe_workspace_remains_unmapped() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc, candidate_sdram_base, 0x100);
@@ -584,7 +638,7 @@ static void test_post_probe_workspace_is_zero_seeded_mutable_and_bounded() {
     assert(bus.first_unresolved().has_value());
 }
 
-static void test_low_vector_shadow_is_rom_seeded_mutable_and_exactly_32_bytes() {
+static void test_low_vector_shadow_is_rom_seeded_mutable_and_exactly_36_bytes() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
                    candidate_sdram_base, 0x100);
@@ -706,9 +760,10 @@ int main() {
     test_unlock_autoselect_command_allowlist_is_exact();
     test_candidate_probe_window_reads_zero();
     test_eight_step_candidate_probe_loop_is_exact_and_sparse();
+    test_y_observed_bootstrap_copy_is_exact_gated_and_initialized_only();
     test_gap_before_post_probe_workspace_remains_unmapped();
     test_post_probe_workspace_is_zero_seeded_mutable_and_bounded();
-    test_low_vector_shadow_is_rom_seeded_mutable_and_exactly_32_bytes();
+    test_low_vector_shadow_is_rom_seeded_mutable_and_exactly_36_bytes();
     test_candidate_probe_window_is_mutable_and_bounded();
     test_bus_records_unmapped_data_read();
     test_bus_records_unmapped_code_read();

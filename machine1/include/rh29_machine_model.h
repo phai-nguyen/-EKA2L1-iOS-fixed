@@ -24,6 +24,21 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::uint32_t candidate_ram_probe_stride = 0x0000003Cu;
     static constexpr std::size_t candidate_ram_probe_loop_windows = 8u;
 
+    // MACHINE1-Y device evidence after fixing Dyncom FIQ banking: SVC R11 is
+    // preserved as 0x744, LDR [R1] returns 0x10, and the bootstrap derives
+    // R2=0x42 words before entering the copy loop at 0x2340. The loop copies
+    // 66 x 32-bit words (0x108 bytes) from 0x744 to 0x0A000000. MACHINE1-Z
+    // admits only the exact STR at PC=0x2344/LR=0x3C8 inside that footprint.
+    // Reads are allowed only for bytes already initialized by those writes, so
+    // the earlier sparse RAM-probe gaps remain unmapped and behavior is not
+    // broadened into a contiguous RAM-bank claim.
+    static constexpr std::uint32_t candidate_bootstrap_copy_source = 0x00000744u;
+    static constexpr std::uint32_t candidate_bootstrap_copy_base = candidate_ram_probe_base;
+    static constexpr std::size_t candidate_bootstrap_copy_size = 0x108u;
+    static constexpr std::size_t candidate_bootstrap_copy_write_width = sizeof(std::uint32_t);
+    static constexpr std::uint32_t candidate_bootstrap_copy_pc = 0x00002344u;
+    static constexpr std::uint32_t candidate_bootstrap_copy_lr = 0x000003C8u;
+
     // MACHINE1-R device evidence: after all eight probe iterations complete,
     // R8 advances once more to 0x0A0001E0. The caller passes R0=that address
     // and R1=0x20 to the next routine, whose first observed access is a 32-bit
@@ -194,6 +209,9 @@ namespace eka2l1::machine::rh29 {
         std::uint32_t flash_unlock_stage() const;
         std::uint64_t candidate_ram_probe_read_count() const;
         std::uint64_t candidate_ram_probe_write_count() const;
+        std::uint64_t candidate_bootstrap_copy_read_count() const;
+        std::uint64_t candidate_bootstrap_copy_write_count() const;
+        std::size_t candidate_bootstrap_copy_initialized_bytes() const;
         std::uint64_t candidate_post_probe_workspace_read_count() const;
         std::uint64_t candidate_post_probe_workspace_write_count() const;
         std::uint64_t low_vector_shadow_read_count() const;
@@ -204,6 +222,8 @@ namespace eka2l1::machine::rh29 {
         bool range_inside_ram(std::uint32_t address, std::size_t width, std::size_t &offset) const;
         bool range_inside_candidate_ram_probe(std::uint32_t address, std::size_t width,
                                               std::size_t &offset) const;
+        bool range_inside_candidate_bootstrap_copy(std::uint32_t address, std::size_t width,
+                                                   std::size_t &offset) const;
         bool range_inside_candidate_post_probe_workspace(std::uint32_t address,
                                                         std::size_t width,
                                                         std::size_t &offset) const;
@@ -239,6 +259,11 @@ namespace eka2l1::machine::rh29 {
         std::vector<std::uint8_t> candidate_ram_probe_data_{};
         std::uint64_t candidate_ram_probe_read_count_ = 0;
         std::uint64_t candidate_ram_probe_write_count_ = 0;
+        std::vector<std::uint8_t> candidate_bootstrap_copy_data_{};
+        std::vector<std::uint8_t> candidate_bootstrap_copy_initialized_{};
+        std::uint64_t candidate_bootstrap_copy_read_count_ = 0;
+        std::uint64_t candidate_bootstrap_copy_write_count_ = 0;
+        std::size_t candidate_bootstrap_copy_initialized_bytes_ = 0;
         std::vector<std::uint8_t> candidate_post_probe_workspace_data_{};
         std::uint64_t candidate_post_probe_workspace_read_count_ = 0;
         std::uint64_t candidate_post_probe_workspace_write_count_ = 0;
