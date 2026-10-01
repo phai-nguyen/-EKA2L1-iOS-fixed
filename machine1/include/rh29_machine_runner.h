@@ -64,6 +64,21 @@ namespace eka2l1::machine::rh29 {
 
     static constexpr std::size_t a32_trace_capacity = 64;
 
+    // MACHINE1-V diagnostic-only trace for the early setup window containing
+    // the five observed SDRAM writes and the 0x0C150004 write.
+    static constexpr std::uint32_t early_setup_trace_pc_begin = 0x00000B00u;
+    static constexpr std::uint32_t early_setup_trace_pc_end = 0x00000B80u;
+    static constexpr std::size_t early_setup_trace_capacity = 64u;
+
+    struct full_a32_trace_entry {
+        std::uint32_t pc = 0;
+        std::uint32_t instruction = 0;
+        std::uint32_t cpsr = 0;
+        std::array<std::uint32_t, 13> r{};
+        std::uint32_t sp = 0;
+        std::uint32_t lr = 0;
+    };
+
     struct probe_result {
         rom_header_info header{};
         std::uint32_t instruction_budget = 0;
@@ -110,6 +125,8 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t low_vector_shadow_write_count = 0;
         std::array<a32_trace_entry, a32_trace_capacity> a32_trace{};
         std::uint32_t a32_trace_count = 0;
+        std::array<full_a32_trace_entry, early_setup_trace_capacity> early_setup_trace{};
+        std::uint32_t early_setup_trace_count = 0;
         probe_stop_reason stop_reason = probe_stop_reason::io_error;
         register_snapshot registers{};
         std::optional<unresolved_access> unresolved{};
