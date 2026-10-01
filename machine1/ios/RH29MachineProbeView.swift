@@ -5,7 +5,7 @@ import SwiftUI
 struct RH29MachineProbeView: View {
     private let budgets: [UInt32] = [1_000, 10_000, 100_000, 1_000_000]
 
-    @State private var instructionBudget: UInt32 = 1_000
+    @State private var instructionBudget: UInt32 = 10_000
     @State private var running = false
     @State private var reportText = ""
     @State private var reportSucceeded = false
