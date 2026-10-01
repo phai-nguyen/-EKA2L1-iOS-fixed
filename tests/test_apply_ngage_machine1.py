@@ -184,7 +184,7 @@ namespace eka2l1::arm {
         self.assertIn("LOW_VECTOR_SHADOW_WRITE_COUNT", runner)
         self.assertIn("LOW_VECTOR_SHADOW_STATUS=diagnostic_hypothesis_disproved_as_complete_mapping_by_T_write_at_0x20", runner)
         self.assertIn("SDRAM_WRITE_TRACE_POLICY=first_16_exact_transactions_no_new_mapping", runner)
-        self.assertIn('prefix << "SDRAM_WRITE_TRACE_"\', runner)
+        self.assertIn('prefix << "SDRAM_WRITE_TRACE_"', runner)
         self.assertIn("RAM_PROBE_READ_COUNT", runner)
         self.assertIn("RH29_MACHINE1_U", runner)
 
