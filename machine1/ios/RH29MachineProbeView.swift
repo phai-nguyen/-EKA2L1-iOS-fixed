@@ -38,6 +38,12 @@ struct RH29MachineProbeView: View {
                     }
                 }
                 .disabled(running)
+
+                if let reportURL {
+                    ShareLink(item: reportURL) {
+                        Label("Chia sẻ báo cáo", systemImage: "square.and.arrow.up")
+                    }
+                }
             }
 
             if !reportText.isEmpty {
@@ -49,11 +55,6 @@ struct RH29MachineProbeView: View {
                     }
                     .frame(minHeight: 240, alignment: .topLeading)
 
-                    if let reportURL {
-                        ShareLink(item: reportURL) {
-                            Label("Chia sẻ báo cáo", systemImage: "square.and.arrow.up")
-                        }
-                    }
                 } header: {
                     Text(reportSucceeded ? "Báo cáo" : "Probe dừng có kiểm soát")
                 }
