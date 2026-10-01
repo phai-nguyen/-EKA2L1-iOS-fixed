@@ -75,7 +75,7 @@ namespace eka2l1::machine::rh29 {
         , ram_base_(ram_base)
         , ram_data_(ram_base && ram_size ? ram_size : 0, 0)
         , ram_initialized_(ram_base && ram_size ? ram_size : 0, 0)
-        , candidate_ram_probe_data_(candidate_ram_probe_size * candidate_ram_probe_observed_windows, 0) {
+        , candidate_ram_probe_data_(candidate_ram_probe_size * candidate_ram_probe_loop_windows, 0) {
     }
 
     bool strict_bus::range_inside_rom_mapping(const std::uint32_t address,
@@ -128,7 +128,7 @@ namespace eka2l1::machine::rh29 {
             return false;
         }
 
-        for (std::size_t window = 0; window < candidate_ram_probe_observed_windows; ++window) {
+        for (std::size_t window = 0; window < candidate_ram_probe_loop_windows; ++window) {
             const std::uint64_t base64 = static_cast<std::uint64_t>(candidate_ram_probe_base)
                 + static_cast<std::uint64_t>(candidate_ram_probe_stride) * window;
             if (address < base64) {
