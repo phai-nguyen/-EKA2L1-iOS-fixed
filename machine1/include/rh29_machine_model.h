@@ -54,6 +54,12 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::size_t observed_flash_id_exit_width = 2u;
     static constexpr std::uint16_t observed_flash_id_exit_value = 0x00F0u;
 
+    // MACHINE1-J device evidence matches the x16 AMD unlock cycle 1:
+    // word address 0x555 => byte offset 0xAAA, data 0x00AA.
+    static constexpr std::uint32_t observed_flash_unlock1_address = second_flash_base + 0x00000AAAu;
+    static constexpr std::size_t observed_flash_unlock1_width = 2u;
+    static constexpr std::uint16_t observed_flash_unlock1_value = 0x00AAu;
+
     enum class parse_error {
         none = 0,
         truncated_header,
@@ -127,6 +133,8 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t amd_reference_device_read_count() const;
         std::uint64_t observed_flash_id_exit_count() const;
         bool flash_autoselect_active() const;
+        std::uint64_t observed_flash_unlock1_count() const;
+        std::uint32_t flash_unlock_stage() const;
 
     private:
         bool range_inside_rom_mapping(std::uint32_t address, std::size_t width, std::size_t &offset) const;
@@ -151,6 +159,8 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t amd_reference_device_read_count_ = 0;
         std::uint64_t observed_flash_id_exit_count_ = 0;
         bool flash_autoselect_active_ = false;
+        std::uint64_t observed_flash_unlock1_count_ = 0;
+        std::uint32_t flash_unlock_stage_ = 0;
         std::optional<unresolved_access> first_unresolved_{};
     };
 }

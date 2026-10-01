@@ -359,6 +359,46 @@ static void test_flash_id_exit_allowlist_is_exact() {
     assert(bus.first_unresolved()->value == wrong);
 }
 
+static void test_flash_unlock_cycle1_matches_observed_x16_transaction() {
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+
+    const std::uint16_t unlock1 = observed_flash_unlock1_value;
+    assert(bus.write(observed_flash_unlock1_address, &unlock1, sizeof(unlock1),
+                     0x000009EC, 0x00000AFC));
+    assert(bus.observed_flash_unlock1_count() == 1);
+    assert(bus.flash_unlock_stage() == 1);
+    assert(!bus.flash_autoselect_active());
+    assert(!bus.first_unresolved().has_value());
+}
+
+static void test_flash_unlock_cycle1_allowlist_is_exact() {
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+    const std::uint16_t wrong = 0x00ABu;
+    assert(!bus.write(observed_flash_unlock1_address, &wrong, sizeof(wrong),
+                      0x000009EC, 0x00000AFC));
+    assert(bus.first_unresolved().has_value());
+    assert(bus.first_unresolved()->address == observed_flash_unlock1_address);
+    assert(bus.first_unresolved()->value == wrong);
+}
+
+static void test_flash_f0_resets_unlock_stage() {
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+    const std::uint16_t unlock1 = observed_flash_unlock1_value;
+    assert(bus.write(observed_flash_unlock1_address, &unlock1, sizeof(unlock1),
+                     0x000009EC, 0x00000AFC));
+    assert(bus.flash_unlock_stage() == 1);
+    const std::uint16_t reset = observed_flash_id_exit_value;
+    assert(bus.write(observed_flash_id_exit_address, &reset, sizeof(reset),
+                     0x000009DC, 0x00000AFC));
+    assert(bus.flash_unlock_stage() == 0);
+}
+
 static void test_bus_records_unmapped_data_read() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000);
@@ -425,6 +465,9 @@ int main() {
     test_amd_reference_device_id_read_is_exact_width();
     test_flash_id_exit_f0_disables_autoselect_state();
     test_flash_id_exit_allowlist_is_exact();
+    test_flash_unlock_cycle1_matches_observed_x16_transaction();
+    test_flash_unlock_cycle1_allowlist_is_exact();
+    test_flash_f0_resets_unlock_stage();
     test_bus_records_unmapped_data_read();
     test_bus_records_unmapped_code_read();
     test_bus_keeps_first_unresolved();

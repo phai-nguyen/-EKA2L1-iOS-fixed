@@ -216,6 +216,7 @@ namespace eka2l1::machine::rh29 {
             && write_value == observed_flash_id_entry_value) {
             ++observed_flash_id_entry_count_;
             flash_autoselect_active_ = true;
+            flash_unlock_stage_ = 0;
             return true;
         }
 
@@ -225,6 +226,17 @@ namespace eka2l1::machine::rh29 {
             && write_value == observed_flash_id_exit_value) {
             ++observed_flash_id_exit_count_;
             flash_autoselect_active_ = false;
+            flash_unlock_stage_ = 0;
+            return true;
+        }
+
+        if (value
+            && !flash_autoselect_active_
+            && address == observed_flash_unlock1_address
+            && width == observed_flash_unlock1_width
+            && write_value == observed_flash_unlock1_value) {
+            ++observed_flash_unlock1_count_;
+            flash_unlock_stage_ = 1;
             return true;
         }
 
@@ -287,5 +299,13 @@ namespace eka2l1::machine::rh29 {
 
     bool strict_bus::flash_autoselect_active() const {
         return flash_autoselect_active_;
+    }
+
+    std::uint64_t strict_bus::observed_flash_unlock1_count() const {
+        return observed_flash_unlock1_count_;
+    }
+
+    std::uint32_t strict_bus::flash_unlock_stage() const {
+        return flash_unlock_stage_;
     }
 }

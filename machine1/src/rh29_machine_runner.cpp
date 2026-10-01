@@ -111,7 +111,7 @@ namespace eka2l1::machine::rh29 {
 
     std::string format_report(const probe_result &result) {
         std::ostringstream out;
-        out << "RH29_MACHINE1_J\n";
+        out << "RH29_MACHINE1_K\n";
         write_hex(out, "ROM_BASE", result.header.rom_base);
         write_hex(out, "ROM_SIZE", result.header.rom_size);
         write_hex(out, "RESTART_VECTOR_WORD", result.header.restart_vector);
@@ -165,6 +165,13 @@ namespace eka2l1::machine::rh29 {
         write_hex(out, "FLASH_ID_EXIT_VALUE", observed_flash_id_exit_value, 4);
         out << "FLASH_ID_EXIT_ACCEPTED_COUNT=" << result.flash_id_exit_count << "\n";
         out << "FLASH_AUTOSELECT_ACTIVE_AT_STOP=" << (result.flash_autoselect_active_at_stop ? 1 : 0) << "\n";
+        out << "FLASH_UNLOCK1_POLICY=" << (result.flash_unlock1_enabled
+            ? "amd_x16_unlock_cycle1_observed" : "disabled") << "\n";
+        write_hex(out, "FLASH_UNLOCK1_ADDRESS", observed_flash_unlock1_address);
+        out << "FLASH_UNLOCK1_WIDTH_BITS=" << (observed_flash_unlock1_width * 8) << "\n";
+        write_hex(out, "FLASH_UNLOCK1_VALUE", observed_flash_unlock1_value, 4);
+        out << "FLASH_UNLOCK1_ACCEPTED_COUNT=" << result.flash_unlock1_count << "\n";
+        out << "FLASH_UNLOCK_STAGE_AT_STOP=" << result.flash_unlock_stage_at_stop << "\n";
         write_hex(out, "KERN_DATA_ADDRESS", result.header.kern_data_address);
         write_hex(out, "KERN_LIMIT", result.header.kern_limit);
         out << "INSTRUCTION_BUDGET=" << result.instruction_budget << "\n";
@@ -271,7 +278,7 @@ namespace eka2l1::machine::rh29 {
         }
 
         // TRomHeader::restart_vector is the 32-bit instruction word stored at
-        // header offset 0x7C, not a guest address. MACHINE1-J probes the ARM
+        // header offset 0x7C, not a guest address. MACHINE1-K probes the ARM
         // cold-reset PC (0x00000000) and exposes canonical ROM bytes there via
         // an explicitly-labelled synthetic alias hypothesis.
         result.reset_pc = cold_reset_pc;
@@ -287,6 +294,7 @@ namespace eka2l1::machine::rh29 {
         result.amd_reference_manufacturer_id_enabled = true;
         result.amd_reference_device_id_enabled = true;
         result.flash_id_exit_enabled = true;
+        result.flash_unlock1_enabled = true;
         strict_bus bus(rom.data(), parsed.header.rom_size, parsed.header.rom_base, cold_reset_pc,
                        candidate_sdram_base, candidate_sdram_size);
         auto monitor = arm::create_exclusive_monitor(arm_emulator_type::dyncom, 1);
@@ -398,7 +406,7 @@ namespace eka2l1::machine::rh29 {
 
         std::uint32_t remaining = options.instruction_budget;
         while (remaining > 0 && !bus.first_unresolved() && !exception && !cp15) {
-            // MACHINE1-J must not let Dyncom's ARM11/MPCore CP15 model answer
+            // MACHINE1-K must not let Dyncom's ARM11/MPCore CP15 model answer
             // RH-29 hardware questions. Inspect the next A32 instruction while
             // it is still only ROM data and stop before any p15 operation runs.
             if (!cpu->is_thumb_mode()) {
@@ -449,6 +457,8 @@ namespace eka2l1::machine::rh29 {
         result.amd_reference_device_read_count = bus.amd_reference_device_read_count();
         result.flash_id_exit_count = bus.observed_flash_id_exit_count();
         result.flash_autoselect_active_at_stop = bus.flash_autoselect_active();
+        result.flash_unlock1_count = bus.observed_flash_unlock1_count();
+        result.flash_unlock_stage_at_stop = bus.flash_unlock_stage();
 
         if (result.unresolved) {
             result.stop_reason = probe_stop_reason::unresolved_access;

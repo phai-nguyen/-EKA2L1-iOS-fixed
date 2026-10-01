@@ -44,6 +44,9 @@ static probe_result sample_result() {
     result.flash_id_exit_enabled = true;
     result.flash_id_exit_count = 1;
     result.flash_autoselect_active_at_stop = false;
+    result.flash_unlock1_enabled = true;
+    result.flash_unlock1_count = 1;
+    result.flash_unlock_stage_at_stop = 1;
     result.executed_instructions = 37;
     result.stop_reason = probe_stop_reason::unresolved_access;
     for (std::size_t i = 0; i < result.registers.r.size(); ++i) {
@@ -61,7 +64,7 @@ static probe_result sample_result() {
 
 static void test_report_contains_probe_identity_and_rom_header() {
     const auto text = format_report(sample_result());
-    require_contains(text, "RH29_MACHINE1_J");
+    require_contains(text, "RH29_MACHINE1_K");
     require_contains(text, "ROM_BASE=0x50000000");
     require_contains(text, "ROM_SIZE=0x01170000");
     require_contains(text, "RESTART_VECTOR_WORD=0x00000000");
@@ -109,6 +112,12 @@ static void test_report_contains_probe_identity_and_rom_header() {
     require_contains(text, "FLASH_ID_EXIT_VALUE=0x00F0");
     require_contains(text, "FLASH_ID_EXIT_ACCEPTED_COUNT=1");
     require_contains(text, "FLASH_AUTOSELECT_ACTIVE_AT_STOP=0");
+    require_contains(text, "FLASH_UNLOCK1_POLICY=amd_x16_unlock_cycle1_observed");
+    require_contains(text, "FLASH_UNLOCK1_ADDRESS=0x02000AAA");
+    require_contains(text, "FLASH_UNLOCK1_WIDTH_BITS=16");
+    require_contains(text, "FLASH_UNLOCK1_VALUE=0x00AA");
+    require_contains(text, "FLASH_UNLOCK1_ACCEPTED_COUNT=1");
+    require_contains(text, "FLASH_UNLOCK_STAGE_AT_STOP=1");
     require_contains(text, "KERN_DATA_ADDRESS=0x80001000");
     require_contains(text, "KERN_LIMIT=0x80002000");
 }
@@ -210,7 +219,7 @@ static void test_report_contains_cp15_barrier() {
     require_contains(text, "CP15_INSTRUCTION=0xEE110F10");
 }
 
-static void test_machine1_j_defaults_to_1k() {
+static void test_machine1_k_defaults_to_1k() {
     probe_options options{};
     assert(options.instruction_budget == 1000);
 }
@@ -244,7 +253,7 @@ int main() {
     test_observed_arm920t_control_write_is_exact_allowlist();
     test_report_contains_cp15_emulation_evidence();
     test_report_contains_cp15_barrier();
-    test_machine1_j_defaults_to_1k();
+    test_machine1_k_defaults_to_1k();
     test_arm_condition_passed_matches_a32_flags();
     std::cout << "rh29_report_tests: PASS\n";
     return 0;

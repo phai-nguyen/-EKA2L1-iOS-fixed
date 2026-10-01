@@ -72,6 +72,9 @@ namespace eka2l1::machine::rh29 {
         bool flash_id_exit_enabled = false;
         std::uint64_t flash_id_exit_count = 0;
         bool flash_autoselect_active_at_stop = false;
+        bool flash_unlock1_enabled = false;
+        std::uint64_t flash_unlock1_count = 0;
+        std::uint32_t flash_unlock_stage_at_stop = 0;
         probe_stop_reason stop_reason = probe_stop_reason::io_error;
         register_snapshot registers{};
         std::optional<unresolved_access> unresolved{};
