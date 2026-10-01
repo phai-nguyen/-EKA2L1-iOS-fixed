@@ -173,9 +173,13 @@ namespace eka2l1::arm {
         self.assertIn("candidate_ram_probe_size = 16u", model)
         self.assertIn("candidate_ram_probe_stride = 0x0000003Cu", model)
         self.assertIn("candidate_ram_probe_loop_windows = 8u", model)
+        self.assertIn("candidate_post_probe_workspace_base", model)
+        self.assertIn("candidate_post_probe_workspace_size = 0x20u", model)
         self.assertIn("symbian_boot_eight_step_sparse_loop_stride_0x3c", runner)
+        self.assertIn("post_probe_0x20_candidate_zero_seeded_mutable", runner)
+        self.assertIn("POST_RAM_WORKSPACE_READ_COUNT", runner)
         self.assertIn("RAM_PROBE_READ_COUNT", runner)
-        self.assertIn("RH29_MACHINE1_R", runner)
+        self.assertIn("RH29_MACHINE1_S", runner)
 
     def test_adds_cmake_sources_exactly_once_and_is_idempotent(self):
         td, root = self.make_upstream()
@@ -200,7 +204,7 @@ namespace eka2l1::arm {
         self.assertIn("NS_SWIFT_NAME(runRH29MachineProbe(instructionBudget:))", header)
         self.assertIn('caseInsensitiveCompare:@"RH-29"', impl)
         self.assertIn('roms/rh-29/SYM.ROM', impl)
-        self.assertIn("[RH29_MACHINE1_R]", impl)
+        self.assertIn("[RH29_MACHINE1_S]", impl)
         self.assertNotIn("reset(false", impl)
         self.assertNotIn("set_device(", impl)
 
@@ -225,12 +229,12 @@ namespace eka2l1::arm {
         self.assertEqual(result.returncode, 0, result.stdout)
         view = (root / "src/emu/ios/App/RH29MachineProbeView.swift").read_text()
         self.assertIn("Task.detached(priority: .userInitiated)", view)
-        self.assertIn("RH29_MACHINE1_R.txt", view)
+        self.assertIn("RH29_MACHINE1_S.txt", view)
         self.assertIn("ShareLink", view)
         self.assertIn(".textSelection(.enabled)", view)
         self.assertIn("[1_000, 10_000, 100_000, 1_000_000]", view)
-        self.assertIn("@State private var instructionBudget: UInt32 = 1_000", view)
-        self.assertIn("MACHINE1-R", view)
+        self.assertIn("@State private var instructionBudget: UInt32 = 10_000", view)
+        self.assertIn("MACHINE1-S", view)
 
     def test_adds_probe_only_svc_dyncom_constructor_without_changing_default_mode(self):
         td, root = self.make_upstream()
