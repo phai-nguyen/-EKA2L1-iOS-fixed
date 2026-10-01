@@ -75,7 +75,7 @@ namespace eka2l1::machine::rh29 {
         , ram_base_(ram_base)
         , ram_data_(ram_base && ram_size ? ram_size : 0, 0)
         , ram_initialized_(ram_base && ram_size ? ram_size : 0, 0)
-        , candidate_ram_probe_data_(candidate_ram_probe_size, 0) {
+        , candidate_ram_probe_data_(candidate_ram_probe_size * candidate_ram_probe_observed_windows, 0) {
     }
 
     bool strict_bus::range_inside_rom_mapping(const std::uint32_t address,
@@ -124,16 +124,28 @@ namespace eka2l1::machine::rh29 {
     bool strict_bus::range_inside_candidate_ram_probe(const std::uint32_t address,
                                                          const std::size_t width,
                                                          std::size_t &offset) const {
-        if (width == 0 || address < candidate_ram_probe_base) {
+        if (width == 0) {
             return false;
         }
-        const std::uint64_t off64 = static_cast<std::uint64_t>(address) - candidate_ram_probe_base;
-        const std::uint64_t end64 = off64 + static_cast<std::uint64_t>(width);
-        if (end64 < off64 || end64 > candidate_ram_probe_data_.size()) {
-            return false;
+
+        for (std::size_t window = 0; window < candidate_ram_probe_observed_windows; ++window) {
+            const std::uint64_t base64 = static_cast<std::uint64_t>(candidate_ram_probe_base)
+                + static_cast<std::uint64_t>(candidate_ram_probe_stride) * window;
+            if (address < base64) {
+                continue;
+            }
+
+            const std::uint64_t local = static_cast<std::uint64_t>(address) - base64;
+            const std::uint64_t end64 = local + static_cast<std::uint64_t>(width);
+            if (end64 < local || end64 > candidate_ram_probe_size) {
+                continue;
+            }
+
+            offset = window * candidate_ram_probe_size + static_cast<std::size_t>(local);
+            return true;
         }
-        offset = static_cast<std::size_t>(off64);
-        return true;
+
+        return false;
     }
 
     void strict_bus::record_unresolved(const access_kind kind,
