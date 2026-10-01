@@ -110,7 +110,7 @@ for source, destination in source_map:
         text = text.replace("RH29_MACHINE1_O.txt", "RH29_MACHINE1_Q.txt")
         text = text.replace(
             "Probe giữ nguyên model MACHINE1-M và không giả lập 0x0A000000. Bản O ghi 64 lệnh A32 cuối cùng cùng R0/R1/R2/R3/R4/R8/R9/R10/SP/LR để lần ngược nguồn gốc con trỏ 0x0A000000.",
-            "O xác nhận bootstrap lấy 0x0A000000 từ bảng cấu hình rồi probe trong FIQ. P chỉ mở đúng 16 byte 0x0A000000–0x0A00000F dạng zero-seeded mutable để quan sát bước kế tiếp; chưa map toàn bank."
+            "P xác nhận bootstrap hoàn tất probe 16 byte đầu, phục hồi dữ liệu, tăng R8 thêm 0x3C và thử tiếp tại 0x0A00003C. Q chỉ mở hai đảo 16 byte đã quan sát; khoảng trống và bước thứ ba vẫn unmapped."
         )
     destination.write_text(text, encoding="utf-8")
 
