@@ -23,6 +23,16 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::uint32_t candidate_ram_probe_stride = 0x0000003Cu;
     static constexpr std::size_t candidate_ram_probe_loop_windows = 8u;
 
+    // MACHINE1-R device evidence: after all eight probe iterations complete,
+    // R8 advances once more to 0x0A0001E0. The caller passes R0=that address
+    // and R1=0x20 to the next routine, whose first observed access is a 32-bit
+    // read at +8. MACHINE1-S exposes only this exact 0x20-byte candidate
+    // workspace, zero-seeded and mutable, without claiming a larger mapping.
+    static constexpr std::uint32_t candidate_post_probe_workspace_base =
+        candidate_ram_probe_base + candidate_ram_probe_stride
+            * static_cast<std::uint32_t>(candidate_ram_probe_loop_windows);
+    static constexpr std::size_t candidate_post_probe_workspace_size = 0x20u;
+
     // MACHINE1-D device evidence. Hardware identity is intentionally unknown:
     // allow only this exact observed write, never the surrounding MMIO range.
     static constexpr std::uint32_t observed_mmio_write_address = 0x0C150004u;
@@ -161,12 +171,17 @@ namespace eka2l1::machine::rh29 {
         std::uint32_t flash_unlock_stage() const;
         std::uint64_t candidate_ram_probe_read_count() const;
         std::uint64_t candidate_ram_probe_write_count() const;
+        std::uint64_t candidate_post_probe_workspace_read_count() const;
+        std::uint64_t candidate_post_probe_workspace_write_count() const;
 
     private:
         bool range_inside_rom_mapping(std::uint32_t address, std::size_t width, std::size_t &offset) const;
         bool range_inside_ram(std::uint32_t address, std::size_t width, std::size_t &offset) const;
         bool range_inside_candidate_ram_probe(std::uint32_t address, std::size_t width,
                                               std::size_t &offset) const;
+        bool range_inside_candidate_post_probe_workspace(std::uint32_t address,
+                                                        std::size_t width,
+                                                        std::size_t &offset) const;
         void record_unresolved(access_kind kind, std::size_t width, std::uint32_t address,
                                std::uint32_t pc, std::uint32_t lr, std::uint64_t value,
                                unresolved_cause cause);
@@ -194,6 +209,9 @@ namespace eka2l1::machine::rh29 {
         std::vector<std::uint8_t> candidate_ram_probe_data_{};
         std::uint64_t candidate_ram_probe_read_count_ = 0;
         std::uint64_t candidate_ram_probe_write_count_ = 0;
+        std::vector<std::uint8_t> candidate_post_probe_workspace_data_{};
+        std::uint64_t candidate_post_probe_workspace_read_count_ = 0;
+        std::uint64_t candidate_post_probe_workspace_write_count_ = 0;
         std::optional<unresolved_access> first_unresolved_{};
     };
 }
