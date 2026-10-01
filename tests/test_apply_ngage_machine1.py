@@ -176,7 +176,7 @@ namespace eka2l1::arm {
         self.assertIn("candidate_post_probe_workspace_base", model)
         self.assertIn("candidate_post_probe_workspace_size = 0x20u", model)
         self.assertIn("low_vector_shadow_base = 0x00000000u", model)
-        self.assertIn("low_vector_shadow_size = 8u * sizeof(std::uint32_t)", model)
+        self.assertIn("low_vector_shadow_size = 9u * sizeof(std::uint32_t)", model)
         self.assertIn("symbian_boot_eight_step_sparse_loop_stride_0x3c", runner)
         self.assertIn("post_probe_0x20_candidate_zero_seeded_mutable", runner)
         self.assertIn("POST_RAM_WORKSPACE_READ_COUNT", runner)
@@ -238,7 +238,7 @@ namespace eka2l1::arm {
         self.assertIn("struct EKA2L1MachineProbeItem: Sendable", bridge)
         self.assertIn("runRH29MachineProbe(instructionBudget:", bridge)
         self.assertIn("showingRH29MachineProbe", content)
-        self.assertIn('firmwareCode.caseInsensitiveCompare("RH-29")', content)
+        self.assertNotIn('firmwareCode.caseInsensitiveCompare("RH-29")', content)
         self.assertIn('Label("RH-29 Machine Probe"', content)
         self.assertIn("RH29MachineProbeView()", content)
 
