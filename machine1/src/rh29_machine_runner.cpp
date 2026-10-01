@@ -111,7 +111,7 @@ namespace eka2l1::machine::rh29 {
 
     std::string format_report(const probe_result &result) {
         std::ostringstream out;
-        out << "RH29_MACHINE1_M\n";
+        out << "RH29_MACHINE1_N\n";
         write_hex(out, "ROM_BASE", result.header.rom_base);
         write_hex(out, "ROM_SIZE", result.header.rom_size);
         write_hex(out, "RESTART_VECTOR_WORD", result.header.restart_vector);
@@ -189,6 +189,18 @@ namespace eka2l1::machine::rh29 {
         out << "INSTRUCTION_BUDGET=" << result.instruction_budget << "\n";
         out << "EXECUTED_INSTRUCTIONS=" << result.executed_instructions << "\n";
         out << "STOP_REASON=" << stop_reason_name(result.stop_reason) << "\n";
+        out << "A32_TRACE_POLICY=last_16_before_stop_no_device_fabrication\n";
+        out << "A32_TRACE_COUNT=" << result.a32_trace_count << "\n";
+        for (std::size_t i = 0; i < result.a32_trace_count && i < result.a32_trace.size(); ++i) {
+            const auto &entry = result.a32_trace[i];
+            std::ostringstream prefix;
+            prefix << "A32_TRACE_" << std::setfill('0') << std::setw(2) << i << "_";
+            const std::string p = prefix.str();
+            write_hex(out, (p + "PC").c_str(), entry.pc);
+            write_hex(out, (p + "INSTRUCTION").c_str(), entry.instruction);
+            write_hex(out, (p + "CPSR").c_str(), entry.cpsr);
+            write_hex(out, (p + "LR").c_str(), entry.lr);
+        }
 
         for (std::size_t i = 0; i < result.registers.r.size(); ++i) {
             const std::string name = "R" + std::to_string(i);
@@ -290,7 +302,7 @@ namespace eka2l1::machine::rh29 {
         }
 
         // TRomHeader::restart_vector is the 32-bit instruction word stored at
-        // header offset 0x7C, not a guest address. MACHINE1-M probes the ARM
+        // header offset 0x7C, not a guest address. MACHINE1-N probes the ARM
         // cold-reset PC (0x00000000) and exposes canonical ROM bytes there via
         // an explicitly-labelled synthetic alias hypothesis.
         result.reset_pc = cold_reset_pc;
@@ -395,6 +407,16 @@ namespace eka2l1::machine::rh29 {
 
         std::optional<cpu_exception_info> exception;
         std::optional<cp15_access_info> cp15;
+        const auto push_a32_trace = [&](const a32_trace_entry &entry) {
+            if (result.a32_trace_count < result.a32_trace.size()) {
+                result.a32_trace[result.a32_trace_count++] = entry;
+                return;
+            }
+            for (std::size_t i = 1; i < result.a32_trace.size(); ++i) {
+                result.a32_trace[i - 1] = result.a32_trace[i];
+            }
+            result.a32_trace.back() = entry;
+        };
         cpu->exception_handler = [&](arm::exception_type type, std::uint32_t data) {
             // A failed bus callback already carries the more precise unresolved-access record.
             if (!bus.first_unresolved() && !exception) {
@@ -420,7 +442,7 @@ namespace eka2l1::machine::rh29 {
 
         std::uint32_t remaining = options.instruction_budget;
         while (remaining > 0 && !bus.first_unresolved() && !exception && !cp15) {
-            // MACHINE1-M must not let Dyncom's ARM11/MPCore CP15 model answer
+            // MACHINE1-N must not let Dyncom's ARM11/MPCore CP15 model answer
             // RH-29 hardware questions. Inspect the next A32 instruction while
             // it is still only ROM data and stop before any p15 operation runs.
             if (!cpu->is_thumb_mode()) {
@@ -430,6 +452,7 @@ namespace eka2l1::machine::rh29 {
                               pc, cpu->get_lr())) {
                     break;
                 }
+                push_a32_trace(a32_trace_entry{pc, instruction, cpu->get_cpsr(), cpu->get_lr()});
                 if (is_arm_cp15_instruction(instruction)
                     && arm_condition_passed(instruction, cpu->get_cpsr())) {
                     const std::uint32_t rd = (instruction >> 12) & 0xFu;

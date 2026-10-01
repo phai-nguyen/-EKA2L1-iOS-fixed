@@ -51,6 +51,9 @@ static probe_result sample_result() {
     result.flash_unlock_autoselect_enabled = true;
     result.flash_unlock_autoselect_count = 1;
     result.flash_unlock_stage_at_stop = 0;
+    result.a32_trace_count = 2;
+    result.a32_trace[0] = a32_trace_entry{0x00002660u, 0xE5901000u, 0x200000D1u, 0x000024C4u};
+    result.a32_trace[1] = a32_trace_entry{0x00002664u, 0xE5902000u, 0x200000D1u, 0x000024C4u};
     result.executed_instructions = 37;
     result.stop_reason = probe_stop_reason::unresolved_access;
     for (std::size_t i = 0; i < result.registers.r.size(); ++i) {
@@ -68,7 +71,7 @@ static probe_result sample_result() {
 
 static void test_report_contains_probe_identity_and_rom_header() {
     const auto text = format_report(sample_result());
-    require_contains(text, "RH29_MACHINE1_M");
+    require_contains(text, "RH29_MACHINE1_N");
     require_contains(text, "ROM_BASE=0x50000000");
     require_contains(text, "ROM_SIZE=0x01170000");
     require_contains(text, "RESTART_VECTOR_WORD=0x00000000");
@@ -141,6 +144,14 @@ static void test_report_contains_budget_stop_and_registers() {
     require_contains(text, "INSTRUCTION_BUDGET=10000");
     require_contains(text, "EXECUTED_INSTRUCTIONS=37");
     require_contains(text, "STOP_REASON=unresolved_access");
+    require_contains(text, "A32_TRACE_POLICY=last_16_before_stop_no_device_fabrication");
+    require_contains(text, "A32_TRACE_COUNT=2");
+    require_contains(text, "A32_TRACE_00_PC=0x00002660");
+    require_contains(text, "A32_TRACE_00_INSTRUCTION=0xE5901000");
+    require_contains(text, "A32_TRACE_01_PC=0x00002664");
+    require_contains(text, "A32_TRACE_01_INSTRUCTION=0xE5902000");
+    require_contains(text, "A32_TRACE_01_CPSR=0x200000D1");
+    require_contains(text, "A32_TRACE_01_LR=0x000024C4");
     require_contains(text, "PC=0x50005678");
     require_contains(text, "LR=0x50001234");
     require_contains(text, "SP=0x20001000");
@@ -233,7 +244,7 @@ static void test_report_contains_cp15_barrier() {
     require_contains(text, "CP15_INSTRUCTION=0xEE110F10");
 }
 
-static void test_machine1_m_defaults_to_1k() {
+static void test_machine1_n_defaults_to_1k() {
     probe_options options{};
     assert(options.instruction_budget == 1000);
 }
@@ -267,7 +278,7 @@ int main() {
     test_observed_arm920t_control_write_is_exact_allowlist();
     test_report_contains_cp15_emulation_evidence();
     test_report_contains_cp15_barrier();
-    test_machine1_m_defaults_to_1k();
+    test_machine1_n_defaults_to_1k();
     test_arm_condition_passed_matches_a32_flags();
     std::cout << "rh29_report_tests: PASS\n";
     return 0;
