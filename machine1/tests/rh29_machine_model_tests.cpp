@@ -280,8 +280,8 @@ static void test_amd_reference_manufacturer_id_read_after_id_entry() {
     assert(!bus.first_unresolved().has_value());
 
     std::uint16_t other = 0;
-    assert(!bus.read(access_kind::data_read, amd_reference_manufacturer_id_address + 2,
-                     &other, sizeof(other), 0x000009A0, 0x00000AFC));
+    assert(!bus.read(access_kind::data_read, amd_reference_manufacturer_id_address + 4,
+                     &other, sizeof(other), 0x000009AC, 0x00000AFC));
     assert(bus.first_unresolved().has_value());
 }
 
