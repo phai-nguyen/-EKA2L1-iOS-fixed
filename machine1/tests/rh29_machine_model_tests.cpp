@@ -596,6 +596,56 @@ static void test_y_observed_bootstrap_copy_is_exact_gated_and_initialized_only()
     assert(wrong_pc.first_unresolved().has_value());
 }
 
+static void test_z_observed_first_stack_push_is_exact_gated_and_initialized_only() {
+    static_assert(candidate_bootstrap_stack_top == 0x0A000FF0u);
+    static_assert(candidate_bootstrap_stack_push_base == 0x0A000FD0u);
+    static_assert(candidate_bootstrap_stack_push_size == 0x20u);
+    static_assert(candidate_bootstrap_stack_write_width == 4u);
+    static_assert(candidate_bootstrap_stack_push_pc == 0x000011A8u);
+    static_assert(candidate_bootstrap_stack_push_lr == 0x000003C8u);
+    static_assert(candidate_bootstrap_stack_push_instruction == 0xE92D47F0u);
+
+    auto rom = valid_rom();
+    strict_bus before(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                      candidate_sdram_base, 0x100);
+    std::uint32_t out = 0;
+    assert(!before.read(access_kind::data_read, candidate_bootstrap_stack_push_base,
+                        &out, sizeof(out), 0x000011ACu, candidate_bootstrap_stack_push_lr));
+    assert(before.first_unresolved().has_value());
+
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+    for (std::uint32_t i = 0; i < candidate_bootstrap_stack_push_size / 4u; ++i) {
+        const std::uint32_t value = 0xA0000000u | i;
+        const std::uint32_t address = candidate_bootstrap_stack_push_base + i * 4u;
+        assert(bus.write(address, &value, sizeof(value),
+                         candidate_bootstrap_stack_push_pc, candidate_bootstrap_stack_push_lr));
+    }
+    assert(bus.candidate_bootstrap_stack_write_count() == 8u);
+    assert(bus.candidate_bootstrap_stack_initialized_bytes() == candidate_bootstrap_stack_push_size);
+
+    out = 0;
+    assert(bus.read(access_kind::data_read, candidate_bootstrap_stack_push_base,
+                    &out, sizeof(out), 0x000011ACu, candidate_bootstrap_stack_push_lr));
+    assert(out == 0xA0000000u);
+    out = 0;
+    assert(bus.read(access_kind::data_read, candidate_bootstrap_stack_push_base + 0x1Cu,
+                    &out, sizeof(out), 0x000011ACu, candidate_bootstrap_stack_push_lr));
+    assert(out == 0xA0000007u);
+    assert(bus.candidate_bootstrap_stack_read_count() == 2u);
+
+    const std::uint32_t extra = 0xDEADBEEFu;
+    assert(!bus.write(candidate_bootstrap_stack_push_base - 4u, &extra, sizeof(extra),
+                      candidate_bootstrap_stack_push_pc, candidate_bootstrap_stack_push_lr));
+    assert(bus.first_unresolved().has_value());
+
+    strict_bus wrong_pc(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                         candidate_sdram_base, 0x100);
+    assert(!wrong_pc.write(candidate_bootstrap_stack_push_base, &extra, sizeof(extra),
+                           candidate_bootstrap_stack_push_pc + 4u, candidate_bootstrap_stack_push_lr));
+    assert(wrong_pc.first_unresolved().has_value());
+}
+
 static void test_gap_before_post_probe_workspace_remains_unmapped() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc, candidate_sdram_base, 0x100);
@@ -761,6 +811,7 @@ int main() {
     test_candidate_probe_window_reads_zero();
     test_eight_step_candidate_probe_loop_is_exact_and_sparse();
     test_y_observed_bootstrap_copy_is_exact_gated_and_initialized_only();
+    test_z_observed_first_stack_push_is_exact_gated_and_initialized_only();
     test_gap_before_post_probe_workspace_remains_unmapped();
     test_post_probe_workspace_is_zero_seeded_mutable_and_bounded();
     test_low_vector_shadow_is_rom_seeded_mutable_and_exactly_36_bytes();

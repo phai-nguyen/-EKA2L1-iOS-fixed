@@ -78,6 +78,8 @@ namespace eka2l1::machine::rh29 {
         , candidate_ram_probe_data_(candidate_ram_probe_size * candidate_ram_probe_loop_windows, 0)
         , candidate_bootstrap_copy_data_(candidate_bootstrap_copy_size, 0)
         , candidate_bootstrap_copy_initialized_(candidate_bootstrap_copy_size, 0)
+        , candidate_bootstrap_stack_data_(candidate_bootstrap_stack_push_size, 0)
+        , candidate_bootstrap_stack_initialized_(candidate_bootstrap_stack_push_size, 0)
         , candidate_post_probe_workspace_data_(candidate_post_probe_workspace_size, 0)
         , low_vector_shadow_data_(low_vector_shadow_size, 0) {
         if (rom_data_ && rom_size_ >= low_vector_shadow_size) {
@@ -166,6 +168,23 @@ namespace eka2l1::machine::rh29 {
             - candidate_bootstrap_copy_base;
         const std::uint64_t end64 = off64 + static_cast<std::uint64_t>(width);
         if (end64 < off64 || end64 > candidate_bootstrap_copy_data_.size()) {
+            return false;
+        }
+        offset = static_cast<std::size_t>(off64);
+        return true;
+    }
+
+    bool strict_bus::range_inside_candidate_bootstrap_stack(
+        const std::uint32_t address,
+        const std::size_t width,
+        std::size_t &offset) const {
+        if (width == 0 || address < candidate_bootstrap_stack_push_base) {
+            return false;
+        }
+        const std::uint64_t off64 = static_cast<std::uint64_t>(address)
+            - candidate_bootstrap_stack_push_base;
+        const std::uint64_t end64 = off64 + static_cast<std::uint64_t>(width);
+        if (end64 < off64 || end64 > candidate_bootstrap_stack_data_.size()) {
             return false;
         }
         offset = static_cast<std::size_t>(off64);
@@ -275,6 +294,22 @@ namespace eka2l1::machine::rh29 {
             }
             std::memcpy(out, ram_data_.data() + offset, width);
             return true;
+        }
+
+        if (kind == access_kind::data_read
+            && range_inside_candidate_bootstrap_stack(address, width, offset)) {
+            bool initialized = true;
+            for (std::size_t i = 0; i < width; ++i) {
+                if (!candidate_bootstrap_stack_initialized_[offset + i]) {
+                    initialized = false;
+                    break;
+                }
+            }
+            if (initialized) {
+                std::memcpy(out, candidate_bootstrap_stack_data_.data() + offset, width);
+                ++candidate_bootstrap_stack_read_count_;
+                return true;
+            }
         }
 
         if (kind == access_kind::data_read
@@ -417,6 +452,23 @@ namespace eka2l1::machine::rh29 {
         }
 
         if (value
+            && width == candidate_bootstrap_stack_write_width
+            && pc == candidate_bootstrap_stack_push_pc
+            && lr == candidate_bootstrap_stack_push_lr
+            && (address & (candidate_bootstrap_stack_write_width - 1u)) == 0
+            && range_inside_candidate_bootstrap_stack(address, width, offset)) {
+            std::memcpy(candidate_bootstrap_stack_data_.data() + offset, value, width);
+            for (std::size_t i = 0; i < width; ++i) {
+                if (!candidate_bootstrap_stack_initialized_[offset + i]) {
+                    candidate_bootstrap_stack_initialized_[offset + i] = 1;
+                    ++candidate_bootstrap_stack_initialized_bytes_;
+                }
+            }
+            ++candidate_bootstrap_stack_write_count_;
+            return true;
+        }
+
+        if (value
             && width == candidate_bootstrap_copy_write_width
             && pc == candidate_bootstrap_copy_pc
             && lr == candidate_bootstrap_copy_lr
@@ -535,6 +587,18 @@ namespace eka2l1::machine::rh29 {
 
     std::size_t strict_bus::candidate_bootstrap_copy_initialized_bytes() const {
         return candidate_bootstrap_copy_initialized_bytes_;
+    }
+
+    std::uint64_t strict_bus::candidate_bootstrap_stack_read_count() const {
+        return candidate_bootstrap_stack_read_count_;
+    }
+
+    std::uint64_t strict_bus::candidate_bootstrap_stack_write_count() const {
+        return candidate_bootstrap_stack_write_count_;
+    }
+
+    std::size_t strict_bus::candidate_bootstrap_stack_initialized_bytes() const {
+        return candidate_bootstrap_stack_initialized_bytes_;
     }
 
     std::uint64_t strict_bus::candidate_post_probe_workspace_read_count() const {
