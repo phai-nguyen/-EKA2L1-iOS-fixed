@@ -36,8 +36,14 @@ jobs:
           repository: EKA2L1/EKA2L1
           ref: ${{ env.UPSTREAM_REF }}
           fetch-depth: 1
-          submodules: recursive
+          submodules: false
           path: source
+
+      - name: Checkout upstream submodules shallow
+        run: |
+          set -euo pipefail
+          git -C source submodule sync --recursive
+          git -C source submodule update --init --recursive --depth 1 --recommend-shallow --jobs 8
 
       - name: Record baselines
         run: |
@@ -182,6 +188,43 @@ jobs:
           restore-keys: |
             ngage-machine1-xcode-${{ runner.os }}-ios16-dyncom-${{ env.UPSTREAM_REF }}-
             hybridhome-upstream1-xcode-${{ runner.os }}-ios16-dyncom-${{ env.UPSTREAM_REF }}-
+
+      - name: Normalize source mtimes for true incremental build
+        run: |
+          set -euo pipefail
+          cd source
+
+          # A fresh checkout gives every source file a new mtime. That makes
+          # cached Xcode/CMake objects look stale and causes an unnecessary
+          # near-full rebuild. Record only files changed by our patch stack.
+          git diff --name-only -z > /tmp/eka-machine1-changed.z
+          git ls-files --others --exclude-standard -z > /tmp/eka-machine1-untracked.z
+
+          # Make untouched upstream files older than the restored build cache.
+          while IFS= read -r -d '' f; do
+            if [ -f "$f" ]; then
+              touch -t 202001010000 "$f"
+            fi
+          done < <(git ls-files -z)
+
+          # Re-touch only files MACHINE1/HYBRIDHOME/VPL/VI actually changed.
+          while IFS= read -r -d '' f; do
+            if [ -f "$f" ]; then
+              touch "$f"
+            fi
+          done < /tmp/eka-machine1-changed.z
+
+          while IFS= read -r -d '' f; do
+            if [ -f "$f" ]; then
+              touch "$f"
+            fi
+          done < /tmp/eka-machine1-untracked.z
+
+          echo "Incremental mtime normalization PASS"
+          echo "Tracked files changed by patch stack:"
+          git diff --name-only | wc -l
+          echo "Untracked generated MACHINE1 files:"
+          git ls-files --others --exclude-standard | wc -l
 
       - name: Cache iOS ffmpeg
         uses: actions/cache@v6
