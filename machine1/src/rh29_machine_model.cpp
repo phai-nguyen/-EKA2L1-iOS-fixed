@@ -369,6 +369,14 @@ namespace eka2l1::machine::rh29 {
                     ++ram_initialized_bytes_;
                 }
             }
+            if (ram_write_trace_count_ < ram_write_trace_.size()) {
+                auto &entry = ram_write_trace_[ram_write_trace_count_++];
+                entry.address = address;
+                entry.pc = pc;
+                entry.lr = lr;
+                entry.width_bits = static_cast<std::uint32_t>(width * 8u);
+                entry.value = write_value;
+            }
             ++ram_write_count_;
             return true;
         }
@@ -403,6 +411,14 @@ namespace eka2l1::machine::rh29 {
 
     std::size_t strict_bus::ram_initialized_bytes() const {
         return ram_initialized_bytes_;
+    }
+
+    std::size_t strict_bus::ram_write_trace_count() const {
+        return ram_write_trace_count_;
+    }
+
+    const std::array<ram_write_trace_entry, ram_write_trace_capacity> &strict_bus::ram_write_trace() const {
+        return ram_write_trace_;
     }
 
     std::uint64_t strict_bus::observed_mmio_write_count() const {

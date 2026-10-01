@@ -175,6 +175,26 @@ static void test_candidate_sdram_uninitialized_read_stops() {
     assert(bus.first_unresolved()->cause == unresolved_cause::ram_uninitialized);
 }
 
+static void test_candidate_sdram_write_trace_records_exact_bus_transactions() {
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+
+    const std::uint32_t first = 0x7037F800u;
+    const std::uint32_t second = 0x11223344u;
+    assert(bus.write(candidate_sdram_base, &first, sizeof(first), 0x00000B2Cu, 0x00000B30u));
+    assert(bus.write(candidate_sdram_base + 4u, &second, sizeof(second), 0x00000B40u, 0x00000B44u));
+    assert(bus.ram_write_trace_count() == 2u);
+    const auto &trace = bus.ram_write_trace();
+    assert(trace[0].address == candidate_sdram_base);
+    assert(trace[0].pc == 0x00000B2Cu);
+    assert(trace[0].lr == 0x00000B30u);
+    assert(trace[0].width_bits == 32u);
+    assert(trace[0].value == first);
+    assert(trace[1].address == candidate_sdram_base + 4u);
+    assert(trace[1].value == second);
+}
+
 static void test_exact_observed_mmio_write_is_the_only_allowlisted_mmio() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
@@ -663,6 +683,7 @@ int main() {
     test_bus_records_rom_write();
     test_candidate_sdram_write_then_read_is_tracked();
     test_candidate_sdram_uninitialized_read_stops();
+    test_candidate_sdram_write_trace_records_exact_bus_transactions();
     test_exact_observed_mmio_write_is_the_only_allowlisted_mmio();
     test_observed_mmio_neighbor_is_not_mapped();
     test_exact_observed_flash_command_is_allowlisted_only_at_fl1_base();

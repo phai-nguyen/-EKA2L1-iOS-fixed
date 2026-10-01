@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -150,6 +151,16 @@ namespace eka2l1::machine::rh29 {
         unresolved_cause cause = unresolved_cause::unmapped;
     };
 
+    struct ram_write_trace_entry {
+        std::uint32_t address = 0;
+        std::uint32_t pc = 0;
+        std::uint32_t lr = 0;
+        std::uint32_t width_bits = 0;
+        std::uint64_t value = 0;
+    };
+
+    static constexpr std::size_t ram_write_trace_capacity = 16u;
+
     class strict_bus {
     public:
         strict_bus(const std::uint8_t *rom_data,
@@ -167,6 +178,8 @@ namespace eka2l1::machine::rh29 {
         const std::optional<unresolved_access> &first_unresolved() const;
         std::uint64_t ram_write_count() const;
         std::size_t ram_initialized_bytes() const;
+        std::size_t ram_write_trace_count() const;
+        const std::array<ram_write_trace_entry, ram_write_trace_capacity> &ram_write_trace() const;
         std::uint64_t observed_mmio_write_count() const;
         std::uint64_t observed_flash_command_count() const;
         std::uint64_t observed_flash_id_entry_count() const;
@@ -209,6 +222,8 @@ namespace eka2l1::machine::rh29 {
         std::vector<std::uint8_t> ram_initialized_{};
         std::uint64_t ram_write_count_ = 0;
         std::size_t ram_initialized_bytes_ = 0;
+        std::array<ram_write_trace_entry, ram_write_trace_capacity> ram_write_trace_{};
+        std::size_t ram_write_trace_count_ = 0;
         std::uint64_t observed_mmio_write_count_ = 0;
         std::uint64_t observed_flash_command_count_ = 0;
         std::uint64_t observed_flash_id_entry_count_ = 0;

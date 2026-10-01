@@ -182,8 +182,11 @@ namespace eka2l1::arm {
         self.assertIn("POST_RAM_WORKSPACE_READ_COUNT", runner)
         self.assertIn("arm_low_vectors_32byte_rom_seeded_mutable_write32", runner)
         self.assertIn("LOW_VECTOR_SHADOW_WRITE_COUNT", runner)
+        self.assertIn("LOW_VECTOR_SHADOW_STATUS=diagnostic_hypothesis_disproved_as_complete_mapping_by_T_write_at_0x20", runner)
+        self.assertIn("SDRAM_WRITE_TRACE_POLICY=first_16_exact_transactions_no_new_mapping", runner)
+        self.assertIn("SDRAM_WRITE_TRACE_00", runner)
         self.assertIn("RAM_PROBE_READ_COUNT", runner)
-        self.assertIn("RH29_MACHINE1_T", runner)
+        self.assertIn("RH29_MACHINE1_U", runner)
 
     def test_adds_cmake_sources_exactly_once_and_is_idempotent(self):
         td, root = self.make_upstream()
@@ -208,7 +211,7 @@ namespace eka2l1::arm {
         self.assertIn("NS_SWIFT_NAME(runRH29MachineProbe(instructionBudget:))", header)
         self.assertIn('caseInsensitiveCompare:@"RH-29"', impl)
         self.assertIn('roms/rh-29/SYM.ROM', impl)
-        self.assertIn("[RH29_MACHINE1_T]", impl)
+        self.assertIn("[RH29_MACHINE1_U]", impl)
         self.assertNotIn("reset(false", impl)
         self.assertNotIn("set_device(", impl)
 
@@ -233,12 +236,12 @@ namespace eka2l1::arm {
         self.assertEqual(result.returncode, 0, result.stdout)
         view = (root / "src/emu/ios/App/RH29MachineProbeView.swift").read_text()
         self.assertIn("Task.detached(priority: .userInitiated)", view)
-        self.assertIn("RH29_MACHINE1_T.txt", view)
+        self.assertIn("RH29_MACHINE1_U.txt", view)
         self.assertIn("ShareLink", view)
         self.assertIn(".textSelection(.enabled)", view)
         self.assertIn("[1_000, 10_000, 100_000, 1_000_000]", view)
         self.assertIn("@State private var instructionBudget: UInt32 = 10_000", view)
-        self.assertIn("MACHINE1-T", view)
+        self.assertIn("MACHINE1-U", view)
         self.assertNotIn("RH29_MACHINE1_R.txt", view)
 
     def test_adds_probe_only_svc_dyncom_constructor_without_changing_default_mode(self):

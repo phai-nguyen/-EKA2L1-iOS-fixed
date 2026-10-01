@@ -77,6 +77,8 @@ namespace eka2l1::machine::rh29 {
         std::uint32_t candidate_sdram_size_bytes = 0;
         std::uint64_t candidate_sdram_write_count = 0;
         std::uint64_t candidate_sdram_initialized_bytes = 0;
+        std::array<ram_write_trace_entry, ram_write_trace_capacity> candidate_sdram_write_trace{};
+        std::uint32_t candidate_sdram_write_trace_count = 0;
         bool exact_observed_mmio_write_enabled = false;
         std::uint64_t exact_observed_mmio_write_count = 0;
         bool exact_observed_flash_command_enabled = false;
