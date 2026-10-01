@@ -58,6 +58,8 @@ namespace eka2l1::machine::rh29 {
         std::uint32_t r8 = 0;
         std::uint32_t r9 = 0;
         std::uint32_t r10 = 0;
+        std::uint32_t r11 = 0;
+        std::uint32_t r12 = 0;
         std::uint32_t sp = 0;
         std::uint32_t lr = 0;
     };

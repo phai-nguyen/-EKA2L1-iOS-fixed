@@ -216,6 +216,8 @@ namespace eka2l1::machine::rh29 {
             write_hex(out, (p + "R8").c_str(), entry.r8);
             write_hex(out, (p + "R9").c_str(), entry.r9);
             write_hex(out, (p + "R10").c_str(), entry.r10);
+            write_hex(out, (p + "R11").c_str(), entry.r11);
+            write_hex(out, (p + "R12").c_str(), entry.r12);
             write_hex(out, (p + "SP").c_str(), entry.sp);
             write_hex(out, (p + "LR").c_str(), entry.lr);
         }
@@ -618,6 +620,8 @@ namespace eka2l1::machine::rh29 {
                     cpu->get_reg(8),
                     cpu->get_reg(9),
                     cpu->get_reg(10),
+                    cpu->get_reg(11),
+                    cpu->get_reg(12),
                     cpu->get_sp(),
                     cpu->get_lr()
                 });

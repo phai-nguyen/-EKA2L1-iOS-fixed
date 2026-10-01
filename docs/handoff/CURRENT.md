@@ -1,7 +1,7 @@
 # CURRENT HANDOFF
 
 Current:
-`docs/handoff/NEWCHAT-NGAGE-QD-MACHINE1-X-2026-10-01.md`
+`docs/handoff/NEWCHAT-NGAGE-QD-MACHINE1-X-2026-10-01.md` (X baseline and device observation); MACHINE1-Y CPU banking experiment is in progress.
 
 Active branch: `ngage-machine1`
 
@@ -19,3 +19,4 @@ Latest state:
 - The emulator response is understood; the RH-29 hardware data backing at address zero at this stage is not. Do not fabricate a value, infer a remap trigger, or expand the low shadow to `0x24`.
 - New ROM/source finding: SVC R11=`0x744` before the RAM probe; the guest changes to FIQ and sets FIQ R11=0. Pinned Dyncom `ChangePrivilegeMode()` does not preserve shared non-FIQ R8–R12 across FIQ, so SVC R11 becomes 0 and causes the spurious `[0x00]` read. See the follow-up section of `docs/research/RH29-MACHINE1-X-2026-10-01.md`.
 - Next isolated experiment: fix/test FIQ R8–R12 banking, keep X's memory response and 36-byte shadow unchanged, then capture actual R1/R2 and next fail-closed barrier. With correct banking, R1=`0x744` and R2=`0x42` are predictions to verify, not device results. Do not infer `0x0C150004` semantics.
+- MACHINE1-Y implementation patches Dyncom shared R8–R12 banking on SVC↔FIQ transitions, reports R11/R12 in the 64-entry A32 tail, and retains X's exact bus model. The host transition test verifies SVC and FIQ banks separately; device result pending. Export `RH29_MACHINE1_Y.txt` from the RH-29 probe at 10,000 instructions and compare `CALLSITE_TRACE` R11 near `0x37C`, A32 R11 around `0x3B8`, R2 around `0x2328`, and the next fail-closed access. Predictions are not observations.

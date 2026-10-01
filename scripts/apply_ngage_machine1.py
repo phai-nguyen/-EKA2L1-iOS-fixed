@@ -17,6 +17,8 @@ ios_header_path = bridge / "IosEmulator.h"
 ios_impl_path = bridge / "IosEmulator.mm"
 dyncom_header_path = root / "src/emu/cpu/include/cpu/dyncom/arm_dyncom.h"
 dyncom_impl_path = root / "src/emu/cpu/src/dyncom/arm_dyncom.cpp"
+state_header_path = root / "src/emu/cpu/include/cpu/dyncom/armstate.h"
+state_impl_path = root / "src/emu/cpu/src/dyncom/armstate.cpp"
 
 required_targets = [
     cmake_path,
@@ -26,6 +28,8 @@ required_targets = [
     ios_impl_path,
     dyncom_header_path,
     dyncom_impl_path,
+    state_header_path,
+    state_impl_path,
 ]
 for path in required_targets:
     if not path.exists():
@@ -41,6 +45,32 @@ source_map = [
 for source, _ in source_map:
     if not source.exists():
         raise SystemExit(f"controller MACHINE1 source missing: {source}")
+
+# FIQ has its own R8-R14. Other modes share R8-R12, so save that shared bank
+# before loading FIQ and restore it when leaving FIQ. Guard pinned-upstream
+# anchors to avoid silently applying a partial CPU fix to a different revision.
+state_header = state_header_path.read_text(encoding="utf-8")
+shared_decl = "    std::array<std::uint32_t, 5> Reg_nonfiq_r8_r12{}; // Shared R8-R12 outside FIQ\n"
+fiq_decl = "    std::array<std::uint32_t, 7> Reg_firq{}; // R8---R14 FIRQ\n"
+if "Reg_nonfiq_r8_r12" not in state_header:
+    if state_header.count(fiq_decl) != 1:
+        raise SystemExit("Dyncom FIQ register declaration anchor not found")
+    state_header = state_header.replace(fiq_decl, fiq_decl + shared_decl, 1)
+    state_header_path.write_text(state_header, encoding="utf-8")
+
+state_impl = state_impl_path.read_text(encoding="utf-8")
+save_fiq = "            std::copy(Reg.begin() + 8, Reg.end() - 1, Reg_firq.begin());\n"
+load_fiq = "            std::copy(Reg_firq.begin(), Reg_firq.end(), Reg.begin() + 8);\n"
+restore_shared = "            std::copy(Reg_nonfiq_r8_r12.begin(), Reg_nonfiq_r8_r12.end(), Reg.begin() + 8);\n"
+save_shared = "            std::copy(Reg.begin() + 8, Reg.begin() + 13, Reg_nonfiq_r8_r12.begin());\n"
+if "Reg_nonfiq_r8_r12" not in state_impl:
+    if state_impl.count(save_fiq) != 1 or state_impl.count(load_fiq) != 1:
+        raise SystemExit("Dyncom FIQ mode transition anchors not found")
+    state_impl = state_impl.replace(save_fiq, save_fiq + restore_shared, 1)
+    state_impl = state_impl.replace(load_fiq, save_shared + load_fiq, 1)
+    state_impl_path.write_text(state_impl, encoding="utf-8")
+elif state_impl.count("Reg_nonfiq_r8_r12") != 3:
+    raise SystemExit("Dyncom FIQ mode transition is partially patched")
 
 
 def insert_before_interface_end(text: str, interface_marker: str, insertion: str, id_marker: str) -> str:
@@ -65,9 +95,9 @@ for source, destination in source_map:
         text = text.replace('#include "rh29_machine_model.h"', '#include "RH29MachineModel.h"', 1)
     elif destination.name == "RH29MachineRunner.cpp":
         text = text.replace('#include "rh29_machine_runner.h"', '#include "RH29MachineRunner.h"', 1)
-        text = text.replace("RH29_MACHINE1_O", "RH29_MACHINE1_X")
-        text = text.replace("MACHINE1-O probes", "MACHINE1-X probes")
-        text = text.replace("MACHINE1-O must not let Dyncom", "MACHINE1-X must not let Dyncom")
+        text = text.replace("RH29_MACHINE1_O", "RH29_MACHINE1_Y")
+        text = text.replace("MACHINE1-O probes", "MACHINE1-Y probes")
+        text = text.replace("MACHINE1-O must not let Dyncom", "MACHINE1-Y must not let Dyncom")
 
         report_anchor = '        out << "FLASH_UNLOCK_STAGE_AT_STOP=" << result.flash_unlock_stage_at_stop << "\\n";\n        write_hex(out, "KERN_DATA_ADDRESS", result.header.kern_data_address);\n'
         report_insert = (
@@ -125,12 +155,12 @@ for source, destination in source_map:
             '        write_hex(out, "KERN_DATA_ADDRESS", result.header.kern_data_address);\n'
         )
         if report_anchor not in text:
-            raise SystemExit("MACHINE1-X runner report anchor not found")
+            raise SystemExit("MACHINE1-Y runner report anchor not found")
         text = text.replace(report_anchor, report_insert, 1)
 
         enable_anchor = '        result.flash_unlock_autoselect_enabled = true;\n        strict_bus bus(rom.data(), parsed.header.rom_size, parsed.header.rom_base, cold_reset_pc,\n'
         if enable_anchor not in text:
-            raise SystemExit("MACHINE1-X runner enable anchor not found")
+            raise SystemExit("MACHINE1-Y runner enable anchor not found")
         text = text.replace(
             enable_anchor,
             '        result.flash_unlock_autoselect_enabled = true;\n'
@@ -143,7 +173,7 @@ for source, destination in source_map:
 
         capture_anchor = '        result.flash_unlock_autoselect_count = bus.observed_flash_unlock_autoselect_count();\n        result.flash_unlock_stage_at_stop = bus.flash_unlock_stage();\n'
         if capture_anchor not in text:
-            raise SystemExit("MACHINE1-X runner capture anchor not found")
+            raise SystemExit("MACHINE1-Y runner capture anchor not found")
         text = text.replace(
             capture_anchor,
             capture_anchor
@@ -159,11 +189,11 @@ for source, destination in source_map:
         )
 
     elif destination.name == "RH29MachineProbeView.swift":
-        text = text.replace("MACHINE1-O", "MACHINE1-X")
-        text = text.replace("RH29_MACHINE1_O.txt", "RH29_MACHINE1_X.txt")
+        text = text.replace("MACHINE1-O", "MACHINE1-Y")
+        text = text.replace("RH29_MACHINE1_O.txt", "RH29_MACHINE1_Y.txt")
         text = text.replace(
             "Probe giữ nguyên model MACHINE1-M và không giả lập 0x0A000000. Bản O ghi 64 lệnh A32 cuối cùng cùng R0/R1/R2/R3/R4/R8/R9/R10/SP/LR để lần ngược nguồn gốc con trỏ 0x0A000000.",
-            "W chứng minh routine 0x2340–0x234C tiếp tục ghi word 32-bit tại 0x20. X chỉ mở thêm đúng word đã quan sát này (shadow 36 byte); 0x24 trở lên vẫn fail-closed, không remap và không gán ngữ nghĩa cho 0x0C150004. Probe luôn hiện để tránh regression UI của W."
+            "Y sửa bank R8–R12 khi Dyncom chuyển SVC→FIQ→SVC và ghi thêm R11/R12 vào trace. Bus vẫn dùng shadow 36 byte của X; 0x24 trở lên fail-closed, không remap và không gán ngữ nghĩa cho 0x0C150004."
         )
     destination.write_text(text, encoding="utf-8")
 
@@ -267,7 +297,7 @@ probe_method = r'''
 - (EKA2L1MachineProbeReport *)runRH29MachineProbeWithInstructionBudget:(uint32_t)budget {
     EKA2L1MachineProbeReport *report = [[EKA2L1MachineProbeReport alloc] init];
     report.succeeded = NO;
-    report.text = @"RH29_MACHINE1_X\nSTOP_REASON=io_error\nDETAIL=emulator is not ready\n";
+    report.text = @"RH29_MACHINE1_Y\nSTOP_REASON=io_error\nDETAIL=emulator is not ready\n";
 
     std::string storage;
     std::string firmware;
@@ -291,12 +321,12 @@ probe_method = r'''
 
     NSString *firmwareCode = [NSString stringWithUTF8String:firmware.c_str()];
     if (!firmwareCode || [firmwareCode caseInsensitiveCompare:@"RH-29"] != NSOrderedSame) {
-        report.text = @"RH29_MACHINE1_X\nSTOP_REASON=io_error\nDETAIL=current device is not RH-29\n";
+        report.text = @"RH29_MACHINE1_Y\nSTOP_REASON=io_error\nDETAIL=current device is not RH-29\n";
         return report;
     }
 
     const std::string rom_path = eka2l1::add_path(storage, "roms/rh-29/SYM.ROM");
-    LOG_INFO(eka2l1::FRONTEND_CMDLINE, "[RH29_MACHINE1_X] start budget={} rom={}", budget, rom_path);
+    LOG_INFO(eka2l1::FRONTEND_CMDLINE, "[RH29_MACHINE1_Y] start budget={} rom={}", budget, rom_path);
     eka2l1::machine::rh29::probe_options options{};
     options.instruction_budget = budget;
     const auto result = eka2l1::machine::rh29::run_probe(rom_path, options);
@@ -306,7 +336,7 @@ probe_method = r'''
         result.stop_reason != eka2l1::machine::rh29::probe_stop_reason::invalid_rom
         && result.stop_reason != eka2l1::machine::rh29::probe_stop_reason::io_error);
     LOG_INFO(eka2l1::FRONTEND_CMDLINE,
-        "[RH29_MACHINE1_X] stop succeeded={} executed={}",
+        "[RH29_MACHINE1_Y] stop succeeded={} executed={}",
         report.succeeded, result.executed_instructions);
     return report;
 }
@@ -388,4 +418,4 @@ if 'firmwareCode.caseInsensitiveCompare("RH-29")' not in content:
     content = content.replace(settings_button, settings_button + probe_button, 1)
 content_path.write_text(content, encoding="utf-8")
 
-print("MACHINE1-X diagnostic sources + iOS probe integration staged")
+print("MACHINE1-Y diagnostic sources + iOS probe integration staged")

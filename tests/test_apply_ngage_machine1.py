@@ -123,6 +123,9 @@ namespace eka2l1::arm {
     }
 }
 ''', encoding="utf-8")
+        (cpu_inc / "armstate.h").write_text('    std::array<std::uint32_t, 7> Reg_firq{}; // R8---R14 FIRQ\n', encoding="utf-8")
+        (cpu_src / "armstate.cpp").write_text(
+            (ROOT / "tests/fixtures/change_privilege_mode.cpp").read_text(encoding="utf-8"), encoding="utf-8")
 
         if good_cmake:
             cmake = '''set(EKA2L1_IOS_SOURCES
@@ -199,7 +202,8 @@ namespace eka2l1::arm {
         self.assertIn("CP15_TRACE_POLICY=all_condition_passed_p15_seen_before_barrier", runner)
         self.assertIn("SETUP_B68_INSTRUCTION_INDEX_BEFORE", runner)
         self.assertIn("RAM_PROBE_READ_COUNT", runner)
-        self.assertIn("RH29_MACHINE1_X", runner)
+        self.assertIn("RH29_MACHINE1_Y", runner)
+        self.assertIn('write_hex(out, (p + "R11").c_str(), entry.r11)', runner)
 
     def test_adds_cmake_sources_exactly_once_and_is_idempotent(self):
         td, root = self.make_upstream()
@@ -224,7 +228,7 @@ namespace eka2l1::arm {
         self.assertIn("NS_SWIFT_NAME(runRH29MachineProbe(instructionBudget:))", header)
         self.assertIn('caseInsensitiveCompare:@"RH-29"', impl)
         self.assertIn('roms/rh-29/SYM.ROM', impl)
-        self.assertIn("[RH29_MACHINE1_X]", impl)
+        self.assertIn("[RH29_MACHINE1_Y]", impl)
         self.assertNotIn("reset(false", impl)
         self.assertNotIn("set_device(", impl)
 
@@ -249,12 +253,12 @@ namespace eka2l1::arm {
         self.assertEqual(result.returncode, 0, result.stdout)
         view = (root / "src/emu/ios/App/RH29MachineProbeView.swift").read_text()
         self.assertIn("Task.detached(priority: .userInitiated)", view)
-        self.assertIn("RH29_MACHINE1_X.txt", view)
+        self.assertIn("RH29_MACHINE1_Y.txt", view)
         self.assertIn("ShareLink", view)
         self.assertIn(".textSelection(.enabled)", view)
         self.assertIn("[1_000, 10_000, 100_000, 1_000_000]", view)
         self.assertIn("@State private var instructionBudget: UInt32 = 10_000", view)
-        self.assertIn("MACHINE1-X", view)
+        self.assertIn("MACHINE1-Y", view)
         self.assertNotIn("RH29_MACHINE1_R.txt", view)
 
     def test_adds_probe_only_svc_dyncom_constructor_without_changing_default_mode(self):
@@ -280,6 +284,57 @@ namespace eka2l1::arm {
         self.assertIn('Menu("home.more"', content)
         self.assertIn("installedDevices", impl)
         self.assertIn("USER32MODE", dyncom)
+
+    def test_fiq_banking_preserves_shared_r8_r12(self):
+        td, root = self.make_upstream()
+        self.addCleanup(td.cleanup)
+        result = self.run_script(root)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        header = (root / "src/emu/cpu/include/cpu/dyncom/armstate.h").read_text()
+        impl = (root / "src/emu/cpu/src/dyncom/armstate.cpp").read_text()
+        self.assertIn("Reg_nonfiq_r8_r12", header)
+        self.assertEqual(impl.count("Reg_nonfiq_r8_r12"), 3)
+        program = '''#include <algorithm>
+#include <array>
+#include <cstdint>
+#include <cassert>
+enum { USERBANK, IRQBANK, SVCBANK, ABORTBANK, UNDEFBANK, FIQBANK, SYSTEMBANK };
+enum { USER32MODE=0x10, FIQ32MODE=0x11, IRQ32MODE=0x12, SVC32MODE=0x13,
+       ABORT32MODE=0x17, UNDEF32MODE=0x1b, SYSTEM32MODE=0x1f };
+struct ARMul_State {
+  std::array<std::uint32_t,16> Reg{};
+  std::array<std::uint32_t,2> Reg_usr{}, Reg_irq{}, Reg_svc{}, Reg_abort{}, Reg_undef{};
+  std::array<std::uint32_t,7> Reg_firq{}, Spsr{};
+  std::array<std::uint32_t,5> Reg_nonfiq_r8_r12{};
+  std::uint32_t Mode=SVC32MODE, Bank=SVCBANK, Cpsr=SVC32MODE, Spsr_copy=0;
+  void ChangePrivilegeMode(std::uint32_t new_mode);
+};
+''' + impl + '''
+int main() {
+  ARMul_State cpu;
+  for (int i=8;i<=12;i++) cpu.Reg[i]=0x700+i;
+  cpu.Reg[13]=0x1234;
+  cpu.ChangePrivilegeMode(FIQ32MODE);
+  for (int i=8;i<=12;i++) cpu.Reg[i]=0x900+i;
+  cpu.Reg[13]=0x4321;
+  cpu.ChangePrivilegeMode(SVC32MODE);
+  for (int i=8;i<=12;i++) assert(cpu.Reg[i]==0x700u+i);
+  assert(cpu.Reg[13]==0x1234);
+  cpu.ChangePrivilegeMode(FIQ32MODE);
+  for (int i=8;i<=12;i++) assert(cpu.Reg[i]==0x900u+i);
+  assert(cpu.Reg[13]==0x4321);
+  cpu.ChangePrivilegeMode(IRQ32MODE);
+  for (int i=8;i<=12;i++) assert(cpu.Reg[i]==0x700u+i);
+  cpu.ChangePrivilegeMode(SVC32MODE);
+  assert(cpu.Reg[11]==0x70b);
+}
+'''
+        binary = root / "banking_test"
+        compiled = subprocess.run(["c++", "-std=c++17", "-Wall", "-Wextra", "-pedantic", "-x", "c++", "-", "-o", str(binary)],
+                                  input=program, text=True, capture_output=True)
+        self.assertEqual(compiled.returncode, 0, compiled.stderr)
+        run = subprocess.run([str(binary)], capture_output=True, text=True)
+        self.assertEqual(run.returncode, 0, run.stderr)
 
 
 if __name__ == "__main__":

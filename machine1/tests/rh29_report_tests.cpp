@@ -56,13 +56,13 @@ static probe_result sample_result() {
         0x00002660u, 0xE5901000u, 0x200000D1u,
         0x0A000000u, 0x0000241Cu, 0x600000D3u, 0x600000D1u,
         0x00000001u, 0x0A000000u, 0x00000001u, 0x00000008u,
-        0x0000241Cu, 0x000024C4u
+        0x00000744u, 0x00000010u, 0x0000241Cu, 0x000024C4u
     };
     result.a32_trace[1] = a32_trace_entry{
         0x00002664u, 0xE89800F0u, 0x200000D1u,
         0x0A000000u, 0x0000241Cu, 0x600000D3u, 0x600000D1u,
         0x00000001u, 0x0A000000u, 0x00000001u, 0x00000008u,
-        0x0000241Cu, 0x000024C4u
+        0x00000744u, 0x00000010u, 0x0000241Cu, 0x000024C4u
     };
     result.executed_instructions = 37;
     result.stop_reason = probe_stop_reason::unresolved_access;
@@ -167,6 +167,8 @@ static void test_report_contains_budget_stop_and_registers() {
     require_contains(text, "A32_TRACE_01_R8=0x0A000000");
     require_contains(text, "A32_TRACE_01_R9=0x00000001");
     require_contains(text, "A32_TRACE_01_R10=0x00000008");
+    require_contains(text, "A32_TRACE_01_R11=0x00000744");
+    require_contains(text, "A32_TRACE_01_R12=0x00000010");
     require_contains(text, "A32_TRACE_01_SP=0x0000241C");
     require_contains(text, "A32_TRACE_01_LR=0x000024C4");
     require_contains(text, "PC=0x50005678");
