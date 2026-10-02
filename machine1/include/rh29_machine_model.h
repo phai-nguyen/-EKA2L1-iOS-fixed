@@ -330,7 +330,7 @@ namespace eka2l1::machine::rh29 {
         "MACHINE1-AP relocated stack must remain exactly eight 32-bit words");
 
     // MACHINE1-AP device evidence consumed by MACHINE1-AQ: the exact relocated
-    // eight-word push completes, then PC=0xF1C executes SUB sp,sp,#0x54,
+    // eight-word push completes and execution reaches instruction 3017; then PC=0xF1C executes SUB sp,sp,#0x54,
     // producing SP=0x09FFF388. PC=0xF20 loads r5/r8/r12 from the already
     // initialized 0x0A000FBC local-frame words. The next bus transaction is
     // PC=0xF24, instruction 0xE58DC024 (STR r12,[sp,#0x24]), which writes
