@@ -190,6 +190,9 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_relocation_read_count = 0;
         std::uint64_t candidate_bootstrap_relocation_write_count = 0;
         std::uint64_t candidate_bootstrap_relocation_initialized_bytes = 0;
+        std::uint64_t candidate_bootstrap_local_frame_tail_read_count = 0;
+        std::uint64_t candidate_bootstrap_local_frame_tail_write_count = 0;
+        std::uint64_t candidate_bootstrap_local_frame_tail_initialized_words = 0;
         bool candidate_post_probe_workspace_enabled = false;
         std::uint64_t candidate_post_probe_workspace_read_count = 0;
         std::uint64_t candidate_post_probe_workspace_write_count = 0;
