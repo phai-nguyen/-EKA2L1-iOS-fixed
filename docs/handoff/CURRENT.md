@@ -2,29 +2,24 @@
 
 Active branch: `ngage-machine1`
 
-Latest state:
-- MACHINE1-AB device log `RH29_MACHINE1_AB.txt` analyzed on 2026-10-02.
-- AB confirms the exact second nested stack push completed: 4 x 32-bit writes / 16 initialized bytes at `0x0A000FAC–0x0A000FBB`, with 4 readbacks.
-- After returning from that helper, PC `0x11C8` reads the already-copied word at `0x0A000010` (originally `0x32800021`), then PC `0x11CC`/`0x11D0` OR control bits to produce `0xB2800021`.
-- New blocker: PC `0x11D4`, instruction `0xE5803008` = `STR r3,[r0,#8]`, attempts write32 `0xB2800021 -> 0x0A000010`, LR=`0x22C4`.
-- `0x0A000010` is inside the existing Z bootstrap-copy footprint `0x0A000000–0x0A000107`; this is an in-place mutation, not evidence for a wider RAM mapping.
-- MACHINE1-AC permits only this exact writeback: address `0x0A000010`, width32, PC `0x11D4`, LR `0x22C4`, value `0xB2800021`, and only when those four bytes have already been initialized by the Z copy.
-- Y FIQ banking fix, Z exact 0x108-byte copy, AA first stack push, AB second stack push, low shadow 36 bytes, and the probe-share UX remain unchanged.
-- **Chia sẻ báo cáo** stays directly below **Chạy probe**.
+Latest implementation:
+- MACHINE1-AE device report stopped at write32 `0xB1000023 -> 0x0A0000A0`, PC=`0x2220`, LR=`0x2244`.
+- AE proved helper `0x21F4..0x2220` processes a copied record whose control word is `0x31000023` (low5=3); therefore AE's model-only `low5==1` gate was too narrow.
+- MACHINE1-AF logic extends only that gate to the three low5 values actually present in the copied firmware table: 1, 2 and 3.
+- AF still admits a record-loop write only when the destination is an aligned +8 control slot inside the existing 16-record/0x108-byte copied table, bytes were initialized by the Z copy, width is 32-bit, PC=`0x2220`, LR=`0x2244`, old bit31 is clear, and the written value exactly equals the firmware transform `(old & ~0x60) | 0x80000020`.
+- Controller tests cover `0x31000023 -> 0xB1000023` and `0x32000022 -> 0xB2000022`; a wrong transform remains fail-closed.
+- No RAM/MMIO range is widened. Y FIQ banking fix, Z exact 0x108-byte copy, AA/AB/AC/AD stack/writeback gates, low shadow 36 bytes, flash gates and diagnostics remain unchanged.
 - `0x0C150004` semantics remain unknown; do not infer remap.
-- Research note: `docs/research/RH29-MACHINE1-AC-2026-10-02.md`.
+- Build workflow/harness label remains AE because connector safety blocked CI-file edits; the branch code itself is AF logic.
+- Device test should use the artifact from the final AF HEAD and export the report filename embedded by the unchanged harness.
 
+Firmware-table evidence retained:
+- source `0x744` = 8-byte header + 16 records x 16 bytes = 0x108 bytes;
+- `0x0A000000, size 0x01000000, control 0x32000022` is the strongest main-SDRAM candidate;
+- `0x08000000, size 0x1000, control 0x30000023` contradicts the old 16-MiB SDRAM label;
+- `0x0C000000, size 0x00200000, control 0x31000023` contains observed `0x0C150004`, without establishing the register semantics.
 
-## Deep firmware finding after AB
-
-Static reconstruction of the 66-word source block at ROM alias `0x744` shows it is a two-word header followed by **16 records x 16 bytes**. The executed helper at `0x12FC` proves each record starts with `base,size`; `0x22A0` scans the 16 records and returns the one containing a queried address; `0x11C8–0x11D4` mutates field +8 of the selected record.
-
-The recovered table includes:
-- `0x0A000000, size 0x01000000` — exactly 16 MiB, matching RH-29's 128-Mbit SDRAM and the observed bootstrap-copy/stack region. This is now the strongest main-SDRAM candidate.
-- `0x08000000, size 0x1000` — only 4 KiB; the old MACHINE1 label treating 0x08000000 as 16-MiB candidate SDRAM is now contradicted by firmware evidence and should be corrected in a later model step.
-- `0x0C000000, size 0x00200000` — contains the observed address `0x0C150004`, but that register's exact semantics remain unknown.
-- flash-family ranges lining up with independent RH-29 UFS/JAF evidence.
-
-Field +8 values (`0x32800021`, `0x31000023`, `0x33400023`, `0x30000023`, `0x32000022`, `0x30200023`) remain raw firmware values. Their low bits resemble ARMv4/v5 translation descriptor types, but do not yet label them as raw PDEs.
-
-Research note: `docs/research/RH29-BOOTSTRAP-REGION-TABLE-2026-10-02.md`.
+AF commits:
+- `80f41daf05cb2a02dcc2ebec3808416a8b425d63` — model accepts exact low5 1/2/3 transforms.
+- `50fad52fc603d4936f2c6c313cbcabc485225dfe` — controller tests for low5 2/3 plus fail-closed wrong transform.
+- `24df0a8f13c21f05cdad3896c4d2174266a47411` — model documentation / removal of obsolete low5==1 constant.
