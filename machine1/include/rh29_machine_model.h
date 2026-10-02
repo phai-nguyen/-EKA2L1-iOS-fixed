@@ -255,7 +255,7 @@ namespace eka2l1::machine::rh29 {
     static_assert(candidate_bootstrap_relocation_base + candidate_bootstrap_relocation_size == 0x09FFF508u,
         "MACHINE1-AN relocation window must stay exactly 0x108 bytes");
 
-    // MACHINE1-AN device evidence: the relocation completes all 66 words and
+    // MACHINE1-AN device evidence consumed by MACHINE1-AO: the relocation completes all 66 words and
     // returns to PC=0x12B8. The first new unresolved access is the first of
     // four explicit stores that fill the remaining reserved local-frame words:
     //   0x12B8 STR r10,[sp,#4]  -> 0x0A000FC0 = 0x00000080
