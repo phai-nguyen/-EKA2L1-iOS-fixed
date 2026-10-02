@@ -198,6 +198,29 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::uint32_t candidate_ram_bank_probe_anchor_read_instruction = 0xE594C000u;
     static constexpr std::uint32_t candidate_ram_bank_probe_anchor_seed = 0x00000000u;
 
+    // MACHINE1-AK device evidence plus the raw 0x1328 handler dump prove the
+    // next phase is a power-of-two address-line probe. R5 starts at 0x4000,
+    // doubles until it reaches record size 0x01000000, and accesses
+    // anchor+R5 via PC 0x137C/0x1380/0x1390/0x13A4. MACHINE1-AL models only
+    // those ten sparse 32-bit words as independent synthetic-zero RAM probe
+    // points. It does NOT map the 16-MiB interval or any gap between points.
+    static constexpr std::uint32_t candidate_ram_bank_sparse_probe_first_offset = 0x00004000u;
+    static constexpr std::uint32_t candidate_ram_bank_sparse_probe_limit = 0x01000000u;
+    static constexpr std::size_t candidate_ram_bank_sparse_probe_point_count = 10u;
+    static constexpr std::size_t candidate_ram_bank_sparse_probe_width = sizeof(std::uint32_t);
+    static constexpr std::uint32_t candidate_ram_bank_sparse_probe_lr = 0x00001348u;
+    static constexpr std::uint32_t candidate_ram_bank_sparse_probe_original_read_pc = 0x0000137Cu;
+    static constexpr std::uint32_t candidate_ram_bank_sparse_probe_test_write_pc = 0x00001380u;
+    static constexpr std::uint32_t candidate_ram_bank_sparse_probe_anchor_verify_pc = 0x00001384u;
+    static constexpr std::uint32_t candidate_ram_bank_sparse_probe_readback_pc = 0x00001390u;
+    static constexpr std::uint32_t candidate_ram_bank_sparse_probe_restore_pc = 0x000013A4u;
+    static constexpr std::uint32_t candidate_ram_bank_sparse_probe_test_value =
+        ~candidate_ram_bank_probe_anchor_seed;
+    static_assert((candidate_ram_bank_sparse_probe_first_offset
+                   << candidate_ram_bank_sparse_probe_point_count)
+                      == candidate_ram_bank_sparse_probe_limit,
+        "MACHINE1-AL sparse points must cover powers 0x4000..0x800000 only");
+
     // MACHINE1-AB device evidence: after the nested push returns, firmware
     // reads the already-copied word at 0x0A000010, ORs control bits, and
     // writes 0xB2800021 back with STR r3,[r0,#8] at PC=0x11D4/LR=0x22C4.
@@ -416,6 +439,11 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_nested_stack_write_count() const;
         std::size_t candidate_bootstrap_nested_stack_initialized_bytes() const;
         std::uint64_t candidate_ram_bank_probe_anchor_read_count() const;
+        std::uint64_t candidate_ram_bank_sparse_probe_original_read_count() const;
+        std::uint64_t candidate_ram_bank_sparse_probe_test_write_count() const;
+        std::uint64_t candidate_ram_bank_sparse_probe_anchor_verify_read_count() const;
+        std::uint64_t candidate_ram_bank_sparse_probe_readback_count() const;
+        std::uint64_t candidate_ram_bank_sparse_probe_restore_write_count() const;
         std::uint64_t candidate_post_probe_workspace_read_count() const;
         std::uint64_t candidate_post_probe_workspace_write_count() const;
         std::uint64_t low_vector_shadow_read_count() const;
@@ -441,6 +469,8 @@ namespace eka2l1::machine::rh29 {
         bool range_inside_candidate_bootstrap_region_stack(std::uint32_t address,
                                                            std::size_t width,
                                                            std::size_t &offset) const;
+        bool candidate_ram_bank_sparse_probe_point_index(std::uint32_t address,
+                                                          std::size_t &index) const;
         bool range_inside_candidate_post_probe_workspace(std::uint32_t address,
                                                         std::size_t width,
                                                         std::size_t &offset) const;
@@ -500,6 +530,13 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_nested_stack_write_count_ = 0;
         std::size_t candidate_bootstrap_nested_stack_initialized_bytes_ = 0;
         std::uint64_t candidate_ram_bank_probe_anchor_read_count_ = 0;
+        std::array<std::uint32_t, candidate_ram_bank_sparse_probe_point_count>
+            candidate_ram_bank_sparse_probe_words_{};
+        std::uint64_t candidate_ram_bank_sparse_probe_original_read_count_ = 0;
+        std::uint64_t candidate_ram_bank_sparse_probe_test_write_count_ = 0;
+        std::uint64_t candidate_ram_bank_sparse_probe_anchor_verify_read_count_ = 0;
+        std::uint64_t candidate_ram_bank_sparse_probe_readback_count_ = 0;
+        std::uint64_t candidate_ram_bank_sparse_probe_restore_write_count_ = 0;
         std::vector<std::uint8_t> candidate_post_probe_workspace_data_{};
         std::uint64_t candidate_post_probe_workspace_read_count_ = 0;
         std::uint64_t candidate_post_probe_workspace_write_count_ = 0;

@@ -257,7 +257,17 @@ namespace eka2l1::machine::rh29 {
         write_hex(out, "RAM_BANK_PROBE_ANCHOR_OBSERVED_INSTRUCTION", candidate_ram_bank_probe_anchor_read_instruction);
         write_hex(out, "RAM_BANK_PROBE_ANCHOR_SEED", candidate_ram_bank_probe_anchor_seed);
         out << "RAM_BANK_PROBE_ANCHOR_READ_COUNT=" << result.candidate_ram_bank_probe_anchor_read_count << "\n";
-        out << "RAM_BANK_HANDLER_DUMP_POLICY=raw_rom_words_0x00001328_0x000013bc_no_semantic_label\n";
+        out << "RAM_BANK_SPARSE_PROBE_POLICY=AK_raw_handler_10_power2_words_synthetic_independent_zero_seed_exact_callsites_no_range_map\n";
+        out << "RAM_BANK_SPARSE_PROBE_POINT_COUNT=" << candidate_ram_bank_sparse_probe_point_count << "\n";
+        write_hex(out, "RAM_BANK_SPARSE_PROBE_FIRST_OFFSET", candidate_ram_bank_sparse_probe_first_offset);
+        write_hex(out, "RAM_BANK_SPARSE_PROBE_LIMIT", candidate_ram_bank_sparse_probe_limit);
+        write_hex(out, "RAM_BANK_SPARSE_PROBE_TEST_VALUE", candidate_ram_bank_sparse_probe_test_value);
+        out << "RAM_BANK_SPARSE_PROBE_ORIGINAL_READ_COUNT=" << result.candidate_ram_bank_sparse_probe_original_read_count << "\n";
+        out << "RAM_BANK_SPARSE_PROBE_TEST_WRITE_COUNT=" << result.candidate_ram_bank_sparse_probe_test_write_count << "\n";
+        out << "RAM_BANK_SPARSE_PROBE_ANCHOR_VERIFY_READ_COUNT=" << result.candidate_ram_bank_sparse_probe_anchor_verify_read_count << "\n";
+        out << "RAM_BANK_SPARSE_PROBE_READBACK_COUNT=" << result.candidate_ram_bank_sparse_probe_readback_count << "\n";
+        out << "RAM_BANK_SPARSE_PROBE_RESTORE_WRITE_COUNT=" << result.candidate_ram_bank_sparse_probe_restore_write_count << "\n";
+        out << "RAM_BANK_HANDLER_DUMP_POLICY=raw_rom_words_0x00001328_0x000013fc_no_semantic_label\n";
         out << "RAM_BANK_HANDLER_DUMP_WORDS_VALID=" << result.ram_bank_handler_dump_words_valid << "\n";
         for (std::size_t i = 0; i < result.ram_bank_handler_dump_words_valid
                                   && i < result.ram_bank_handler_dump_words.size(); ++i) {
@@ -727,6 +737,16 @@ namespace eka2l1::machine::rh29 {
 
         result.candidate_ram_bank_probe_anchor_read_count =
             bus.candidate_ram_bank_probe_anchor_read_count();
+        result.candidate_ram_bank_sparse_probe_original_read_count =
+            bus.candidate_ram_bank_sparse_probe_original_read_count();
+        result.candidate_ram_bank_sparse_probe_test_write_count =
+            bus.candidate_ram_bank_sparse_probe_test_write_count();
+        result.candidate_ram_bank_sparse_probe_anchor_verify_read_count =
+            bus.candidate_ram_bank_sparse_probe_anchor_verify_read_count();
+        result.candidate_ram_bank_sparse_probe_readback_count =
+            bus.candidate_ram_bank_sparse_probe_readback_count();
+        result.candidate_ram_bank_sparse_probe_restore_write_count =
+            bus.candidate_ram_bank_sparse_probe_restore_write_count();
 
         if (result.unresolved) {
             result.stop_reason = probe_stop_reason::unresolved_access;

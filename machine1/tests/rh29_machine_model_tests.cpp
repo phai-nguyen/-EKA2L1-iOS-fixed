@@ -1163,6 +1163,95 @@ static void test_aj_observed_ram_bank_probe_anchor_is_exact_read_only_seed() {
     assert(write_closed.first_unresolved().has_value());
 }
 
+static void test_ak_raw_handler_sparse_address_line_probe_is_exact_and_restores() {
+    static_assert(candidate_ram_bank_sparse_probe_first_offset == 0x00004000u);
+    static_assert(candidate_ram_bank_sparse_probe_limit == 0x01000000u);
+    static_assert(candidate_ram_bank_sparse_probe_point_count == 10u);
+    static_assert(candidate_ram_bank_sparse_probe_original_read_pc == 0x0000137Cu);
+    static_assert(candidate_ram_bank_sparse_probe_test_write_pc == 0x00001380u);
+    static_assert(candidate_ram_bank_sparse_probe_anchor_verify_pc == 0x00001384u);
+    static_assert(candidate_ram_bank_sparse_probe_readback_pc == 0x00001390u);
+    static_assert(candidate_ram_bank_sparse_probe_restore_pc == 0x000013A4u);
+    static_assert(candidate_ram_bank_sparse_probe_test_value == 0xFFFFFFFFu);
+
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+
+    std::uint32_t anchor_word = 0xFFFFFFFFu;
+    assert(bus.read(access_kind::data_read,
+                    candidate_ram_bank_probe_anchor_address,
+                    &anchor_word, sizeof(anchor_word),
+                    candidate_ram_bank_probe_anchor_read_pc,
+                    candidate_ram_bank_probe_anchor_read_lr));
+    assert(anchor_word == 0u);
+
+    std::uint32_t offset = candidate_ram_bank_sparse_probe_first_offset;
+    for (std::size_t i = 0; i < candidate_ram_bank_sparse_probe_point_count; ++i) {
+        const std::uint32_t address = candidate_ram_bank_probe_anchor_address + offset;
+        std::uint32_t original = 0xFFFFFFFFu;
+        assert(bus.read(access_kind::data_read, address, &original, sizeof(original),
+                        candidate_ram_bank_sparse_probe_original_read_pc,
+                        candidate_ram_bank_sparse_probe_lr));
+        assert(original == 0u);
+        const std::uint32_t test_value = candidate_ram_bank_sparse_probe_test_value;
+        assert(bus.write(address, &test_value, sizeof(test_value),
+                         candidate_ram_bank_sparse_probe_test_write_pc,
+                         candidate_ram_bank_sparse_probe_lr));
+        anchor_word = 0xFFFFFFFFu;
+        assert(bus.read(access_kind::data_read,
+                        candidate_ram_bank_probe_anchor_address,
+                        &anchor_word, sizeof(anchor_word),
+                        candidate_ram_bank_sparse_probe_anchor_verify_pc,
+                        candidate_ram_bank_sparse_probe_lr));
+        assert(anchor_word == 0u);
+        std::uint32_t readback = 0;
+        assert(bus.read(access_kind::data_read, address, &readback, sizeof(readback),
+                        candidate_ram_bank_sparse_probe_readback_pc,
+                        candidate_ram_bank_sparse_probe_lr));
+        assert(readback == test_value);
+        assert(bus.write(address, &original, sizeof(original),
+                         candidate_ram_bank_sparse_probe_restore_pc,
+                         candidate_ram_bank_sparse_probe_lr));
+        offset <<= 1u;
+    }
+
+    assert(bus.candidate_ram_bank_sparse_probe_original_read_count() == 10u);
+    assert(bus.candidate_ram_bank_sparse_probe_test_write_count() == 10u);
+    assert(bus.candidate_ram_bank_sparse_probe_anchor_verify_read_count() == 10u);
+    assert(bus.candidate_ram_bank_sparse_probe_readback_count() == 10u);
+    assert(bus.candidate_ram_bank_sparse_probe_restore_write_count() == 10u);
+
+    strict_bus gap(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+    std::uint32_t out = 0;
+    assert(!gap.read(access_kind::data_read,
+                     candidate_ram_bank_probe_anchor_address + 0x2000u,
+                     &out, sizeof(out),
+                     candidate_ram_bank_sparse_probe_original_read_pc,
+                     candidate_ram_bank_sparse_probe_lr));
+    assert(gap.first_unresolved().has_value());
+
+    strict_bus wrong_pc(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                        candidate_sdram_base, 0x100);
+    assert(!wrong_pc.read(access_kind::data_read,
+                          candidate_ram_bank_probe_anchor_address
+                              + candidate_ram_bank_sparse_probe_first_offset,
+                          &out, sizeof(out), 0x00001380u,
+                          candidate_ram_bank_sparse_probe_lr));
+    assert(wrong_pc.first_unresolved().has_value());
+
+    strict_bus wrong_value(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                           candidate_sdram_base, 0x100);
+    const std::uint32_t bad = 0x12345678u;
+    assert(!wrong_value.write(candidate_ram_bank_probe_anchor_address
+                                  + candidate_ram_bank_sparse_probe_first_offset,
+                              &bad, sizeof(bad),
+                              candidate_ram_bank_sparse_probe_test_write_pc,
+                              candidate_ram_bank_sparse_probe_lr));
+    assert(wrong_value.first_unresolved().has_value());
+}
+
 static void test_gap_before_post_probe_workspace_remains_unmapped() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc, candidate_sdram_base, 0x100);
@@ -1337,6 +1426,7 @@ int main() {
     test_ah_observed_sixth_stack_push_adds_exactly_two_new_words();
     test_ai_observed_seventh_stack_push_adds_exactly_six_new_words();
     test_aj_observed_ram_bank_probe_anchor_is_exact_read_only_seed();
+    test_ak_raw_handler_sparse_address_line_probe_is_exact_and_restores();
     test_gap_before_post_probe_workspace_remains_unmapped();
     test_post_probe_workspace_is_zero_seeded_mutable_and_bounded();
     test_low_vector_shadow_is_rom_seeded_mutable_and_exactly_36_bytes();

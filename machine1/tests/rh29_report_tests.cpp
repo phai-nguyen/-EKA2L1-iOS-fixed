@@ -52,6 +52,11 @@ static probe_result sample_result() {
     result.flash_unlock_autoselect_count = 1;
     result.flash_unlock_stage_at_stop = 0;
     result.candidate_ram_bank_probe_anchor_read_count = 1;
+    result.candidate_ram_bank_sparse_probe_original_read_count = 10;
+    result.candidate_ram_bank_sparse_probe_test_write_count = 10;
+    result.candidate_ram_bank_sparse_probe_anchor_verify_read_count = 10;
+    result.candidate_ram_bank_sparse_probe_readback_count = 10;
+    result.candidate_ram_bank_sparse_probe_restore_write_count = 10;
     result.ram_bank_handler_dump_words_valid = 2;
     result.ram_bank_handler_dump_words[0] = 0xE92D41F0u;
     result.ram_bank_handler_dump_words[1] = 0xE1A08000u;
@@ -153,7 +158,7 @@ static void test_report_contains_probe_identity_and_rom_header() {
     require_contains(text, "KERN_LIMIT=0x80002000");
 }
 
-static void test_report_contains_ak_ram_probe_evidence() {
+static void test_report_contains_al_ram_probe_evidence() {
     const auto text = format_report(sample_result());
     require_contains(text, "RAM_BANK_PROBE_ANCHOR_POLICY=AJ_device_exact_first_read_pc_0x1368_lr_0x1348_addr_0x0a001100_synthetic_zero_seed_read_only_no_range_map");
     require_contains(text, "RAM_BANK_PROBE_ANCHOR_ADDRESS=0x0A001100");
@@ -163,7 +168,17 @@ static void test_report_contains_ak_ram_probe_evidence() {
     require_contains(text, "RAM_BANK_PROBE_ANCHOR_OBSERVED_INSTRUCTION=0xE594C000");
     require_contains(text, "RAM_BANK_PROBE_ANCHOR_SEED=0x00000000");
     require_contains(text, "RAM_BANK_PROBE_ANCHOR_READ_COUNT=1");
-    require_contains(text, "RAM_BANK_HANDLER_DUMP_POLICY=raw_rom_words_0x00001328_0x000013bc_no_semantic_label");
+    require_contains(text, "RAM_BANK_SPARSE_PROBE_POLICY=AK_raw_handler_10_power2_words_synthetic_independent_zero_seed_exact_callsites_no_range_map");
+    require_contains(text, "RAM_BANK_SPARSE_PROBE_POINT_COUNT=10");
+    require_contains(text, "RAM_BANK_SPARSE_PROBE_FIRST_OFFSET=0x00004000");
+    require_contains(text, "RAM_BANK_SPARSE_PROBE_LIMIT=0x01000000");
+    require_contains(text, "RAM_BANK_SPARSE_PROBE_TEST_VALUE=0xFFFFFFFF");
+    require_contains(text, "RAM_BANK_SPARSE_PROBE_ORIGINAL_READ_COUNT=10");
+    require_contains(text, "RAM_BANK_SPARSE_PROBE_TEST_WRITE_COUNT=10");
+    require_contains(text, "RAM_BANK_SPARSE_PROBE_ANCHOR_VERIFY_READ_COUNT=10");
+    require_contains(text, "RAM_BANK_SPARSE_PROBE_READBACK_COUNT=10");
+    require_contains(text, "RAM_BANK_SPARSE_PROBE_RESTORE_WRITE_COUNT=10");
+    require_contains(text, "RAM_BANK_HANDLER_DUMP_POLICY=raw_rom_words_0x00001328_0x000013fc_no_semantic_label");
     require_contains(text, "RAM_BANK_HANDLER_DUMP_WORDS_VALID=2");
     require_contains(text, "RAM_BANK_HANDLER_DUMP_00_ADDRESS=0x00001328");
     require_contains(text, "RAM_BANK_HANDLER_DUMP_00_VALUE=0xE92D41F0");
@@ -311,7 +326,7 @@ static void test_arm_condition_passed_matches_a32_flags() {
 
 int main() {
     test_report_contains_probe_identity_and_rom_header();
-    test_report_contains_ak_ram_probe_evidence();
+    test_report_contains_al_ram_probe_evidence();
     test_report_contains_budget_stop_and_registers();
     test_report_contains_unresolved_access();
     test_report_contains_cpu_exception();

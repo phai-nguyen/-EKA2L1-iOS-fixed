@@ -267,6 +267,20 @@ namespace eka2l1::machine::rh29 {
         return true;
     }
 
+    bool strict_bus::candidate_ram_bank_sparse_probe_point_index(
+        const std::uint32_t address,
+        std::size_t &index) const {
+        std::uint32_t offset = candidate_ram_bank_sparse_probe_first_offset;
+        for (std::size_t i = 0; i < candidate_ram_bank_sparse_probe_point_count; ++i) {
+            if (address == candidate_ram_bank_probe_anchor_address + offset) {
+                index = i;
+                return true;
+            }
+            offset <<= 1u;
+        }
+        return false;
+    }
+
     bool strict_bus::range_inside_candidate_post_probe_workspace(
         const std::uint32_t address,
         const std::size_t width,
@@ -380,6 +394,34 @@ namespace eka2l1::machine::rh29 {
             const std::uint32_t seed = candidate_ram_bank_probe_anchor_seed;
             std::memcpy(out, &seed, sizeof(seed));
             ++candidate_ram_bank_probe_anchor_read_count_;
+            return true;
+        }
+
+        if (kind == access_kind::data_read
+            && address == candidate_ram_bank_probe_anchor_address
+            && width == candidate_ram_bank_sparse_probe_width
+            && pc == candidate_ram_bank_sparse_probe_anchor_verify_pc
+            && lr == candidate_ram_bank_sparse_probe_lr) {
+            const std::uint32_t seed = candidate_ram_bank_probe_anchor_seed;
+            std::memcpy(out, &seed, sizeof(seed));
+            ++candidate_ram_bank_sparse_probe_anchor_verify_read_count_;
+            return true;
+        }
+
+        std::size_t sparse_probe_index = 0;
+        if (kind == access_kind::data_read
+            && width == candidate_ram_bank_sparse_probe_width
+            && lr == candidate_ram_bank_sparse_probe_lr
+            && candidate_ram_bank_sparse_probe_point_index(address, sparse_probe_index)
+            && (pc == candidate_ram_bank_sparse_probe_original_read_pc
+                || pc == candidate_ram_bank_sparse_probe_readback_pc)) {
+            const std::uint32_t word = candidate_ram_bank_sparse_probe_words_[sparse_probe_index];
+            std::memcpy(out, &word, sizeof(word));
+            if (pc == candidate_ram_bank_sparse_probe_original_read_pc) {
+                ++candidate_ram_bank_sparse_probe_original_read_count_;
+            } else {
+                ++candidate_ram_bank_sparse_probe_readback_count_;
+            }
             return true;
         }
 
@@ -745,6 +787,27 @@ namespace eka2l1::machine::rh29 {
             }
         }
 
+        std::size_t sparse_probe_index = 0;
+        if (value
+            && width == candidate_ram_bank_sparse_probe_width
+            && lr == candidate_ram_bank_sparse_probe_lr
+            && candidate_ram_bank_sparse_probe_point_index(address, sparse_probe_index)) {
+            std::uint32_t observed = 0;
+            std::memcpy(&observed, value, sizeof(observed));
+            if (pc == candidate_ram_bank_sparse_probe_test_write_pc
+                && observed == candidate_ram_bank_sparse_probe_test_value) {
+                candidate_ram_bank_sparse_probe_words_[sparse_probe_index] = observed;
+                ++candidate_ram_bank_sparse_probe_test_write_count_;
+                return true;
+            }
+            if (pc == candidate_ram_bank_sparse_probe_restore_pc
+                && observed == candidate_ram_bank_probe_anchor_seed) {
+                candidate_ram_bank_sparse_probe_words_[sparse_probe_index] = observed;
+                ++candidate_ram_bank_sparse_probe_restore_write_count_;
+                return true;
+            }
+        }
+
         if (value
             && width == candidate_bootstrap_post_copy_mutation_width
             && address == candidate_bootstrap_post_copy_mutation_address
@@ -922,6 +985,26 @@ namespace eka2l1::machine::rh29 {
 
     std::uint64_t strict_bus::candidate_ram_bank_probe_anchor_read_count() const {
         return candidate_ram_bank_probe_anchor_read_count_;
+    }
+
+    std::uint64_t strict_bus::candidate_ram_bank_sparse_probe_original_read_count() const {
+        return candidate_ram_bank_sparse_probe_original_read_count_;
+    }
+
+    std::uint64_t strict_bus::candidate_ram_bank_sparse_probe_test_write_count() const {
+        return candidate_ram_bank_sparse_probe_test_write_count_;
+    }
+
+    std::uint64_t strict_bus::candidate_ram_bank_sparse_probe_anchor_verify_read_count() const {
+        return candidate_ram_bank_sparse_probe_anchor_verify_read_count_;
+    }
+
+    std::uint64_t strict_bus::candidate_ram_bank_sparse_probe_readback_count() const {
+        return candidate_ram_bank_sparse_probe_readback_count_;
+    }
+
+    std::uint64_t strict_bus::candidate_ram_bank_sparse_probe_restore_write_count() const {
+        return candidate_ram_bank_sparse_probe_restore_write_count_;
     }
 
     std::uint64_t strict_bus::candidate_post_probe_workspace_read_count() const {
