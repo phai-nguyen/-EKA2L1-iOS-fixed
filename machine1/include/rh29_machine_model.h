@@ -221,6 +221,23 @@ namespace eka2l1::machine::rh29 {
                       == candidate_ram_bank_sparse_probe_limit,
         "MACHINE1-AL sparse points must cover powers 0x4000..0x800000 only");
 
+    // MACHINE1-AL device evidence: all ten sparse address-line probe points
+    // completed with exact 10/10/10/10/10 read/write/verify/readback/restore
+    // counts. Execution then returns to the caller path. At PC=0x12A8,
+    // instruction 0xE2440B03 derives R0=0x09FFF400 from R4=0x0A000000;
+    // PC=0x12AC/LR=0x1270 executes 0xE58D0000 (STR r0,[sp]) with
+    // SP=0x0A000FBC. MACHINE1-AM admits only this observed 32-bit local-frame
+    // word, exact callsite and exact value. It does not expose the remaining
+    // 0x14-byte reserved frame or any adjacent stack/RAM range.
+    static constexpr std::uint32_t candidate_bootstrap_local_frame_word_address = 0x0A000FBCu;
+    static constexpr std::size_t candidate_bootstrap_local_frame_word_width = sizeof(std::uint32_t);
+    static constexpr std::uint32_t candidate_bootstrap_local_frame_word_write_pc = 0x000012ACu;
+    static constexpr std::uint32_t candidate_bootstrap_local_frame_word_write_lr = 0x00001270u;
+    static constexpr std::uint32_t candidate_bootstrap_local_frame_word_instruction = 0xE58D0000u;
+    static constexpr std::uint32_t candidate_bootstrap_local_frame_word_value = 0x09FFF400u;
+    static_assert(candidate_bootstrap_local_frame_word_address == candidate_bootstrap_nested_stack_top,
+        "MACHINE1-AM local-frame word must start exactly at the prior nested-stack top");
+
     // MACHINE1-AB device evidence: after the nested push returns, firmware
     // reads the already-copied word at 0x0A000010, ORs control bits, and
     // writes 0xB2800021 back with STR r3,[r0,#8] at PC=0x11D4/LR=0x22C4.
@@ -444,6 +461,8 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_ram_bank_sparse_probe_anchor_verify_read_count() const;
         std::uint64_t candidate_ram_bank_sparse_probe_readback_count() const;
         std::uint64_t candidate_ram_bank_sparse_probe_restore_write_count() const;
+        std::uint64_t candidate_bootstrap_local_frame_word_read_count() const;
+        std::uint64_t candidate_bootstrap_local_frame_word_write_count() const;
         std::uint64_t candidate_post_probe_workspace_read_count() const;
         std::uint64_t candidate_post_probe_workspace_write_count() const;
         std::uint64_t low_vector_shadow_read_count() const;
@@ -537,6 +556,10 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_ram_bank_sparse_probe_anchor_verify_read_count_ = 0;
         std::uint64_t candidate_ram_bank_sparse_probe_readback_count_ = 0;
         std::uint64_t candidate_ram_bank_sparse_probe_restore_write_count_ = 0;
+        std::uint32_t candidate_bootstrap_local_frame_word_data_ = 0;
+        bool candidate_bootstrap_local_frame_word_initialized_ = false;
+        std::uint64_t candidate_bootstrap_local_frame_word_read_count_ = 0;
+        std::uint64_t candidate_bootstrap_local_frame_word_write_count_ = 0;
         std::vector<std::uint8_t> candidate_post_probe_workspace_data_{};
         std::uint64_t candidate_post_probe_workspace_read_count_ = 0;
         std::uint64_t candidate_post_probe_workspace_write_count_ = 0;
