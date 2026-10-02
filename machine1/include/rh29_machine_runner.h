@@ -165,6 +165,8 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_copy_initialized_bytes = 0;
         bool candidate_bootstrap_post_copy_mutation_enabled = false;
         std::uint64_t candidate_bootstrap_post_copy_mutation_count = 0;
+        bool candidate_bootstrap_record_loop_mutation_enabled = false;
+        std::uint64_t candidate_bootstrap_record_loop_mutation_count = 0;
         bool candidate_bootstrap_stack_enabled = false;
         std::uint64_t candidate_bootstrap_stack_read_count = 0;
         std::uint64_t candidate_bootstrap_stack_write_count = 0;
