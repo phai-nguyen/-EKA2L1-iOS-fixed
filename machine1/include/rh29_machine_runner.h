@@ -99,6 +99,10 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::uint32_t setup_literal_pool_end = 0x00000BC4u;
     static constexpr std::size_t setup_literal_pool_word_count =
         (setup_literal_pool_end - setup_literal_pool_begin) / sizeof(std::uint32_t);
+    static constexpr std::uint32_t ram_bank_handler_dump_begin = 0x00001328u;
+    static constexpr std::uint32_t ram_bank_handler_dump_end = 0x000013C0u;
+    static constexpr std::size_t ram_bank_handler_dump_word_count =
+        (ram_bank_handler_dump_end - ram_bank_handler_dump_begin) / sizeof(std::uint32_t);
     static constexpr std::size_t cp15_trace_capacity = 16u;
 
     struct low_page_trace_entry {
@@ -175,6 +179,7 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_nested_stack_read_count = 0;
         std::uint64_t candidate_bootstrap_nested_stack_write_count = 0;
         std::uint64_t candidate_bootstrap_nested_stack_initialized_bytes = 0;
+        std::uint64_t candidate_ram_bank_probe_anchor_read_count = 0;
         bool candidate_post_probe_workspace_enabled = false;
         std::uint64_t candidate_post_probe_workspace_read_count = 0;
         std::uint64_t candidate_post_probe_workspace_write_count = 0;
@@ -189,6 +194,8 @@ namespace eka2l1::machine::rh29 {
         std::uint32_t callsite_trace_count = 0;
         std::array<std::uint32_t, setup_literal_pool_word_count> setup_literal_pool_words{};
         std::uint32_t setup_literal_pool_words_valid = 0;
+        std::array<std::uint32_t, ram_bank_handler_dump_word_count> ram_bank_handler_dump_words{};
+        std::uint32_t ram_bank_handler_dump_words_valid = 0;
         std::array<low_page_trace_entry, low_page_trace_capacity> low_page_trace{};
         std::uint32_t low_page_trace_count = 0;
         std::uint64_t low_page_trace_total_count = 0;
