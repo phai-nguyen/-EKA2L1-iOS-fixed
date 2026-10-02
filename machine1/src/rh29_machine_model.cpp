@@ -530,6 +530,43 @@ namespace eka2l1::machine::rh29 {
         }
 
         if (value
+            && width == sizeof(std::uint32_t)
+            && pc == candidate_bootstrap_record_loop_mutation_pc
+            && lr == candidate_bootstrap_record_loop_mutation_lr
+            && range_inside_candidate_bootstrap_copy(address, width, offset)) {
+            const std::uint32_t first_control =
+                candidate_bootstrap_record_table_base
+                + static_cast<std::uint32_t>(candidate_bootstrap_record_control_offset);
+            const std::uint32_t rel = address >= first_control ? address - first_control : 0xFFFFFFFFu;
+            const bool control_slot =
+                address >= first_control + static_cast<std::uint32_t>(candidate_bootstrap_record_stride)
+                && rel % candidate_bootstrap_record_stride == 0
+                && rel / candidate_bootstrap_record_stride < candidate_bootstrap_record_count;
+            bool initialized = control_slot;
+            for (std::size_t i = 0; initialized && i < width; ++i) {
+                if (!candidate_bootstrap_copy_initialized_[offset + i]) {
+                    initialized = false;
+                }
+            }
+            if (initialized) {
+                std::uint32_t old_value = 0;
+                std::uint32_t observed = 0;
+                std::memcpy(&old_value, candidate_bootstrap_copy_data_.data() + offset, sizeof(old_value));
+                std::memcpy(&observed, value, sizeof(observed));
+                const std::uint32_t expected =
+                    (old_value & ~candidate_bootstrap_record_loop_clear_mask)
+                    | candidate_bootstrap_record_loop_or_mask;
+                if ((old_value & 0x80000000u) == 0
+                    && (old_value & 0x1Fu) == candidate_bootstrap_record_loop_low5_required
+                    && observed == expected) {
+                    std::memcpy(candidate_bootstrap_copy_data_.data() + offset, value, width);
+                    ++candidate_bootstrap_record_loop_mutation_count_;
+                    return true;
+                }
+            }
+        }
+
+        if (value
             && width == candidate_bootstrap_post_copy_mutation_width
             && address == candidate_bootstrap_post_copy_mutation_address
             && pc == candidate_bootstrap_post_copy_mutation_pc
@@ -674,6 +711,10 @@ namespace eka2l1::machine::rh29 {
 
     std::uint64_t strict_bus::candidate_bootstrap_post_copy_mutation_count() const {
         return candidate_bootstrap_post_copy_mutation_count_;
+    }
+
+    std::uint64_t strict_bus::candidate_bootstrap_record_loop_mutation_count() const {
+        return candidate_bootstrap_record_loop_mutation_count_;
     }
 
     std::uint64_t strict_bus::candidate_bootstrap_stack_read_count() const {
