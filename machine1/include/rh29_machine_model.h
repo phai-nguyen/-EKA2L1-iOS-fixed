@@ -293,7 +293,7 @@ namespace eka2l1::machine::rh29 {
         "MACHINE1-AO tail must fill only the exact reserved words before the first push window");
 
     // MACHINE1-AO device evidence consumed by MACHINE1-AP: all four local-frame
-    // tail stores complete. The path then loads 0x09FFF400 from [sp], subtracts
+    // tail stores complete and execution reaches instruction 3014 before the new push. The path then loads 0x09FFF400 from [sp], subtracts
     // four to 0x09FFF3FC, and calls the small stack-switch helper at 0x3FC with
     // R1=0xF18. That helper installs SP=0x09FFF3FC and LR=0xF18, then returns to
     // PC=0xF18. Instruction 0xE92D47F0 is STMDB sp!,{r4-r10,lr}, so its exact
