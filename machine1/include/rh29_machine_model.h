@@ -158,6 +158,30 @@ namespace eka2l1::machine::rh29 {
     static_assert(candidate_bootstrap_sixth_stack_top == candidate_bootstrap_nested_stack_extension_base,
         "MACHINE1-AI deep stack must stop exactly below the AH extension");
 
+    // MACHINE1-AI device evidence: the low5=2 record path reaches PC=0x1474,
+    // then BLs to 0x1328 with LR=0x1478. The first instruction there is
+    // 0xE92D41F0 = STMDB sp!, {r4-r8,lr}. Entry SP is 0x0A000FA0, so the
+    // exact 24-byte footprint is 0x0A000F88..0x0A000F9F. This is wholly
+    // below the AI deep-stack window. MACHINE1-AJ adds only these six words
+    // for this exact callsite; no generic stack/RAM page is created.
+    static constexpr std::uint32_t candidate_bootstrap_seventh_stack_top =
+        candidate_bootstrap_sixth_stack_push_base;
+    static constexpr std::size_t candidate_bootstrap_seventh_stack_push_size = 0x18u;
+    static constexpr std::uint32_t candidate_bootstrap_seventh_stack_push_base =
+        candidate_bootstrap_seventh_stack_top
+            - static_cast<std::uint32_t>(candidate_bootstrap_seventh_stack_push_size);
+    static constexpr std::uint32_t candidate_bootstrap_seventh_stack_push_pc = 0x00001328u;
+    static constexpr std::uint32_t candidate_bootstrap_seventh_stack_push_lr = 0x00001478u;
+    static constexpr std::uint32_t candidate_bootstrap_seventh_stack_push_instruction = 0xE92D41F0u;
+    static constexpr std::uint32_t candidate_bootstrap_region_stack_base =
+        candidate_bootstrap_seventh_stack_push_base;
+    static constexpr std::size_t candidate_bootstrap_region_stack_size =
+        candidate_bootstrap_seventh_stack_push_size;
+    static_assert(candidate_bootstrap_region_stack_size == 6u * sizeof(std::uint32_t),
+        "MACHINE1-AJ must add exactly six new stack words");
+    static_assert(candidate_bootstrap_seventh_stack_top == candidate_bootstrap_deep_stack_base,
+        "MACHINE1-AJ region stack must stop exactly below the AI deep stack");
+
     // MACHINE1-AB device evidence: after the nested push returns, firmware
     // reads the already-copied word at 0x0A000010, ORs control bits, and
     // writes 0xB2800021 back with STR r3,[r0,#8] at PC=0x11D4/LR=0x22C4.
@@ -397,6 +421,9 @@ namespace eka2l1::machine::rh29 {
         bool range_inside_candidate_bootstrap_deep_stack(std::uint32_t address,
                                                          std::size_t width,
                                                          std::size_t &offset) const;
+        bool range_inside_candidate_bootstrap_region_stack(std::uint32_t address,
+                                                           std::size_t width,
+                                                           std::size_t &offset) const;
         bool range_inside_candidate_post_probe_workspace(std::uint32_t address,
                                                         std::size_t width,
                                                         std::size_t &offset) const;
@@ -450,6 +477,8 @@ namespace eka2l1::machine::rh29 {
         std::vector<std::uint8_t> candidate_bootstrap_nested_stack_extension_initialized_{};
         std::vector<std::uint8_t> candidate_bootstrap_deep_stack_data_{};
         std::vector<std::uint8_t> candidate_bootstrap_deep_stack_initialized_{};
+        std::vector<std::uint8_t> candidate_bootstrap_region_stack_data_{};
+        std::vector<std::uint8_t> candidate_bootstrap_region_stack_initialized_{};
         std::uint64_t candidate_bootstrap_nested_stack_read_count_ = 0;
         std::uint64_t candidate_bootstrap_nested_stack_write_count_ = 0;
         std::size_t candidate_bootstrap_nested_stack_initialized_bytes_ = 0;
