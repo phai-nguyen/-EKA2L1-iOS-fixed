@@ -71,6 +71,22 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::uint32_t candidate_bootstrap_nested_stack_push_lr = 0x000011C8u;
     static constexpr std::uint32_t candidate_bootstrap_nested_stack_push_instruction = 0xE92D4070u;
 
+    // MACHINE1-AC device evidence: after the exact post-copy mutation at
+    // 0x0A000010 succeeds, firmware returns to 0x11D8 and calls 0x2228.
+    // At PC=0x2228/LR=0x11E0, instruction 0xE92D4030 is
+    // STMDB sp!, {r4,r5,lr}. SP starts at 0x0A000FBC, so the exact 12-byte
+    // footprint is 0x0A000FB0..0x0A000FBB. This footprint is wholly inside
+    // the already evidenced AA/AB 16-byte nested-stack window. MACHINE1-AD
+    // therefore admits this exact third push only; it does not widen memory.
+    static constexpr std::uint32_t candidate_bootstrap_third_stack_top = 0x0A000FBCu;
+    static constexpr std::size_t candidate_bootstrap_third_stack_push_size = 0x0Cu;
+    static constexpr std::uint32_t candidate_bootstrap_third_stack_push_base =
+        candidate_bootstrap_third_stack_top
+            - static_cast<std::uint32_t>(candidate_bootstrap_third_stack_push_size);
+    static constexpr std::uint32_t candidate_bootstrap_third_stack_push_pc = 0x00002228u;
+    static constexpr std::uint32_t candidate_bootstrap_third_stack_push_lr = 0x000011E0u;
+    static constexpr std::uint32_t candidate_bootstrap_third_stack_push_instruction = 0xE92D4030u;
+
     // MACHINE1-AB device evidence: after the nested push returns, firmware
     // reads the already-copied word at 0x0A000010, ORs control bits, and
     // writes 0xB2800021 back with STR r3,[r0,#8] at PC=0x11D4/LR=0x22C4.
