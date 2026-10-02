@@ -182,3 +182,26 @@ Independent RH-29 evidence:
 - Nokia RH-29 service manual: UPP WD2, one 128-Mbit SDRAM, 128-Mbit + 64-Mbit flash.
 - UFS/JAF logs: low flash windows at 0x00000000 and 0x02000000/0x027FFFFF.
 
+
+
+## 9. MACHINE1-AC device result
+
+AC validates the AB-derived post-copy mutation gate:
+
+- `BOOTSTRAP_POST_COPY_MUTATION_ACCEPTED_COUNT=1`
+- execution advances through `0x11D8` and `0x11DC`
+- the next call enters `0x2228` with `LR=0x11E0`
+- `0x2228 = E92D4030 = STMDB sp!, {r4,r5,lr}`
+- SP before the instruction is `0x0A000FBC`
+- the exact 12-byte footprint is therefore `0x0A000FB0–0x0A000FBB`
+- first rejected transaction is a 32-bit write to `0x0A000FB0`.
+
+Crucially, this 12-byte footprint is wholly inside the already evidenced AA/AB nested-stack window
+`0x0A000FAC–0x0A000FBB`. This is new evidence for stack reuse, not evidence for a wider RAM mapping.
+
+MACHINE1-AD therefore permits only the exact `PC=0x2228/LR=0x11E0` third STMDB push while reusing the
+existing 16-byte nested-stack backing. It does not widen the mapped address range.
+
+AC stopped after 1820 executed instructions. The CP15 evidence remains unchanged:
+`MCR p15,0,r0,c1,c0,0` at `0x2DC8` with value `0x1272`. No new evidence identifies
+`0x0C150004` as a remap register.
