@@ -287,6 +287,22 @@ namespace eka2l1::machine::rh29 {
         out << "BOOTSTRAP_RELOCATION_READ_COUNT=" << result.candidate_bootstrap_relocation_read_count << "\n";
         out << "BOOTSTRAP_RELOCATION_WRITE_COUNT=" << result.candidate_bootstrap_relocation_write_count << "\n";
         out << "BOOTSTRAP_RELOCATION_INITIALIZED_BYTES=" << result.candidate_bootstrap_relocation_initialized_bytes << "\n";
+        out << "BOOTSTRAP_LOCAL_FRAME_TAIL_POLICY=AN_exact_four_word_tail_pc_0x12b8_0x12bc_0x12c0_0x12c4_lr_0x12b8_values_0x80_0_0_0x01170000_initialized_readback_only_no_range_widen\n";
+        out << "BOOTSTRAP_LOCAL_FRAME_TAIL_WORD_COUNT=" << candidate_bootstrap_local_frame_tail_word_count << "\n";
+        out << "BOOTSTRAP_LOCAL_FRAME_TAIL_WIDTH_BITS=" << (candidate_bootstrap_local_frame_tail_word_width * 8u) << "\n";
+        write_hex(out, "BOOTSTRAP_LOCAL_FRAME_TAIL_GATE_LR", candidate_bootstrap_local_frame_tail_lr);
+        for (std::size_t i = 0; i < candidate_bootstrap_local_frame_tail_word_count; ++i) {
+            std::ostringstream p;
+            p << "BOOTSTRAP_LOCAL_FRAME_TAIL_" << std::setfill('0') << std::setw(2) << i << "_";
+            const std::string prefix = p.str();
+            write_hex(out, (prefix + "ADDRESS").c_str(), candidate_bootstrap_local_frame_tail_addresses[i]);
+            write_hex(out, (prefix + "PC").c_str(), candidate_bootstrap_local_frame_tail_pcs[i]);
+            write_hex(out, (prefix + "INSTRUCTION").c_str(), candidate_bootstrap_local_frame_tail_instructions[i]);
+            write_hex(out, (prefix + "VALUE").c_str(), candidate_bootstrap_local_frame_tail_values[i]);
+        }
+        out << "BOOTSTRAP_LOCAL_FRAME_TAIL_READ_COUNT=" << result.candidate_bootstrap_local_frame_tail_read_count << "\n";
+        out << "BOOTSTRAP_LOCAL_FRAME_TAIL_WRITE_COUNT=" << result.candidate_bootstrap_local_frame_tail_write_count << "\n";
+        out << "BOOTSTRAP_LOCAL_FRAME_TAIL_INITIALIZED_WORDS=" << result.candidate_bootstrap_local_frame_tail_initialized_words << "\n";
         out << "RAM_BANK_HANDLER_DUMP_POLICY=raw_rom_words_0x000012a0_0x000013fc_context_no_semantic_label\n";
         out << "RAM_BANK_HANDLER_DUMP_WORDS_VALID=" << result.ram_bank_handler_dump_words_valid << "\n";
         for (std::size_t i = 0; i < result.ram_bank_handler_dump_words_valid
@@ -777,6 +793,12 @@ namespace eka2l1::machine::rh29 {
             bus.candidate_bootstrap_relocation_write_count();
         result.candidate_bootstrap_relocation_initialized_bytes =
             bus.candidate_bootstrap_relocation_initialized_bytes();
+        result.candidate_bootstrap_local_frame_tail_read_count =
+            bus.candidate_bootstrap_local_frame_tail_read_count();
+        result.candidate_bootstrap_local_frame_tail_write_count =
+            bus.candidate_bootstrap_local_frame_tail_write_count();
+        result.candidate_bootstrap_local_frame_tail_initialized_words =
+            bus.candidate_bootstrap_local_frame_tail_initialized_words();
 
         if (result.unresolved) {
             result.stop_reason = probe_stop_reason::unresolved_access;
