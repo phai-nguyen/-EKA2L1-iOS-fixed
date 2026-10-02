@@ -3,14 +3,13 @@
 Active branch: `ngage-machine1`
 
 Latest state:
-- MACHINE1-AA device log `RH29_MACHINE1_AA.txt` analyzed on 2026-10-02.
-- AA confirms the first bootstrap stack push completed exactly: 8 x 32-bit writes / 32 initialized bytes at `0x0A000FD0–0x0A000FEF`.
-- After that push, PC `0x11AC` executes `SUB sp,sp,#0x14`, leaving SP=`0x0A000FBC`.
-- PC `0x11C4` calls `0x22A0`, giving LR=`0x11C8`. Instruction `0xE92D4070` at `0x22A0` is `STMDB sp!, {r4-r6,lr}`.
-- AA stops on the first write32 at `0x0A000FAC`; therefore the exact second push footprint is 16 bytes: `0x0A000FAC–0x0A000FBB`.
-- MACHINE1-AB adds only that 16-byte footprint, gated by PC `0x22A0`, LR `0x11C8`, aligned width32, with initialized-only readback.
-- The gap `0x0A000FBC–0x0A000FCF` remains fail-closed; do not map the whole stack page.
-- Probe UX baseline now places **Chia sẻ báo cáo** directly below **Chạy probe**, with the old bottom ShareLink removed.
-- Y FIQ banking fix, Z exact 0x108-byte copy, AA first 32-byte push, and low shadow 36 bytes remain unchanged.
+- MACHINE1-AB device log `RH29_MACHINE1_AB.txt` analyzed on 2026-10-02.
+- AB confirms the exact second nested stack push completed: 4 x 32-bit writes / 16 initialized bytes at `0x0A000FAC–0x0A000FBB`, with 4 readbacks.
+- After returning from that helper, PC `0x11C8` reads the already-copied word at `0x0A000010` (originally `0x32800021`), then PC `0x11CC`/`0x11D0` OR control bits to produce `0xB2800021`.
+- New blocker: PC `0x11D4`, instruction `0xE5803008` = `STR r3,[r0,#8]`, attempts write32 `0xB2800021 -> 0x0A000010`, LR=`0x22C4`.
+- `0x0A000010` is inside the existing Z bootstrap-copy footprint `0x0A000000–0x0A000107`; this is an in-place mutation, not evidence for a wider RAM mapping.
+- MACHINE1-AC permits only this exact writeback: address `0x0A000010`, width32, PC `0x11D4`, LR `0x22C4`, value `0xB2800021`, and only when those four bytes have already been initialized by the Z copy.
+- Y FIQ banking fix, Z exact 0x108-byte copy, AA first stack push, AB second stack push, low shadow 36 bytes, and the probe-share UX remain unchanged.
+- **Chia sẻ báo cáo** stays directly below **Chạy probe**.
 - `0x0C150004` semantics remain unknown; do not infer remap.
-- Research note: `docs/research/RH29-MACHINE1-AB-2026-10-02.md`.
+- Research note: `docs/research/RH29-MACHINE1-AC-2026-10-02.md`.
