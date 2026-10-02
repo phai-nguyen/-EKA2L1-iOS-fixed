@@ -95,9 +95,9 @@ for source, destination in source_map:
         text = text.replace('#include "rh29_machine_model.h"', '#include "RH29MachineModel.h"', 1)
     elif destination.name == "RH29MachineRunner.cpp":
         text = text.replace('#include "rh29_machine_runner.h"', '#include "RH29MachineRunner.h"', 1)
-        text = text.replace("RH29_MACHINE1_O", "RH29_MACHINE1_AA")
-        text = text.replace("MACHINE1-O probes", "MACHINE1-AA probes")
-        text = text.replace("MACHINE1-O must not let Dyncom", "MACHINE1-AA must not let Dyncom")
+        text = text.replace("RH29_MACHINE1_O", "RH29_MACHINE1_AB")
+        text = text.replace("MACHINE1-O probes", "MACHINE1-AB probes")
+        text = text.replace("MACHINE1-O must not let Dyncom", "MACHINE1-AB must not let Dyncom")
 
         report_anchor = '        out << "FLASH_UNLOCK_STAGE_AT_STOP=" << result.flash_unlock_stage_at_stop << "\\n";\n        write_hex(out, "KERN_DATA_ADDRESS", result.header.kern_data_address);\n'
         report_insert = (
@@ -131,6 +131,18 @@ for source, destination in source_map:
             '        out << "BOOTSTRAP_STACK_READ_COUNT=" << result.candidate_bootstrap_stack_read_count << "\\n";\n'
             '        out << "BOOTSTRAP_STACK_WRITE_COUNT=" << result.candidate_bootstrap_stack_write_count << "\\n";\n'
             '        out << "BOOTSTRAP_STACK_INITIALIZED_BYTES=" << result.candidate_bootstrap_stack_initialized_bytes << "\\n";\n'
+            '        out << "BOOTSTRAP_NESTED_STACK_POLICY=" << (result.candidate_bootstrap_nested_stack_enabled\n'
+            '            ? "AA_device_sp_0x0a000fbc_exact_second_stmdb_16bytes_pc_0x22a0_lr_0x11c8_initialized_readback_only" : "disabled") << "\\n";\n'
+            '        write_hex(out, "BOOTSTRAP_NESTED_STACK_TOP", candidate_bootstrap_nested_stack_top);\n'
+            '        write_hex(out, "BOOTSTRAP_NESTED_STACK_PUSH_BASE", candidate_bootstrap_nested_stack_push_base);\n'
+            '        out << "BOOTSTRAP_NESTED_STACK_PUSH_SIZE=" << candidate_bootstrap_nested_stack_push_size << "\\n";\n'
+            '        out << "BOOTSTRAP_NESTED_STACK_WRITE_WIDTH_BITS=" << (candidate_bootstrap_nested_stack_write_width * 8u) << "\\n";\n'
+            '        write_hex(out, "BOOTSTRAP_NESTED_STACK_GATE_PC", candidate_bootstrap_nested_stack_push_pc);\n'
+            '        write_hex(out, "BOOTSTRAP_NESTED_STACK_GATE_LR", candidate_bootstrap_nested_stack_push_lr);\n'
+            '        write_hex(out, "BOOTSTRAP_NESTED_STACK_OBSERVED_INSTRUCTION", candidate_bootstrap_nested_stack_push_instruction);\n'
+            '        out << "BOOTSTRAP_NESTED_STACK_READ_COUNT=" << result.candidate_bootstrap_nested_stack_read_count << "\\n";\n'
+            '        out << "BOOTSTRAP_NESTED_STACK_WRITE_COUNT=" << result.candidate_bootstrap_nested_stack_write_count << "\\n";\n'
+            '        out << "BOOTSTRAP_NESTED_STACK_INITIALIZED_BYTES=" << result.candidate_bootstrap_nested_stack_initialized_bytes << "\\n";\n'
             '        out << "POST_RAM_WORKSPACE_POLICY=" << (result.candidate_post_probe_workspace_enabled\n'
             '            ? "post_probe_0x20_candidate_zero_seeded_mutable" : "disabled") << "\\n";\n'
             '        write_hex(out, "POST_RAM_WORKSPACE_BASE", candidate_post_probe_workspace_base);\n'
@@ -178,18 +190,19 @@ for source, destination in source_map:
             '        write_hex(out, "KERN_DATA_ADDRESS", result.header.kern_data_address);\n'
         )
         if report_anchor not in text:
-            raise SystemExit("MACHINE1-AA runner report anchor not found")
+            raise SystemExit("MACHINE1-AB runner report anchor not found")
         text = text.replace(report_anchor, report_insert, 1)
 
         enable_anchor = '        result.flash_unlock_autoselect_enabled = true;\n        strict_bus bus(rom.data(), parsed.header.rom_size, parsed.header.rom_base, cold_reset_pc,\n'
         if enable_anchor not in text:
-            raise SystemExit("MACHINE1-AA runner enable anchor not found")
+            raise SystemExit("MACHINE1-AB runner enable anchor not found")
         text = text.replace(
             enable_anchor,
             '        result.flash_unlock_autoselect_enabled = true;\n'
             '        result.candidate_ram_probe_enabled = true;\n'
             '        result.candidate_bootstrap_copy_enabled = true;\n'
             '        result.candidate_bootstrap_stack_enabled = true;\n'
+            '        result.candidate_bootstrap_nested_stack_enabled = true;\n'
             '        result.candidate_post_probe_workspace_enabled = true;\n'
             '        result.low_vector_shadow_enabled = true;\n'
             '        strict_bus bus(rom.data(), parsed.header.rom_size, parsed.header.rom_base, cold_reset_pc,\n',
@@ -198,7 +211,7 @@ for source, destination in source_map:
 
         capture_anchor = '        result.flash_unlock_autoselect_count = bus.observed_flash_unlock_autoselect_count();\n        result.flash_unlock_stage_at_stop = bus.flash_unlock_stage();\n'
         if capture_anchor not in text:
-            raise SystemExit("MACHINE1-AA runner capture anchor not found")
+            raise SystemExit("MACHINE1-AB runner capture anchor not found")
         text = text.replace(
             capture_anchor,
             capture_anchor
@@ -210,6 +223,9 @@ for source, destination in source_map:
             + '        result.candidate_bootstrap_stack_read_count = bus.candidate_bootstrap_stack_read_count();\n'
             + '        result.candidate_bootstrap_stack_write_count = bus.candidate_bootstrap_stack_write_count();\n'
             + '        result.candidate_bootstrap_stack_initialized_bytes = static_cast<std::uint64_t>(bus.candidate_bootstrap_stack_initialized_bytes());\n'
+            + '        result.candidate_bootstrap_nested_stack_read_count = bus.candidate_bootstrap_nested_stack_read_count();\n'
+            + '        result.candidate_bootstrap_nested_stack_write_count = bus.candidate_bootstrap_nested_stack_write_count();\n'
+            + '        result.candidate_bootstrap_nested_stack_initialized_bytes = static_cast<std::uint64_t>(bus.candidate_bootstrap_nested_stack_initialized_bytes());\n'
             + '        result.candidate_post_probe_workspace_read_count = bus.candidate_post_probe_workspace_read_count();\n'
             + '        result.candidate_post_probe_workspace_write_count = bus.candidate_post_probe_workspace_write_count();\n'
             + '        result.low_vector_shadow_read_count = bus.low_vector_shadow_read_count();\n'
@@ -220,11 +236,11 @@ for source, destination in source_map:
         )
 
     elif destination.name == "RH29MachineProbeView.swift":
-        text = text.replace("MACHINE1-O", "MACHINE1-AA")
-        text = text.replace("RH29_MACHINE1_O.txt", "RH29_MACHINE1_AA.txt")
+        text = text.replace("MACHINE1-O", "MACHINE1-AB")
+        text = text.replace("RH29_MACHINE1_O.txt", "RH29_MACHINE1_AB.txt")
         text = text.replace(
             "Probe giữ nguyên model MACHINE1-M và không giả lập 0x0A000000. Bản O ghi 64 lệnh A32 cuối cùng cùng R0/R1/R2/R3/R4/R8/R9/R10/SP/LR để lần ngược nguồn gốc con trỏ 0x0A000000.",
-            "AA giữ toàn bộ Y/Z và chỉ cho phép push stack đầu tiên đã quan sát: SP được firmware đặt thành 0x0A000FF0, lệnh STMDB tại PC 0x11A8 ghi đúng 32 byte 0x0A000FD0–0x0A000FEF. Chỉ byte đã ghi mới được đọc lại; không mở cả trang 4 KiB, không remap và không gán ngữ nghĩa cho 0x0C150004."
+            "AB giữ toàn bộ Y/Z/AA và chỉ thêm push stack thứ hai đã quan sát: sau SUB sp,#0x14, SP=0x0A000FBC; STMDB tại PC 0x22A0/LR 0x11C8 ghi đúng 16 byte 0x0A000FAC–0x0A000FBB. Nút Chia sẻ báo cáo nằm ngay dưới Chạy probe; không mở cả trang 4 KiB, không remap và không gán ngữ nghĩa cho 0x0C150004."
         )
     destination.write_text(text, encoding="utf-8")
 
@@ -328,7 +344,7 @@ probe_method = r'''
 - (EKA2L1MachineProbeReport *)runRH29MachineProbeWithInstructionBudget:(uint32_t)budget {
     EKA2L1MachineProbeReport *report = [[EKA2L1MachineProbeReport alloc] init];
     report.succeeded = NO;
-    report.text = @"RH29_MACHINE1_AA\nSTOP_REASON=io_error\nDETAIL=emulator is not ready\n";
+    report.text = @"RH29_MACHINE1_AB\nSTOP_REASON=io_error\nDETAIL=emulator is not ready\n";
 
     std::string storage;
     std::string firmware;
@@ -352,12 +368,12 @@ probe_method = r'''
 
     NSString *firmwareCode = [NSString stringWithUTF8String:firmware.c_str()];
     if (!firmwareCode || [firmwareCode caseInsensitiveCompare:@"RH-29"] != NSOrderedSame) {
-        report.text = @"RH29_MACHINE1_AA\nSTOP_REASON=io_error\nDETAIL=current device is not RH-29\n";
+        report.text = @"RH29_MACHINE1_AB\nSTOP_REASON=io_error\nDETAIL=current device is not RH-29\n";
         return report;
     }
 
     const std::string rom_path = eka2l1::add_path(storage, "roms/rh-29/SYM.ROM");
-    LOG_INFO(eka2l1::FRONTEND_CMDLINE, "[RH29_MACHINE1_AA] start budget={} rom={}", budget, rom_path);
+    LOG_INFO(eka2l1::FRONTEND_CMDLINE, "[RH29_MACHINE1_AB] start budget={} rom={}", budget, rom_path);
     eka2l1::machine::rh29::probe_options options{};
     options.instruction_budget = budget;
     const auto result = eka2l1::machine::rh29::run_probe(rom_path, options);
@@ -367,7 +383,7 @@ probe_method = r'''
         result.stop_reason != eka2l1::machine::rh29::probe_stop_reason::invalid_rom
         && result.stop_reason != eka2l1::machine::rh29::probe_stop_reason::io_error);
     LOG_INFO(eka2l1::FRONTEND_CMDLINE,
-        "[RH29_MACHINE1_AA] stop succeeded={} executed={}",
+        "[RH29_MACHINE1_AB] stop succeeded={} executed={}",
         report.succeeded, result.executed_instructions);
     return report;
 }
@@ -449,4 +465,4 @@ if 'firmwareCode.caseInsensitiveCompare("RH-29")' not in content:
     content = content.replace(settings_button, settings_button + probe_button, 1)
 content_path.write_text(content, encoding="utf-8")
 
-print("MACHINE1-AA diagnostic sources + iOS probe integration staged")
+print("MACHINE1-AB diagnostic sources + iOS probe integration staged")
