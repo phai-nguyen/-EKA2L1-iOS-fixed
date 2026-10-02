@@ -8,62 +8,83 @@ Active repo/branch:
 - branch: `ngage-machine1`
 - target: Nokia N-Gage QD RH-29 V04.10
 
-Latest device evidence — AG logic:
-- User report filename: `RH29_MACHINE1_AE(3).txt` because harness identity still says AE.
-- budget 10000; executed **2246**; stop `unresolved_access`.
-- AG exact callsite at `PC=0x2258/LR=0x11E8` succeeded:
-  - nested-stack write count increased from 7 to **10**, exactly +3 write32.
-  - nested-stack read count is **10**.
-- after returning from `0x2258`, firmware executes `0x11E8..0x11FC`, then:
-  - `0x11FC: EB00026C` calls `0x1BB4`
-  - LR becomes `0x1200`
-  - `0x1BB4: E92D40F0 = STMDB sp!, {r4-r7,lr}`
-  - entry SP=`0x0A000FBC`
-  - exact push footprint=`0x0A000FA8..0x0A000FBB` (20 bytes)
-  - first rejected write is `0x0A000FA8`, PC=`0x1BB4`, LR=`0x1200`, write32 value 0.
-- Existing nested-stack backing is `0x0A000FAC..0x0A000FBB` (16 bytes), so this new 20-byte push needs only **one new 4-byte word** at `0x0A000FA8..0x0A000FAB`.
-- CP15 remains unchanged: `PC=0x2DC8`, instruction `0xEE010F10`, value `0x1272`, emulated; no new remap evidence.
+Latest device report:
+- uploaded filename: `RH29_MACHINE1_AE(4).txt`
+- report identity still says `RH29_MACHINE1_AE`; identify newer logic by GitHub run/SHA and execution evidence.
+- budget: 10000
+- executed: **2257**
+- stop: `unresolved_access`.
 
-MACHINE1-AH implementation:
-- Adds exact fifth-push constants:
-  - top `0x0A000FBC`
-  - base `0x0A000FA8`
-  - size `0x14` = 20 bytes
-  - PC `0x1BB4`
-  - LR `0x1200`
-  - instruction `0xE92D40F0`
-- Adds only a **4-byte initialized-only extension backing** at `0x0A000FA8..0x0A000FAB`.
-- For the same AH callsite, the remaining four words are stored in the existing nested-stack backing `0x0A000FAC..0x0A000FBB`.
-- Older AB/AD/AG callsites cannot access the new extension word.
-- Reads from the extension are allowed only after its bytes have been initialized by the exact AH push, matching existing initialized-only stack policy.
-- Negative tests:
-  - old AG callsite writing `0xFA8` fails;
-  - wrong LR at `0xFA8` fails;
-  - address below `0xFA8` fails.
-- No broad stack/RAM page is mapped.
+AH device-PASS evidence:
+- nested-stack write count is **14**, up from AG's 10.
+- This matches AH's fifth push at `PC=0x1BB4/LR=0x1200`:
+  - `0xE92D40F0 = STMDB sp!, {r4-r7,lr}`
+  - entry SP `0x0A000FBC`
+  - resulting SP `0x0A000FA8`
+  - upper four words land in existing nested backing `0x0A000FAC..0x0A000FBB`
+  - new low word `0x0A000FA8..0x0A000FAB` is therefore accepted.
+- execution continues through `0x1BB8..0x1BDC`; AH is not the current blocker.
 
-AH commits:
-- `eea8fdbc78dd7d26cba68d64f98d23d7af89745f` — define exact 20-byte push + one-word extension.
-- `4e30edefb18c0e6118743214aabd4094dbf7c9b1` — exact extension write/read + reuse nested backing.
-- `1eb107233d9cb8573251d7f0d43c3ee615128d3c` — controller tests.
+New AI device evidence:
+- at `0x1BDC`, instruction `0xEBFFFE15` calls `0x1438`; LR becomes `0x1BE0`.
+- `0x1438: E92D4010 = STMDB sp!, {r4,lr}`.
+- entry SP: `0x0A000FA8`.
+- exact push size: 8 bytes.
+- exact new footprint: `0x0A000FA0..0x0A000FA7`.
+- first unresolved transaction:
+  - kind: data_write
+  - width: 32
+  - address: `0x0A000FA0`
+  - PC: `0x00001438`
+  - LR: `0x00001BE0`
+  - value: `0x00000010`
+  - cause: unmapped.
+- CP15 remains unchanged:
+  - PC `0x2DC8`
+  - instruction `0xEE010F10`
+  - value `0x1272`
+  - emulated with MMU-off policy.
+- No new evidence changes the unknown semantics of `0x0C150004`.
+
+MACHINE1-AI implementation:
+- exact sixth push:
+  - top `0x0A000FA8`
+  - base `0x0A000FA0`
+  - size 8
+  - PC `0x1438`
+  - LR `0x1BE0`
+  - instruction `0xE92D4010`.
+- adds a dedicated **8-byte deep-stack backing only at `0x0A000FA0..0x0A000FA7`**.
+- initialized-only reads.
+- only exact AI callsite can initialize/write the two words.
+- AH/AG/older callsites cannot access the new backing.
+- address below `0xFA0` remains fail-closed.
+- no broad stack/RAM mapping.
+
+AI commits:
+- `895c4fb68a771d32092dea8432177d06e9a71542` — exact sixth-push constants.
+- `03e9e0bb7e50a989a7e771f2aa3c632d7e781c9a` — exact 8-byte deep-stack backing/gate.
+- `34ddb8cd22b900542feb813bf97e784b2b7831ac` — initialized-only + negative unit tests.
 
 Build:
-- run #113, ID `36980268012`
-- code SHA `1eb107233d9cb8573251d7f0d43c3ee615128d3c`
-- workflow label still `Build NGAGE-MACHINE1-AE`; logic is AH.
-- URL: `https://github.com/phai-nguyen/-EKA2L1-iOS-fixed/actions/runs/36980268012`
+- run #116
+- ID `36983862084`
+- code SHA `34ddb8cd22b900542feb813bf97e784b2b7831ac`
+- workflow display name may still say `Build NGAGE-MACHINE1-AE`; logic is MACHINE1-AI.
+- URL: `https://github.com/phai-nguyen/-EKA2L1-iOS-fixed/actions/runs/36983862084`
 
 Next action:
-1. Wait for #113 final result.
-2. If PASS, device-test exact artifact with budget 10000.
-3. New TXT may still be named AE; identify by build #113 / code SHA.
-4. Confirm AH passes `0x1BB4` and inspect the next unresolved transaction.
-5. Do not widen below `0x0A000FA8` unless a new device access proves it.
+1. Wait for #116 final result.
+2. If PASS, device-test its IPA with budget 10000.
+3. Share next TXT; filename may still say AE.
+4. Confirm execution passes `0x1438`, then follow only the next exact unresolved transaction.
+5. Do not widen stack below `0x0A000FA0` without new device evidence.
 
 Permanent constraints:
 - preserve Y FIQ banking fix;
 - preserve Z exact 0x108-byte copy;
-- preserve AA/AB/AC/AD/AF/AG exact evidence gates;
+- preserve AA/AB/AC/AD/AF/AG/AH exact evidence gates;
 - low vector shadow remains 36 bytes;
 - no broad RAM/stack mapping;
-- `0x0C150004` semantics remain unknown; do not infer remap.
+- do not infer `0x0C150004` is a remap register;
+- Share report UI remains directly below Run probe.
