@@ -486,10 +486,19 @@ namespace eka2l1::machine::rh29 {
             return true;
         }
 
+        const bool exact_nested_stack_push =
+            pc == candidate_bootstrap_nested_stack_push_pc
+            && lr == candidate_bootstrap_nested_stack_push_lr;
+        const bool exact_third_stack_push =
+            pc == candidate_bootstrap_third_stack_push_pc
+            && lr == candidate_bootstrap_third_stack_push_lr
+            && address >= candidate_bootstrap_third_stack_push_base
+            && static_cast<std::uint64_t>(address) + width
+                <= static_cast<std::uint64_t>(candidate_bootstrap_third_stack_top);
+
         if (value
             && width == candidate_bootstrap_nested_stack_write_width
-            && pc == candidate_bootstrap_nested_stack_push_pc
-            && lr == candidate_bootstrap_nested_stack_push_lr
+            && (exact_nested_stack_push || exact_third_stack_push)
             && (address & (candidate_bootstrap_nested_stack_write_width - 1u)) == 0
             && range_inside_candidate_bootstrap_nested_stack(address, width, offset)) {
             std::memcpy(candidate_bootstrap_nested_stack_data_.data() + offset, value, width);
