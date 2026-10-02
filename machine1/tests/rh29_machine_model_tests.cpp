@@ -861,6 +861,51 @@ static void test_aa_observed_second_stack_push_is_exact_gated_and_initialized_on
     assert(wrong_pc.first_unresolved().has_value());
 }
 
+static void test_af_observed_fourth_stack_push_reuses_exact_12byte_window() {
+    static_assert(candidate_bootstrap_fourth_stack_top == 0x0A000FBCu);
+    static_assert(candidate_bootstrap_fourth_stack_push_base == 0x0A000FB0u);
+    static_assert(candidate_bootstrap_fourth_stack_push_size == 0x0Cu);
+    static_assert(candidate_bootstrap_fourth_stack_push_pc == 0x00002258u);
+    static_assert(candidate_bootstrap_fourth_stack_push_lr == 0x000011E8u);
+    static_assert(candidate_bootstrap_fourth_stack_push_instruction == 0xE92D4030u);
+    static_assert(candidate_bootstrap_fourth_stack_push_base
+                  == candidate_bootstrap_third_stack_push_base);
+    static_assert(candidate_bootstrap_fourth_stack_top
+                  == candidate_bootstrap_third_stack_top);
+
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+
+    for (std::uint32_t i = 0; i < candidate_bootstrap_fourth_stack_push_size / 4u; ++i) {
+        const std::uint32_t value = 0xC0000000u | i;
+        const std::uint32_t address = candidate_bootstrap_fourth_stack_push_base + i * 4u;
+        assert(bus.write(address, &value, sizeof(value),
+                         candidate_bootstrap_fourth_stack_push_pc,
+                         candidate_bootstrap_fourth_stack_push_lr));
+    }
+    assert(bus.candidate_bootstrap_nested_stack_write_count() == 3u);
+    assert(bus.candidate_bootstrap_nested_stack_initialized_bytes()
+           == candidate_bootstrap_fourth_stack_push_size);
+
+    strict_bus wrong_lr(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                        candidate_sdram_base, 0x100);
+    const std::uint32_t value = 0xDEADBEEFu;
+    assert(!wrong_lr.write(candidate_bootstrap_fourth_stack_push_base,
+                           &value, sizeof(value),
+                           candidate_bootstrap_fourth_stack_push_pc,
+                           candidate_bootstrap_fourth_stack_push_lr + 4u));
+    assert(wrong_lr.first_unresolved().has_value());
+
+    strict_bus outside(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                       candidate_sdram_base, 0x100);
+    assert(!outside.write(candidate_bootstrap_fourth_stack_push_base - 4u,
+                          &value, sizeof(value),
+                          candidate_bootstrap_fourth_stack_push_pc,
+                          candidate_bootstrap_fourth_stack_push_lr));
+    assert(outside.first_unresolved().has_value());
+}
+
 static void test_gap_before_post_probe_workspace_remains_unmapped() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc, candidate_sdram_base, 0x100);
@@ -1030,6 +1075,7 @@ int main() {
     test_af_observed_record_loop_mutation_is_exact_and_initialized_only();
     test_z_observed_first_stack_push_is_exact_gated_and_initialized_only();
     test_aa_observed_second_stack_push_is_exact_gated_and_initialized_only();
+    test_af_observed_fourth_stack_push_reuses_exact_12byte_window();
     test_gap_before_post_probe_workspace_remains_unmapped();
     test_post_probe_workspace_is_zero_seeded_mutable_and_bounded();
     test_low_vector_shadow_is_rom_seeded_mutable_and_exactly_36_bytes();
