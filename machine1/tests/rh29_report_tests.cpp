@@ -65,6 +65,9 @@ static probe_result sample_result() {
     result.candidate_bootstrap_local_frame_tail_read_count = 4;
     result.candidate_bootstrap_local_frame_tail_write_count = 4;
     result.candidate_bootstrap_local_frame_tail_initialized_words = 4;
+    result.candidate_bootstrap_relocated_stack_read_count = 8;
+    result.candidate_bootstrap_relocated_stack_write_count = 8;
+    result.candidate_bootstrap_relocated_stack_initialized_words = 8;
     result.ram_bank_handler_dump_words_valid = 2;
     result.ram_bank_handler_dump_words[0] = 0xE2440B03u;
     result.ram_bank_handler_dump_words[1] = 0xE58D0000u;
@@ -166,7 +169,7 @@ static void test_report_contains_probe_identity_and_rom_header() {
     require_contains(text, "KERN_LIMIT=0x80002000");
 }
 
-static void test_report_contains_ao_ram_probe_relocation_and_frame_tail_evidence() {
+static void test_report_contains_ap_ram_probe_relocation_frame_tail_and_relocated_stack_evidence() {
     const auto text = format_report(sample_result());
     require_contains(text, "RAM_BANK_PROBE_ANCHOR_POLICY=AJ_device_exact_first_read_pc_0x1368_lr_0x1348_addr_0x0a001100_synthetic_zero_seed_read_only_no_range_map");
     require_contains(text, "RAM_BANK_PROBE_ANCHOR_ADDRESS=0x0A001100");
@@ -221,6 +224,21 @@ static void test_report_contains_ao_ram_probe_relocation_and_frame_tail_evidence
     require_contains(text, "BOOTSTRAP_LOCAL_FRAME_TAIL_READ_COUNT=4");
     require_contains(text, "BOOTSTRAP_LOCAL_FRAME_TAIL_WRITE_COUNT=4");
     require_contains(text, "BOOTSTRAP_LOCAL_FRAME_TAIL_INITIALIZED_WORDS=4");
+    require_contains(text, "BOOTSTRAP_RELOCATED_STACK_POLICY=AO_device_exact_stmdb_sp_32bytes_pc_0x0f18_lr_0x0f18_values_from_register_snapshot_initialized_readback_only_no_range_widen");
+    require_contains(text, "BOOTSTRAP_RELOCATED_STACK_TOP=0x09FFF3FC");
+    require_contains(text, "BOOTSTRAP_RELOCATED_STACK_BASE=0x09FFF3DC");
+    require_contains(text, "BOOTSTRAP_RELOCATED_STACK_WORD_COUNT=8");
+    require_contains(text, "BOOTSTRAP_RELOCATED_STACK_WIDTH_BITS=32");
+    require_contains(text, "BOOTSTRAP_RELOCATED_STACK_GATE_PC=0x00000F18");
+    require_contains(text, "BOOTSTRAP_RELOCATED_STACK_GATE_LR=0x00000F18");
+    require_contains(text, "BOOTSTRAP_RELOCATED_STACK_OBSERVED_INSTRUCTION=0xE92D47F0");
+    require_contains(text, "BOOTSTRAP_RELOCATED_STACK_00_ADDRESS=0x09FFF3DC");
+    require_contains(text, "BOOTSTRAP_RELOCATED_STACK_00_VALUE=0x0A000000");
+    require_contains(text, "BOOTSTRAP_RELOCATED_STACK_07_ADDRESS=0x09FFF3F8");
+    require_contains(text, "BOOTSTRAP_RELOCATED_STACK_07_VALUE=0x00000F18");
+    require_contains(text, "BOOTSTRAP_RELOCATED_STACK_READ_COUNT=8");
+    require_contains(text, "BOOTSTRAP_RELOCATED_STACK_WRITE_COUNT=8");
+    require_contains(text, "BOOTSTRAP_RELOCATED_STACK_INITIALIZED_WORDS=8");
     require_contains(text, "RAM_BANK_HANDLER_DUMP_POLICY=raw_rom_words_0x000012a0_0x000013fc_context_no_semantic_label");
     require_contains(text, "RAM_BANK_HANDLER_DUMP_WORDS_VALID=2");
     require_contains(text, "RAM_BANK_HANDLER_DUMP_00_ADDRESS=0x000012A0");
@@ -369,7 +387,7 @@ static void test_arm_condition_passed_matches_a32_flags() {
 
 int main() {
     test_report_contains_probe_identity_and_rom_header();
-    test_report_contains_ao_ram_probe_relocation_and_frame_tail_evidence();
+    test_report_contains_ap_ram_probe_relocation_frame_tail_and_relocated_stack_evidence();
     test_report_contains_budget_stop_and_registers();
     test_report_contains_unresolved_access();
     test_report_contains_cpu_exception();
