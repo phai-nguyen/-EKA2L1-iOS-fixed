@@ -672,6 +672,76 @@ static void test_ab_observed_post_copy_mutation_is_exact_and_requires_initialize
     assert(wrong_pc.first_unresolved().has_value());
 }
 
+static void test_ad_observed_record_loop_mutation_is_exact_and_initialized_only() {
+    static_assert(candidate_bootstrap_record_table_base == 0x0A000008u);
+    static_assert(candidate_bootstrap_record_count == 16u);
+    static_assert(candidate_bootstrap_record_stride == 0x10u);
+    static_assert(candidate_bootstrap_record_control_offset == 0x08u);
+    static_assert(candidate_bootstrap_record_loop_mutation_pc == 0x00002220u);
+    static_assert(candidate_bootstrap_record_loop_mutation_lr == 0x00002244u);
+    static_assert(candidate_bootstrap_record_loop_mutation_instruction == 0xE5803008u);
+    static_assert(candidate_bootstrap_record_loop_clear_mask == 0x00000060u);
+    static_assert(candidate_bootstrap_record_loop_or_mask == 0x80000020u);
+
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+
+    const std::uint32_t record1_control =
+        candidate_bootstrap_record_table_base
+        + static_cast<std::uint32_t>(candidate_bootstrap_record_stride)
+        + static_cast<std::uint32_t>(candidate_bootstrap_record_control_offset);
+    const std::uint32_t old_value = 0x32800021u;
+    assert(bus.write(record1_control, &old_value, sizeof(old_value),
+                     candidate_bootstrap_copy_pc, candidate_bootstrap_copy_lr));
+
+    const std::uint32_t expected =
+        (old_value & ~candidate_bootstrap_record_loop_clear_mask)
+        | candidate_bootstrap_record_loop_or_mask;
+    assert(expected == 0xB2800021u);
+    assert(bus.write(record1_control, &expected, sizeof(expected),
+                     candidate_bootstrap_record_loop_mutation_pc,
+                     candidate_bootstrap_record_loop_mutation_lr));
+    assert(bus.candidate_bootstrap_record_loop_mutation_count() == 1u);
+
+    std::uint32_t out = 0;
+    assert(bus.read(access_kind::data_read, record1_control, &out, sizeof(out),
+                    0x00002224u, candidate_bootstrap_record_loop_mutation_lr));
+    assert(out == expected);
+
+    strict_bus before(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                      candidate_sdram_base, 0x100);
+    assert(!before.write(record1_control, &expected, sizeof(expected),
+                         candidate_bootstrap_record_loop_mutation_pc,
+                         candidate_bootstrap_record_loop_mutation_lr));
+    assert(before.first_unresolved().has_value());
+
+    strict_bus wrong_slot(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                          candidate_sdram_base, 0x100);
+    const std::uint32_t bad_addr = candidate_bootstrap_record_table_base
+        + static_cast<std::uint32_t>(candidate_bootstrap_record_stride)
+        + 4u;
+    assert(wrong_slot.write(bad_addr, &old_value, sizeof(old_value),
+                            candidate_bootstrap_copy_pc, candidate_bootstrap_copy_lr));
+    assert(!wrong_slot.write(bad_addr, &expected, sizeof(expected),
+                             candidate_bootstrap_record_loop_mutation_pc,
+                             candidate_bootstrap_record_loop_mutation_lr));
+    assert(wrong_slot.first_unresolved().has_value());
+
+    strict_bus wrong_old(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                         candidate_sdram_base, 0x100);
+    const std::uint32_t old_low3 = 0x31000023u;
+    assert(wrong_old.write(record1_control, &old_low3, sizeof(old_low3),
+                           candidate_bootstrap_copy_pc, candidate_bootstrap_copy_lr));
+    const std::uint32_t fake =
+        (old_low3 & ~candidate_bootstrap_record_loop_clear_mask)
+        | candidate_bootstrap_record_loop_or_mask;
+    assert(!wrong_old.write(record1_control, &fake, sizeof(fake),
+                            candidate_bootstrap_record_loop_mutation_pc,
+                            candidate_bootstrap_record_loop_mutation_lr));
+    assert(wrong_old.first_unresolved().has_value());
+}
+
 static void test_z_observed_first_stack_push_is_exact_gated_and_initialized_only() {
     static_assert(candidate_bootstrap_stack_top == 0x0A000FF0u);
     static_assert(candidate_bootstrap_stack_push_base == 0x0A000FD0u);
@@ -934,6 +1004,7 @@ int main() {
     test_eight_step_candidate_probe_loop_is_exact_and_sparse();
     test_y_observed_bootstrap_copy_is_exact_gated_and_initialized_only();
     test_ab_observed_post_copy_mutation_is_exact_and_requires_initialized_copy();
+    test_ad_observed_record_loop_mutation_is_exact_and_initialized_only();
     test_z_observed_first_stack_push_is_exact_gated_and_initialized_only();
     test_aa_observed_second_stack_push_is_exact_gated_and_initialized_only();
     test_gap_before_post_probe_workspace_remains_unmapped();
