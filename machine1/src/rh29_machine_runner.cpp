@@ -321,6 +321,15 @@ namespace eka2l1::machine::rh29 {
         out << "BOOTSTRAP_RELOCATED_STACK_READ_COUNT=" << result.candidate_bootstrap_relocated_stack_read_count << "\n";
         out << "BOOTSTRAP_RELOCATED_STACK_WRITE_COUNT=" << result.candidate_bootstrap_relocated_stack_write_count << "\n";
         out << "BOOTSTRAP_RELOCATED_STACK_INITIALIZED_WORDS=" << result.candidate_bootstrap_relocated_stack_initialized_words << "\n";
+        out << "BOOTSTRAP_RELOCATED_LOCAL_WORD_POLICY=AP_device_exact_sp_plus_0x24_addr_0x09fff3ac_pc_0x0f24_lr_0x0f18_value_0_initialized_readback_only_no_frame_widen\n";
+        write_hex(out, "BOOTSTRAP_RELOCATED_LOCAL_WORD_ADDRESS", candidate_bootstrap_relocated_local_word_address);
+        out << "BOOTSTRAP_RELOCATED_LOCAL_WORD_WIDTH_BITS=" << (candidate_bootstrap_relocated_local_word_width * 8u) << "\n";
+        write_hex(out, "BOOTSTRAP_RELOCATED_LOCAL_WORD_GATE_PC", candidate_bootstrap_relocated_local_word_pc);
+        write_hex(out, "BOOTSTRAP_RELOCATED_LOCAL_WORD_GATE_LR", candidate_bootstrap_relocated_local_word_lr);
+        write_hex(out, "BOOTSTRAP_RELOCATED_LOCAL_WORD_OBSERVED_INSTRUCTION", candidate_bootstrap_relocated_local_word_instruction);
+        write_hex(out, "BOOTSTRAP_RELOCATED_LOCAL_WORD_OBSERVED_VALUE", candidate_bootstrap_relocated_local_word_value);
+        out << "BOOTSTRAP_RELOCATED_LOCAL_WORD_READ_COUNT=" << result.candidate_bootstrap_relocated_local_word_read_count << "\n";
+        out << "BOOTSTRAP_RELOCATED_LOCAL_WORD_WRITE_COUNT=" << result.candidate_bootstrap_relocated_local_word_write_count << "\n";
         out << "RAM_BANK_HANDLER_DUMP_POLICY=raw_rom_words_0x000012a0_0x000013fc_context_no_semantic_label\n";
         out << "RAM_BANK_HANDLER_DUMP_WORDS_VALID=" << result.ram_bank_handler_dump_words_valid << "\n";
         for (std::size_t i = 0; i < result.ram_bank_handler_dump_words_valid
@@ -823,6 +832,10 @@ namespace eka2l1::machine::rh29 {
             bus.candidate_bootstrap_relocated_stack_write_count();
         result.candidate_bootstrap_relocated_stack_initialized_words =
             bus.candidate_bootstrap_relocated_stack_initialized_words();
+        result.candidate_bootstrap_relocated_local_word_read_count =
+            bus.candidate_bootstrap_relocated_local_word_read_count();
+        result.candidate_bootstrap_relocated_local_word_write_count =
+            bus.candidate_bootstrap_relocated_local_word_write_count();
 
         if (result.unresolved) {
             result.stop_reason = probe_stop_reason::unresolved_access;
