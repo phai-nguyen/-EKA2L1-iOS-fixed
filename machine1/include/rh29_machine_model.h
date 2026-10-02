@@ -292,6 +292,43 @@ namespace eka2l1::machine::rh29 {
                       == candidate_bootstrap_stack_push_base,
         "MACHINE1-AO tail must fill only the exact reserved words before the first push window");
 
+    // MACHINE1-AO device evidence consumed by MACHINE1-AP: all four local-frame
+    // tail stores complete. The path then loads 0x09FFF400 from [sp], subtracts
+    // four to 0x09FFF3FC, and calls the small stack-switch helper at 0x3FC with
+    // R1=0xF18. That helper installs SP=0x09FFF3FC and LR=0xF18, then returns to
+    // PC=0xF18. Instruction 0xE92D47F0 is STMDB sp!,{r4-r10,lr}, so its exact
+    // 32-byte footprint is 0x09FFF3DC..0x09FFF3FB. The first word
+    // 0x09FFF3DC=0x0A000000 is directly unresolved on device; the remaining
+    // seven values are deterministic from the same AO register snapshot and
+    // register list. MACHINE1-AP admits only these eight exact tuples and
+    // initialized-only readback. PC=0xF1C and all lower stack space remain
+    // fail-closed until separately observed.
+    static constexpr std::size_t candidate_bootstrap_relocated_stack_word_count = 8u;
+    static constexpr std::size_t candidate_bootstrap_relocated_stack_word_width = sizeof(std::uint32_t);
+    static constexpr std::uint32_t candidate_bootstrap_relocated_stack_top = 0x09FFF3FCu;
+    static constexpr std::uint32_t candidate_bootstrap_relocated_stack_base = 0x09FFF3DCu;
+    static constexpr std::uint32_t candidate_bootstrap_relocated_stack_pc = 0x00000F18u;
+    static constexpr std::uint32_t candidate_bootstrap_relocated_stack_lr = 0x00000F18u;
+    static constexpr std::uint32_t candidate_bootstrap_relocated_stack_instruction = 0xE92D47F0u;
+    static constexpr std::array<std::uint32_t, candidate_bootstrap_relocated_stack_word_count>
+        candidate_bootstrap_relocated_stack_addresses{
+            0x09FFF3DCu, 0x09FFF3E0u, 0x09FFF3E4u, 0x09FFF3E8u,
+            0x09FFF3ECu, 0x09FFF3F0u, 0x09FFF3F4u, 0x09FFF3F8u
+        };
+    static constexpr std::array<std::uint32_t, candidate_bootstrap_relocated_stack_word_count>
+        candidate_bootstrap_relocated_stack_values{
+            0x0A000000u, 0x0A000000u, 0x00000000u, 0x01170000u,
+            0x00000000u, 0x00000000u, 0x00000080u, 0x00000F18u
+        };
+    static_assert(candidate_bootstrap_relocated_stack_addresses.front()
+                      == candidate_bootstrap_relocated_stack_base
+                  && candidate_bootstrap_relocated_stack_addresses.back() + 4u
+                      == candidate_bootstrap_relocated_stack_top
+                  && candidate_bootstrap_relocated_stack_top
+                         - candidate_bootstrap_relocated_stack_base
+                      == 0x20u,
+        "MACHINE1-AP relocated stack must remain exactly eight 32-bit words");
+
     // MACHINE1-AB device evidence: after the nested push returns, firmware
     // reads the already-copied word at 0x0A000010, ORs control bits, and
     // writes 0xB2800021 back with STR r3,[r0,#8] at PC=0x11D4/LR=0x22C4.
@@ -523,6 +560,9 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_local_frame_tail_read_count() const;
         std::uint64_t candidate_bootstrap_local_frame_tail_write_count() const;
         std::size_t candidate_bootstrap_local_frame_tail_initialized_words() const;
+        std::uint64_t candidate_bootstrap_relocated_stack_read_count() const;
+        std::uint64_t candidate_bootstrap_relocated_stack_write_count() const;
+        std::size_t candidate_bootstrap_relocated_stack_initialized_words() const;
         std::uint64_t candidate_post_probe_workspace_read_count() const;
         std::uint64_t candidate_post_probe_workspace_write_count() const;
         std::uint64_t low_vector_shadow_read_count() const;
@@ -634,6 +674,13 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_local_frame_tail_read_count_ = 0;
         std::uint64_t candidate_bootstrap_local_frame_tail_write_count_ = 0;
         std::size_t candidate_bootstrap_local_frame_tail_initialized_words_ = 0;
+        std::array<std::uint32_t, candidate_bootstrap_relocated_stack_word_count>
+            candidate_bootstrap_relocated_stack_data_{};
+        std::array<bool, candidate_bootstrap_relocated_stack_word_count>
+            candidate_bootstrap_relocated_stack_initialized_{};
+        std::uint64_t candidate_bootstrap_relocated_stack_read_count_ = 0;
+        std::uint64_t candidate_bootstrap_relocated_stack_write_count_ = 0;
+        std::size_t candidate_bootstrap_relocated_stack_initialized_words_ = 0;
         std::vector<std::uint8_t> candidate_post_probe_workspace_data_{};
         std::uint64_t candidate_post_probe_workspace_read_count_ = 0;
         std::uint64_t candidate_post_probe_workspace_write_count_ = 0;
