@@ -211,6 +211,12 @@ namespace eka2l1::arm {
         self.assertIn("candidate_bootstrap_local_frame_word_write_lr = 0x00001270u", model)
         self.assertIn("candidate_bootstrap_local_frame_word_instruction = 0xE58D0000u", model)
         self.assertIn("candidate_bootstrap_local_frame_word_value = 0x09FFF400u", model)
+        self.assertIn("candidate_bootstrap_relocation_source = candidate_bootstrap_copy_base", model)
+        self.assertIn("candidate_bootstrap_relocation_base = 0x09FFF400u", model)
+        self.assertIn("candidate_bootstrap_relocation_size = candidate_bootstrap_copy_size", model)
+        self.assertIn("candidate_bootstrap_relocation_pc = 0x00002344u", model)
+        self.assertIn("candidate_bootstrap_relocation_lr = 0x000012B8u", model)
+        self.assertIn("candidate_bootstrap_relocation_instruction = 0xE4803004u", model)
         self.assertIn("candidate_bootstrap_post_copy_mutation_address", model)
         self.assertIn("candidate_bootstrap_post_copy_mutation_pc = 0x000011D4u", model)
         self.assertIn("candidate_bootstrap_post_copy_mutation_lr = 0x000022C4u", model)
@@ -256,6 +262,9 @@ namespace eka2l1::arm {
         self.assertIn("RAM_BANK_SPARSE_PROBE_RESTORE_WRITE_COUNT", runner)
         self.assertIn("BOOTSTRAP_LOCAL_FRAME_WORD_POLICY=AL_device_exact_word_addr_0x0a000fbc_pc_0x12ac_lr_0x1270_value_0x09fff400_initialized_readback_only_no_range_widen", runner)
         self.assertIn("BOOTSTRAP_LOCAL_FRAME_WORD_WRITE_COUNT", runner)
+        self.assertIn("BOOTSTRAP_RELOCATION_POLICY=AM_device_exact_0x108_copy_0x0a000000_to_0x09fff400_pc_0x2344_lr_0x12b8_source_verified_initialized_readback_only_no_range_widen", runner)
+        self.assertIn("BOOTSTRAP_RELOCATION_WRITE_COUNT", runner)
+        self.assertIn("BOOTSTRAP_RELOCATION_INITIALIZED_BYTES", runner)
         self.assertIn("candidate_ram_bank_probe_anchor_read_count", runner)
         self.assertIn("RAM_PROBE_READ_COUNT", runner)
         self.assertIn("BOOTSTRAP_COPY_POLICY", runner)
@@ -275,7 +284,7 @@ namespace eka2l1::arm {
         self.assertIn("BOOTSTRAP_RECORD_LOOP_MUTATION_POLICY", runner)
         self.assertIn("AD_device_16record_stride_0x10_field_plus8_pc_0x2220_lr_0x2244_exact_transform_initialized_only", runner)
         self.assertIn("BOOTSTRAP_RECORD_LOOP_MUTATION_ACCEPTED_COUNT", runner)
-        self.assertIn("RH29_MACHINE1_AM", runner)
+        self.assertIn("RH29_MACHINE1_AN", runner)
         self.assertIn('write_hex(out, (p + "R11").c_str(), entry.r11)', runner)
 
     def test_adds_cmake_sources_exactly_once_and_is_idempotent(self):
@@ -301,7 +310,7 @@ namespace eka2l1::arm {
         self.assertIn("NS_SWIFT_NAME(runRH29MachineProbe(instructionBudget:))", header)
         self.assertIn('caseInsensitiveCompare:@"RH-29"', impl)
         self.assertIn('roms/rh-29/SYM.ROM', impl)
-        self.assertIn("[RH29_MACHINE1_AM]", impl)
+        self.assertIn("[RH29_MACHINE1_AN]", impl)
         self.assertNotIn("reset(false", impl)
         self.assertNotIn("set_device(", impl)
 
@@ -326,7 +335,7 @@ namespace eka2l1::arm {
         self.assertEqual(result.returncode, 0, result.stdout)
         view = (root / "src/emu/ios/App/RH29MachineProbeView.swift").read_text()
         self.assertIn("Task.detached(priority: .userInitiated)", view)
-        self.assertIn("RH29_MACHINE1_AM.txt", view)
+        self.assertIn("RH29_MACHINE1_AN.txt", view)
         self.assertIn("ShareLink", view)
         self.assertLess(view.index('Label("Chạy probe"'), view.index("ShareLink"))
         self.assertLess(view.index("ShareLink"), view.index("if !reportText.isEmpty"))
@@ -334,7 +343,7 @@ namespace eka2l1::arm {
         self.assertIn(".textSelection(.enabled)", view)
         self.assertIn("[1_000, 10_000, 100_000, 1_000_000]", view)
         self.assertIn("@State private var instructionBudget: UInt32 = 10_000", view)
-        self.assertIn("MACHINE1-AM", view)
+        self.assertIn("MACHINE1-AN", view)
         self.assertNotIn("RH29_MACHINE1_R.txt", view)
 
     def test_adds_probe_only_svc_dyncom_constructor_without_changing_default_mode(self):
