@@ -249,6 +249,25 @@ namespace eka2l1::machine::rh29 {
             write_hex(out, (prefix + "ADDRESS").c_str(), setup_literal_pool_begin + static_cast<std::uint32_t>(i * 4u));
             write_hex(out, (prefix + "VALUE").c_str(), result.setup_literal_pool_words[i]);
         }
+        out << "RAM_BANK_PROBE_ANCHOR_POLICY=AJ_device_exact_first_read_pc_0x1368_lr_0x1348_addr_0x0a001100_synthetic_zero_seed_read_only_no_range_map\n";
+        write_hex(out, "RAM_BANK_PROBE_ANCHOR_ADDRESS", candidate_ram_bank_probe_anchor_address);
+        out << "RAM_BANK_PROBE_ANCHOR_WIDTH_BITS=" << (candidate_ram_bank_probe_anchor_width * 8u) << "\n";
+        write_hex(out, "RAM_BANK_PROBE_ANCHOR_GATE_PC", candidate_ram_bank_probe_anchor_read_pc);
+        write_hex(out, "RAM_BANK_PROBE_ANCHOR_GATE_LR", candidate_ram_bank_probe_anchor_read_lr);
+        write_hex(out, "RAM_BANK_PROBE_ANCHOR_OBSERVED_INSTRUCTION", candidate_ram_bank_probe_anchor_read_instruction);
+        write_hex(out, "RAM_BANK_PROBE_ANCHOR_SEED", candidate_ram_bank_probe_anchor_seed);
+        out << "RAM_BANK_PROBE_ANCHOR_READ_COUNT=" << result.candidate_ram_bank_probe_anchor_read_count << "\n";
+        out << "RAM_BANK_HANDLER_DUMP_POLICY=raw_rom_words_0x00001328_0x000013bc_no_semantic_label\n";
+        out << "RAM_BANK_HANDLER_DUMP_WORDS_VALID=" << result.ram_bank_handler_dump_words_valid << "\n";
+        for (std::size_t i = 0; i < result.ram_bank_handler_dump_words_valid
+                                  && i < result.ram_bank_handler_dump_words.size(); ++i) {
+            std::ostringstream p;
+            p << "RAM_BANK_HANDLER_DUMP_" << std::setfill('0') << std::setw(2) << i << "_";
+            const std::string prefix = p.str();
+            write_hex(out, (prefix + "ADDRESS").c_str(),
+                      ram_bank_handler_dump_begin + static_cast<std::uint32_t>(i * 4u));
+            write_hex(out, (prefix + "VALUE").c_str(), result.ram_bank_handler_dump_words[i]);
+        }
         out << "SETUP_B68_OBSERVED=" << (result.setup_b68_observed ? 1 : 0) << "\n";
         out << "SETUP_B68_INSTRUCTION_INDEX_BEFORE=" << result.setup_b68_instruction_index_before << "\n";
         out << "SETUP_B68_INSTRUCTION_INDEX_AFTER=" << result.setup_b68_instruction_index_after << "\n";
@@ -390,6 +409,17 @@ namespace eka2l1::machine::rh29 {
                 (static_cast<std::uint32_t>(rom[offset + 2u]) << 16u) |
                 (static_cast<std::uint32_t>(rom[offset + 3u]) << 24u);
             ++result.setup_literal_pool_words_valid;
+        }
+
+        for (std::size_t i = 0; i < result.ram_bank_handler_dump_words.size(); ++i) {
+            const std::size_t offset = static_cast<std::size_t>(ram_bank_handler_dump_begin) + i * 4u;
+            if (offset + 4u > rom.size()) break;
+            result.ram_bank_handler_dump_words[i] =
+                static_cast<std::uint32_t>(rom[offset]) |
+                (static_cast<std::uint32_t>(rom[offset + 1u]) << 8u) |
+                (static_cast<std::uint32_t>(rom[offset + 2u]) << 16u) |
+                (static_cast<std::uint32_t>(rom[offset + 3u]) << 24u);
+            ++result.ram_bank_handler_dump_words_valid;
         }
 
         // TRomHeader::restart_vector is the 32-bit instruction word stored at
@@ -694,6 +724,9 @@ namespace eka2l1::machine::rh29 {
         result.flash_unlock2_count = bus.observed_flash_unlock2_count();
         result.flash_unlock_autoselect_count = bus.observed_flash_unlock_autoselect_count();
         result.flash_unlock_stage_at_stop = bus.flash_unlock_stage();
+
+        result.candidate_ram_bank_probe_anchor_read_count =
+            bus.candidate_ram_bank_probe_anchor_read_count();
 
         if (result.unresolved) {
             result.stop_reason = probe_stop_reason::unresolved_access;
