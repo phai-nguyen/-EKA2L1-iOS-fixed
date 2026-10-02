@@ -104,6 +104,25 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::uint32_t candidate_bootstrap_post_copy_mutation_instruction = 0xE5803008u;
     static constexpr std::uint32_t candidate_bootstrap_post_copy_mutation_value = 0xB2800021u;
 
+    // MACHINE1-AD device evidence: 0x2228 walks the copied 16-record table.
+    // After record 0, PC=0x2244 advances the record pointer by 0x10 and
+    // PC=0x2248 decrements the count 16->15. For record 1, helper 0x21F4
+    // reads field +8 (0x32800021), PC=0x2210 clears bits 0x60, and
+    // PC=0x2218 ORs 0x80000020, producing 0xB2800021. PC=0x2220 then stores
+    // it back to field +8 at 0x0A000020. MACHINE1-AE generalizes only this
+    // exact loop transform across already-copied record-control slots.
+    static constexpr std::uint32_t candidate_bootstrap_record_table_base =
+        candidate_bootstrap_copy_base + 0x08u;
+    static constexpr std::size_t candidate_bootstrap_record_count = 16u;
+    static constexpr std::size_t candidate_bootstrap_record_stride = 0x10u;
+    static constexpr std::size_t candidate_bootstrap_record_control_offset = 0x08u;
+    static constexpr std::uint32_t candidate_bootstrap_record_loop_mutation_pc = 0x00002220u;
+    static constexpr std::uint32_t candidate_bootstrap_record_loop_mutation_lr = 0x00002244u;
+    static constexpr std::uint32_t candidate_bootstrap_record_loop_mutation_instruction = 0xE5803008u;
+    static constexpr std::uint32_t candidate_bootstrap_record_loop_low5_required = 0x01u;
+    static constexpr std::uint32_t candidate_bootstrap_record_loop_clear_mask = 0x00000060u;
+    static constexpr std::uint32_t candidate_bootstrap_record_loop_or_mask = 0x80000020u;
+
     // MACHINE1-R device evidence: after all eight probe iterations complete,
     // R8 advances once more to 0x0A0001E0. The caller passes R0=that address
     // and R1=0x20 to the next routine, whose first observed access is a 32-bit
@@ -278,6 +297,7 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_copy_write_count() const;
         std::size_t candidate_bootstrap_copy_initialized_bytes() const;
         std::uint64_t candidate_bootstrap_post_copy_mutation_count() const;
+        std::uint64_t candidate_bootstrap_record_loop_mutation_count() const;
         std::uint64_t candidate_bootstrap_stack_read_count() const;
         std::uint64_t candidate_bootstrap_stack_write_count() const;
         std::size_t candidate_bootstrap_stack_initialized_bytes() const;
@@ -341,6 +361,7 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_copy_write_count_ = 0;
         std::size_t candidate_bootstrap_copy_initialized_bytes_ = 0;
         std::uint64_t candidate_bootstrap_post_copy_mutation_count_ = 0;
+        std::uint64_t candidate_bootstrap_record_loop_mutation_count_ = 0;
         std::vector<std::uint8_t> candidate_bootstrap_stack_data_{};
         std::vector<std::uint8_t> candidate_bootstrap_stack_initialized_{};
         std::uint64_t candidate_bootstrap_stack_read_count_ = 0;
