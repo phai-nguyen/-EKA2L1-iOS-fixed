@@ -122,6 +122,11 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::uint32_t candidate_bootstrap_record_loop_low5_required = 0x01u;
     static constexpr std::uint32_t candidate_bootstrap_record_loop_clear_mask = 0x00000060u;
     static constexpr std::uint32_t candidate_bootstrap_record_loop_or_mask = 0x80000020u;
+    static_assert(candidate_bootstrap_record_control_offset < candidate_bootstrap_record_stride
+        && candidate_bootstrap_record_table_base
+            + static_cast<std::uint32_t>(candidate_bootstrap_record_stride * candidate_bootstrap_record_count)
+            <= candidate_bootstrap_copy_base + candidate_bootstrap_copy_size,
+        "MACHINE1-AE record-control loop must stay inside the copied 0x108-byte table");
 
     // MACHINE1-R device evidence: after all eight probe iterations complete,
     // R8 advances once more to 0x0A0001E0. The caller passes R0=that address
