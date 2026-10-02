@@ -267,7 +267,16 @@ namespace eka2l1::machine::rh29 {
         out << "RAM_BANK_SPARSE_PROBE_ANCHOR_VERIFY_READ_COUNT=" << result.candidate_ram_bank_sparse_probe_anchor_verify_read_count << "\n";
         out << "RAM_BANK_SPARSE_PROBE_READBACK_COUNT=" << result.candidate_ram_bank_sparse_probe_readback_count << "\n";
         out << "RAM_BANK_SPARSE_PROBE_RESTORE_WRITE_COUNT=" << result.candidate_ram_bank_sparse_probe_restore_write_count << "\n";
-        out << "RAM_BANK_HANDLER_DUMP_POLICY=raw_rom_words_0x00001328_0x000013fc_no_semantic_label\n";
+        out << "BOOTSTRAP_LOCAL_FRAME_WORD_POLICY=AL_device_exact_word_addr_0x0a000fbc_pc_0x12ac_lr_0x1270_value_0x09fff400_initialized_readback_only_no_range_widen\n";
+        write_hex(out, "BOOTSTRAP_LOCAL_FRAME_WORD_ADDRESS", candidate_bootstrap_local_frame_word_address);
+        out << "BOOTSTRAP_LOCAL_FRAME_WORD_WIDTH_BITS=" << (candidate_bootstrap_local_frame_word_width * 8u) << "\n";
+        write_hex(out, "BOOTSTRAP_LOCAL_FRAME_WORD_GATE_PC", candidate_bootstrap_local_frame_word_write_pc);
+        write_hex(out, "BOOTSTRAP_LOCAL_FRAME_WORD_GATE_LR", candidate_bootstrap_local_frame_word_write_lr);
+        write_hex(out, "BOOTSTRAP_LOCAL_FRAME_WORD_OBSERVED_INSTRUCTION", candidate_bootstrap_local_frame_word_instruction);
+        write_hex(out, "BOOTSTRAP_LOCAL_FRAME_WORD_OBSERVED_VALUE", candidate_bootstrap_local_frame_word_value);
+        out << "BOOTSTRAP_LOCAL_FRAME_WORD_READ_COUNT=" << result.candidate_bootstrap_local_frame_word_read_count << "\n";
+        out << "BOOTSTRAP_LOCAL_FRAME_WORD_WRITE_COUNT=" << result.candidate_bootstrap_local_frame_word_write_count << "\n";
+        out << "RAM_BANK_HANDLER_DUMP_POLICY=raw_rom_words_0x000012a0_0x000013fc_context_no_semantic_label\n";
         out << "RAM_BANK_HANDLER_DUMP_WORDS_VALID=" << result.ram_bank_handler_dump_words_valid << "\n";
         for (std::size_t i = 0; i < result.ram_bank_handler_dump_words_valid
                                   && i < result.ram_bank_handler_dump_words.size(); ++i) {
@@ -747,6 +756,10 @@ namespace eka2l1::machine::rh29 {
             bus.candidate_ram_bank_sparse_probe_readback_count();
         result.candidate_ram_bank_sparse_probe_restore_write_count =
             bus.candidate_ram_bank_sparse_probe_restore_write_count();
+        result.candidate_bootstrap_local_frame_word_read_count =
+            bus.candidate_bootstrap_local_frame_word_read_count();
+        result.candidate_bootstrap_local_frame_word_write_count =
+            bus.candidate_bootstrap_local_frame_word_write_count();
 
         if (result.unresolved) {
             result.stop_reason = probe_stop_reason::unresolved_access;
