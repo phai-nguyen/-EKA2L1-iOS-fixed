@@ -2,24 +2,33 @@
 
 Active branch: `ngage-machine1`
 
-Latest implementation:
-- MACHINE1-AE device report stopped at write32 `0xB1000023 -> 0x0A0000A0`, PC=`0x2220`, LR=`0x2244`.
-- AE proved helper `0x21F4..0x2220` processes a copied record whose control word is `0x31000023` (low5=3); therefore AE's model-only `low5==1` gate was too narrow.
-- MACHINE1-AF logic extends only that gate to the three low5 values actually present in the copied firmware table: 1, 2 and 3.
-- AF still admits a record-loop write only when the destination is an aligned +8 control slot inside the existing 16-record/0x108-byte copied table, bytes were initialized by the Z copy, width is 32-bit, PC=`0x2220`, LR=`0x2244`, old bit31 is clear, and the written value exactly equals the firmware transform `(old & ~0x60) | 0x80000020`.
-- Controller tests cover `0x31000023 -> 0xB1000023` and `0x32000022 -> 0xB2000022`; a wrong transform remains fail-closed.
-- No RAM/MMIO range is widened. Y FIQ banking fix, Z exact 0x108-byte copy, AA/AB/AC/AD stack/writeback gates, low shadow 36 bytes, flash gates and diagnostics remain unchanged.
-- `0x0C150004` semantics remain unknown; do not infer remap.
-- Build workflow/harness label remains AE because connector safety blocked CI-file edits; the branch code itself is AF logic.
-- Device test should use the artifact from the final AF HEAD and export the report filename embedded by the unchanged harness.
+Latest device result:
+- User-supplied AF-logic report is named `RH29_MACHINE1_AE(1).txt` because the iOS harness identity still says AE.
+- Instruction budget: 10,000; executed: 2,122; stop reason: unresolved_access.
+- Z bootstrap copy remains exact: 66 x 32-bit writes / 264 initialized bytes at `0x0A000000..0x0A000107`.
+- AB exact first-record mutation remains accepted once at `0x0A000010`.
+- AF record loop accepted **15** mutations. Together with the separate first-record mutation, all **16** copied record control words were processed.
+- The trace proves low5=3 and low5=2 forms execute through the same firmware helper; examples include `0x30000023 -> 0xB0000023`, `0x32000022 -> 0xB2000022`, and `0x30200023 -> 0xB0200023`.
+- After the record loop returns, PC `0x11E4` calls `0x2258`; LR becomes `0x11E8`.
+- At PC `0x2258`, instruction `0xE92D4030` = `STMDB sp!, {r4,r5,lr}`. Entry SP is `0x0A000FBC`; first unresolved write is `0x0A000FB0`.
+- This is exactly the same 12-byte footprint `0x0A000FB0..0x0A000FBB` and same instruction already evidenced for the earlier callsite at PC `0x2228`/LR `0x11E0`.
+- CP15 observation remains unchanged: PC `0x2DC8`, instruction `0xEE010F10`, value `0x1272`, emulated. Do not infer remap from `0x0C150004`.
 
-Firmware-table evidence retained:
-- source `0x744` = 8-byte header + 16 records x 16 bytes = 0x108 bytes;
-- `0x0A000000, size 0x01000000, control 0x32000022` is the strongest main-SDRAM candidate;
-- `0x08000000, size 0x1000, control 0x30000023` contradicts the old 16-MiB SDRAM label;
-- `0x0C000000, size 0x00200000, control 0x31000023` contains observed `0x0C150004`, without establishing the register semantics.
+MACHINE1-AG implementation:
+- Adds only one new exact stack callsite: PC `0x2258`, LR `0x11E8`, instruction `0xE92D4030`.
+- Reuses the existing 12-byte nested-stack footprint `0x0A000FB0..0x0A000FBB`; no address range is widened.
+- Existing width/alignment/range gates remain fail-closed.
+- Added controller tests proving the exact callsite passes while wrong LR and address below the footprint fail.
+- Relevant commits:
+  - `6955147e73460ef5fd1f870269cc837522892fdc` — define fourth-stack callsite constants.
+  - `b23d7b1935a78560b596e818d005d8fceda54745` — admit exact PC/LR over existing footprint.
+  - `90a06fcf2993100d5ee50f0f67359447e03efd66` — controller tests.
+- Workflow/harness identity may still display AE; code logic at the final source commit is AG.
+- Expected proof on device: nested-stack write count should increase by 3 if the full `STMDB` completes, then the next unresolved access must be analyzed before any further widening.
 
-AF commits:
-- `80f41daf05cb2a02dcc2ebec3808416a8b425d63` — model accepts exact low5 1/2/3 transforms.
-- `50fad52fc603d4936f2c6c313cbcabc485225dfe` — controller tests for low5 2/3 plus fail-closed wrong transform.
-- `24df0a8f13c21f05cdad3896c4d2174266a47411` — model documentation / removal of obsolete low5==1 constant.
+Safety/evidence constraints:
+- Preserve Y FIQ banking fix.
+- Preserve Z exact 0x108-byte copy.
+- Preserve AA/AB/AC/AD exact stack/writeback gates.
+- Do not create a generic 4 KiB stack page or broad RAM mapping.
+- `0x0C150004` semantics remain unknown; do not label it a remap register.
