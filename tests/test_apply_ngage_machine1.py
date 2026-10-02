@@ -189,6 +189,11 @@ namespace eka2l1::arm {
         self.assertIn("candidate_bootstrap_nested_stack_push_pc = 0x000022A0u", model)
         self.assertIn("candidate_bootstrap_nested_stack_push_lr = 0x000011C8u", model)
         self.assertIn("candidate_bootstrap_nested_stack_push_instruction = 0xE92D4070u", model)
+        self.assertIn("candidate_bootstrap_post_copy_mutation_address", model)
+        self.assertIn("candidate_bootstrap_post_copy_mutation_pc = 0x000011D4u", model)
+        self.assertIn("candidate_bootstrap_post_copy_mutation_lr = 0x000022C4u", model)
+        self.assertIn("candidate_bootstrap_post_copy_mutation_instruction = 0xE5803008u", model)
+        self.assertIn("candidate_bootstrap_post_copy_mutation_value = 0xB2800021u", model)
         self.assertIn("candidate_post_probe_workspace_base", model)
         self.assertIn("candidate_post_probe_workspace_size = 0x20u", model)
         self.assertIn("low_vector_shadow_base = 0x00000000u", model)
@@ -224,7 +229,10 @@ namespace eka2l1::arm {
         self.assertIn("BOOTSTRAP_NESTED_STACK_POLICY", runner)
         self.assertIn("AA_device_sp_0x0a000fbc_exact_second_stmdb_16bytes_pc_0x22a0_lr_0x11c8_initialized_readback_only", runner)
         self.assertIn("BOOTSTRAP_NESTED_STACK_INITIALIZED_BYTES", runner)
-        self.assertIn("RH29_MACHINE1_AB", runner)
+        self.assertIn("BOOTSTRAP_POST_COPY_MUTATION_POLICY", runner)
+        self.assertIn("AB_device_exact_existing_word_writeback_addr_0x0a000010_pc_0x11d4_lr_0x22c4_value_0xb2800021_initialized_copy_only", runner)
+        self.assertIn("BOOTSTRAP_POST_COPY_MUTATION_ACCEPTED_COUNT", runner)
+        self.assertIn("RH29_MACHINE1_AC", runner)
         self.assertIn('write_hex(out, (p + "R11").c_str(), entry.r11)', runner)
 
     def test_adds_cmake_sources_exactly_once_and_is_idempotent(self):
@@ -250,7 +258,7 @@ namespace eka2l1::arm {
         self.assertIn("NS_SWIFT_NAME(runRH29MachineProbe(instructionBudget:))", header)
         self.assertIn('caseInsensitiveCompare:@"RH-29"', impl)
         self.assertIn('roms/rh-29/SYM.ROM', impl)
-        self.assertIn("[RH29_MACHINE1_AB]", impl)
+        self.assertIn("[RH29_MACHINE1_AC]", impl)
         self.assertNotIn("reset(false", impl)
         self.assertNotIn("set_device(", impl)
 
@@ -275,7 +283,7 @@ namespace eka2l1::arm {
         self.assertEqual(result.returncode, 0, result.stdout)
         view = (root / "src/emu/ios/App/RH29MachineProbeView.swift").read_text()
         self.assertIn("Task.detached(priority: .userInitiated)", view)
-        self.assertIn("RH29_MACHINE1_AB.txt", view)
+        self.assertIn("RH29_MACHINE1_AC.txt", view)
         self.assertIn("ShareLink", view)
         self.assertLess(view.index('Label("Chạy probe"'), view.index("ShareLink"))
         self.assertLess(view.index("ShareLink"), view.index("if !reportText.isEmpty"))
@@ -283,7 +291,7 @@ namespace eka2l1::arm {
         self.assertIn(".textSelection(.enabled)", view)
         self.assertIn("[1_000, 10_000, 100_000, 1_000_000]", view)
         self.assertIn("@State private var instructionBudget: UInt32 = 10_000", view)
-        self.assertIn("MACHINE1-AB", view)
+        self.assertIn("MACHINE1-AC", view)
         self.assertNotIn("RH29_MACHINE1_R.txt", view)
 
     def test_adds_probe_only_svc_dyncom_constructor_without_changing_default_mode(self):
