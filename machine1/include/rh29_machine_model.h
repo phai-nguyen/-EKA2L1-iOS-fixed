@@ -86,6 +86,9 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::uint32_t candidate_bootstrap_third_stack_push_pc = 0x00002228u;
     static constexpr std::uint32_t candidate_bootstrap_third_stack_push_lr = 0x000011E0u;
     static constexpr std::uint32_t candidate_bootstrap_third_stack_push_instruction = 0xE92D4030u;
+    static_assert(candidate_bootstrap_third_stack_push_base >= candidate_bootstrap_nested_stack_push_base
+        && candidate_bootstrap_third_stack_top <= candidate_bootstrap_nested_stack_top,
+        "MACHINE1-AD third stack push must remain inside the evidenced nested-stack window");
 
     // MACHINE1-AB device evidence: after the nested push returns, firmware
     // reads the already-copied word at 0x0A000010, ORs control bits, and
