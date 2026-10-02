@@ -255,6 +255,43 @@ namespace eka2l1::machine::rh29 {
     static_assert(candidate_bootstrap_relocation_base + candidate_bootstrap_relocation_size == 0x09FFF508u,
         "MACHINE1-AN relocation window must stay exactly 0x108 bytes");
 
+    // MACHINE1-AN device evidence: the relocation completes all 66 words and
+    // returns to PC=0x12B8. The first new unresolved access is the first of
+    // four explicit stores that fill the remaining reserved local-frame words:
+    //   0x12B8 STR r10,[sp,#4]  -> 0x0A000FC0 = 0x00000080
+    //   0x12BC STR r9, [sp,#8]  -> 0x0A000FC4 = 0x00000000
+    //   0x12C0 STR r8, [sp,#12] -> 0x0A000FC8 = 0x00000000
+    //   0x12C4 STR r7, [sp,#16] -> 0x0A000FCC = 0x01170000
+    // The first tuple is directly device-observed; the remaining three are
+    // deterministic from the adjacent raw ROM instructions plus the same AN
+    // register snapshot. MACHINE1-AO admits only these four exact tuples and
+    // initialized-only readback. It does not map 0x0A000FBC..0x0A000FCF as a
+    // generic stack range.
+    static constexpr std::size_t candidate_bootstrap_local_frame_tail_word_count = 4u;
+    static constexpr std::size_t candidate_bootstrap_local_frame_tail_word_width = sizeof(std::uint32_t);
+    static constexpr std::uint32_t candidate_bootstrap_local_frame_tail_lr = 0x000012B8u;
+    static constexpr std::array<std::uint32_t, candidate_bootstrap_local_frame_tail_word_count>
+        candidate_bootstrap_local_frame_tail_addresses{
+            0x0A000FC0u, 0x0A000FC4u, 0x0A000FC8u, 0x0A000FCCu
+        };
+    static constexpr std::array<std::uint32_t, candidate_bootstrap_local_frame_tail_word_count>
+        candidate_bootstrap_local_frame_tail_pcs{
+            0x000012B8u, 0x000012BCu, 0x000012C0u, 0x000012C4u
+        };
+    static constexpr std::array<std::uint32_t, candidate_bootstrap_local_frame_tail_word_count>
+        candidate_bootstrap_local_frame_tail_instructions{
+            0xE58DA004u, 0xE58D9008u, 0xE58D800Cu, 0xE58D7010u
+        };
+    static constexpr std::array<std::uint32_t, candidate_bootstrap_local_frame_tail_word_count>
+        candidate_bootstrap_local_frame_tail_values{
+            0x00000080u, 0x00000000u, 0x00000000u, 0x01170000u
+        };
+    static_assert(candidate_bootstrap_local_frame_tail_addresses.front()
+                      == candidate_bootstrap_local_frame_word_address + 4u
+                  && candidate_bootstrap_local_frame_tail_addresses.back() + 4u
+                      == candidate_bootstrap_stack_push_base,
+        "MACHINE1-AO tail must fill only the exact reserved words before the first push window");
+
     // MACHINE1-AB device evidence: after the nested push returns, firmware
     // reads the already-copied word at 0x0A000010, ORs control bits, and
     // writes 0xB2800021 back with STR r3,[r0,#8] at PC=0x11D4/LR=0x22C4.
@@ -483,6 +520,9 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_relocation_read_count() const;
         std::uint64_t candidate_bootstrap_relocation_write_count() const;
         std::size_t candidate_bootstrap_relocation_initialized_bytes() const;
+        std::uint64_t candidate_bootstrap_local_frame_tail_read_count() const;
+        std::uint64_t candidate_bootstrap_local_frame_tail_write_count() const;
+        std::size_t candidate_bootstrap_local_frame_tail_initialized_words() const;
         std::uint64_t candidate_post_probe_workspace_read_count() const;
         std::uint64_t candidate_post_probe_workspace_write_count() const;
         std::uint64_t low_vector_shadow_read_count() const;
@@ -587,6 +627,13 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_relocation_read_count_ = 0;
         std::uint64_t candidate_bootstrap_relocation_write_count_ = 0;
         std::size_t candidate_bootstrap_relocation_initialized_bytes_ = 0;
+        std::array<std::uint32_t, candidate_bootstrap_local_frame_tail_word_count>
+            candidate_bootstrap_local_frame_tail_data_{};
+        std::array<bool, candidate_bootstrap_local_frame_tail_word_count>
+            candidate_bootstrap_local_frame_tail_initialized_{};
+        std::uint64_t candidate_bootstrap_local_frame_tail_read_count_ = 0;
+        std::uint64_t candidate_bootstrap_local_frame_tail_write_count_ = 0;
+        std::size_t candidate_bootstrap_local_frame_tail_initialized_words_ = 0;
         std::vector<std::uint8_t> candidate_post_probe_workspace_data_{};
         std::uint64_t candidate_post_probe_workspace_read_count_ = 0;
         std::uint64_t candidate_post_probe_workspace_write_count_ = 0;
