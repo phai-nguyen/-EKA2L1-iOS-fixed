@@ -99,7 +99,7 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::uint32_t setup_literal_pool_end = 0x00000BC4u;
     static constexpr std::size_t setup_literal_pool_word_count =
         (setup_literal_pool_end - setup_literal_pool_begin) / sizeof(std::uint32_t);
-    static constexpr std::uint32_t ram_bank_handler_dump_begin = 0x00001328u;
+    static constexpr std::uint32_t ram_bank_handler_dump_begin = 0x000012A0u;
     static constexpr std::uint32_t ram_bank_handler_dump_end = 0x00001400u;
     static constexpr std::size_t ram_bank_handler_dump_word_count =
         (ram_bank_handler_dump_end - ram_bank_handler_dump_begin) / sizeof(std::uint32_t);
@@ -185,6 +185,8 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_ram_bank_sparse_probe_anchor_verify_read_count = 0;
         std::uint64_t candidate_ram_bank_sparse_probe_readback_count = 0;
         std::uint64_t candidate_ram_bank_sparse_probe_restore_write_count = 0;
+        std::uint64_t candidate_bootstrap_local_frame_word_read_count = 0;
+        std::uint64_t candidate_bootstrap_local_frame_word_write_count = 0;
         bool candidate_post_probe_workspace_enabled = false;
         std::uint64_t candidate_post_probe_workspace_read_count = 0;
         std::uint64_t candidate_post_probe_workspace_write_count = 0;
