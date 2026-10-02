@@ -373,6 +373,17 @@ namespace eka2l1::machine::rh29 {
         }
 
         if (kind == access_kind::data_read
+            && address == candidate_ram_bank_probe_anchor_address
+            && width == candidate_ram_bank_probe_anchor_width
+            && pc == candidate_ram_bank_probe_anchor_read_pc
+            && lr == candidate_ram_bank_probe_anchor_read_lr) {
+            const std::uint32_t seed = candidate_ram_bank_probe_anchor_seed;
+            std::memcpy(out, &seed, sizeof(seed));
+            ++candidate_ram_bank_probe_anchor_read_count_;
+            return true;
+        }
+
+        if (kind == access_kind::data_read
             && range_inside_candidate_bootstrap_region_stack(address, width, offset)) {
             bool initialized = true;
             for (std::size_t i = 0; i < width; ++i) {
@@ -907,6 +918,10 @@ namespace eka2l1::machine::rh29 {
 
     std::size_t strict_bus::candidate_bootstrap_nested_stack_initialized_bytes() const {
         return candidate_bootstrap_nested_stack_initialized_bytes_;
+    }
+
+    std::uint64_t strict_bus::candidate_ram_bank_probe_anchor_read_count() const {
+        return candidate_ram_bank_probe_anchor_read_count_;
     }
 
     std::uint64_t strict_bus::candidate_post_probe_workspace_read_count() const {
