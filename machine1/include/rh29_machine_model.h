@@ -329,6 +329,24 @@ namespace eka2l1::machine::rh29 {
                       == 0x20u,
         "MACHINE1-AP relocated stack must remain exactly eight 32-bit words");
 
+    // MACHINE1-AP device evidence consumed by MACHINE1-AQ: the exact relocated
+    // eight-word push completes, then PC=0xF1C executes SUB sp,sp,#0x54,
+    // producing SP=0x09FFF388. PC=0xF20 loads r5/r8/r12 from the already
+    // initialized 0x0A000FBC local-frame words. The next bus transaction is
+    // PC=0xF24, instruction 0xE58DC024 (STR r12,[sp,#0x24]), which writes
+    // value 0x00000000 to 0x09FFF3AC. MACHINE1-AQ admits only this exact
+    // observed word and initialized-only readback. The remaining 0x54-byte
+    // local frame stays unmapped until device evidence reaches it.
+    static constexpr std::uint32_t candidate_bootstrap_relocated_local_word_address = 0x09FFF3ACu;
+    static constexpr std::size_t candidate_bootstrap_relocated_local_word_width = sizeof(std::uint32_t);
+    static constexpr std::uint32_t candidate_bootstrap_relocated_local_word_pc = 0x00000F24u;
+    static constexpr std::uint32_t candidate_bootstrap_relocated_local_word_lr = 0x00000F18u;
+    static constexpr std::uint32_t candidate_bootstrap_relocated_local_word_instruction = 0xE58DC024u;
+    static constexpr std::uint32_t candidate_bootstrap_relocated_local_word_value = 0x00000000u;
+    static_assert(candidate_bootstrap_relocated_local_word_address
+                      == candidate_bootstrap_relocated_stack_base - 0x30u,
+        "MACHINE1-AQ local word must stay at the exact AP-observed sp+0x24 address");
+
     // MACHINE1-AB device evidence: after the nested push returns, firmware
     // reads the already-copied word at 0x0A000010, ORs control bits, and
     // writes 0xB2800021 back with STR r3,[r0,#8] at PC=0x11D4/LR=0x22C4.
@@ -563,6 +581,8 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_relocated_stack_read_count() const;
         std::uint64_t candidate_bootstrap_relocated_stack_write_count() const;
         std::size_t candidate_bootstrap_relocated_stack_initialized_words() const;
+        std::uint64_t candidate_bootstrap_relocated_local_word_read_count() const;
+        std::uint64_t candidate_bootstrap_relocated_local_word_write_count() const;
         std::uint64_t candidate_post_probe_workspace_read_count() const;
         std::uint64_t candidate_post_probe_workspace_write_count() const;
         std::uint64_t low_vector_shadow_read_count() const;
@@ -681,6 +701,10 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_relocated_stack_read_count_ = 0;
         std::uint64_t candidate_bootstrap_relocated_stack_write_count_ = 0;
         std::size_t candidate_bootstrap_relocated_stack_initialized_words_ = 0;
+        std::uint32_t candidate_bootstrap_relocated_local_word_data_ = 0;
+        bool candidate_bootstrap_relocated_local_word_initialized_ = false;
+        std::uint64_t candidate_bootstrap_relocated_local_word_read_count_ = 0;
+        std::uint64_t candidate_bootstrap_relocated_local_word_write_count_ = 0;
         std::vector<std::uint8_t> candidate_post_probe_workspace_data_{};
         std::uint64_t candidate_post_probe_workspace_read_count_ = 0;
         std::uint64_t candidate_post_probe_workspace_write_count_ = 0;
