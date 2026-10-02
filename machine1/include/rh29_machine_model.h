@@ -90,6 +90,25 @@ namespace eka2l1::machine::rh29 {
         && candidate_bootstrap_third_stack_top <= candidate_bootstrap_nested_stack_top,
         "MACHINE1-AD third stack push must remain inside the evidenced nested-stack window");
 
+    // MACHINE1-AF device evidence: after all 16 record control words are
+    // processed, PC=0x11E4 calls 0x2258 with LR=0x11E8. The first instruction
+    // there is again 0xE92D4030 (STMDB sp!, {r4,r5,lr}) with SP=0x0A000FBC.
+    // Its first unresolved write is 0x0A000FB0, exactly the same 12-byte
+    // footprint already evidenced at 0x2228. MACHINE1-AG admits only this new
+    // callsite over that existing footprint; it does not widen stack memory.
+    static constexpr std::uint32_t candidate_bootstrap_fourth_stack_top =
+        candidate_bootstrap_third_stack_top;
+    static constexpr std::size_t candidate_bootstrap_fourth_stack_push_size =
+        candidate_bootstrap_third_stack_push_size;
+    static constexpr std::uint32_t candidate_bootstrap_fourth_stack_push_base =
+        candidate_bootstrap_third_stack_push_base;
+    static constexpr std::uint32_t candidate_bootstrap_fourth_stack_push_pc = 0x00002258u;
+    static constexpr std::uint32_t candidate_bootstrap_fourth_stack_push_lr = 0x000011E8u;
+    static constexpr std::uint32_t candidate_bootstrap_fourth_stack_push_instruction = 0xE92D4030u;
+    static_assert(candidate_bootstrap_fourth_stack_push_base >= candidate_bootstrap_nested_stack_push_base
+        && candidate_bootstrap_fourth_stack_top <= candidate_bootstrap_nested_stack_top,
+        "MACHINE1-AG fourth stack push must reuse the evidenced nested-stack window");
+
     // MACHINE1-AB device evidence: after the nested push returns, firmware
     // reads the already-copied word at 0x0A000010, ORs control bits, and
     // writes 0xB2800021 back with STR r3,[r0,#8] at PC=0x11D4/LR=0x22C4.
