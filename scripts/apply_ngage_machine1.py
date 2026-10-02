@@ -95,9 +95,9 @@ for source, destination in source_map:
         text = text.replace('#include "rh29_machine_model.h"', '#include "RH29MachineModel.h"', 1)
     elif destination.name == "RH29MachineRunner.cpp":
         text = text.replace('#include "rh29_machine_runner.h"', '#include "RH29MachineRunner.h"', 1)
-        text = text.replace("RH29_MACHINE1_O", "RH29_MACHINE1_AD")
-        text = text.replace("MACHINE1-O probes", "MACHINE1-AD probes")
-        text = text.replace("MACHINE1-O must not let Dyncom", "MACHINE1-AD must not let Dyncom")
+        text = text.replace("RH29_MACHINE1_O", "RH29_MACHINE1_AE")
+        text = text.replace("MACHINE1-O probes", "MACHINE1-AE probes")
+        text = text.replace("MACHINE1-O must not let Dyncom", "MACHINE1-AE must not let Dyncom")
 
         report_anchor = '        out << "FLASH_UNLOCK_STAGE_AT_STOP=" << result.flash_unlock_stage_at_stop << "\\n";\n        write_hex(out, "KERN_DATA_ADDRESS", result.header.kern_data_address);\n'
         report_insert = (
@@ -128,6 +128,18 @@ for source, destination in source_map:
             '        write_hex(out, "BOOTSTRAP_POST_COPY_MUTATION_OBSERVED_INSTRUCTION", candidate_bootstrap_post_copy_mutation_instruction);\n'
             '        write_hex(out, "BOOTSTRAP_POST_COPY_MUTATION_OBSERVED_VALUE", candidate_bootstrap_post_copy_mutation_value);\n'
             '        out << "BOOTSTRAP_POST_COPY_MUTATION_ACCEPTED_COUNT=" << result.candidate_bootstrap_post_copy_mutation_count << "\\n";\n'
+            '        out << "BOOTSTRAP_RECORD_LOOP_MUTATION_POLICY=" << (result.candidate_bootstrap_record_loop_mutation_enabled\n'
+            '            ? "AD_device_16record_stride_0x10_field_plus8_pc_0x2220_lr_0x2244_exact_transform_initialized_only" : "disabled") << "\\n";\n'
+            '        write_hex(out, "BOOTSTRAP_RECORD_TABLE_BASE", candidate_bootstrap_record_table_base);\n'
+            '        out << "BOOTSTRAP_RECORD_COUNT=" << candidate_bootstrap_record_count << "\\n";\n'
+            '        out << "BOOTSTRAP_RECORD_STRIDE=" << candidate_bootstrap_record_stride << "\\n";\n'
+            '        out << "BOOTSTRAP_RECORD_CONTROL_OFFSET=" << candidate_bootstrap_record_control_offset << "\\n";\n'
+            '        write_hex(out, "BOOTSTRAP_RECORD_LOOP_GATE_PC", candidate_bootstrap_record_loop_mutation_pc);\n'
+            '        write_hex(out, "BOOTSTRAP_RECORD_LOOP_GATE_LR", candidate_bootstrap_record_loop_mutation_lr);\n'
+            '        write_hex(out, "BOOTSTRAP_RECORD_LOOP_OBSERVED_INSTRUCTION", candidate_bootstrap_record_loop_mutation_instruction);\n'
+            '        write_hex(out, "BOOTSTRAP_RECORD_LOOP_CLEAR_MASK", candidate_bootstrap_record_loop_clear_mask);\n'
+            '        write_hex(out, "BOOTSTRAP_RECORD_LOOP_OR_MASK", candidate_bootstrap_record_loop_or_mask);\n'
+            '        out << "BOOTSTRAP_RECORD_LOOP_MUTATION_ACCEPTED_COUNT=" << result.candidate_bootstrap_record_loop_mutation_count << "\\n";\n'
             '        out << "BOOTSTRAP_STACK_POLICY=" << (result.candidate_bootstrap_stack_enabled\n'
             '            ? "Z_device_sp_base_plus_0xff0_exact_first_stmdb_32bytes_pc_0x11a8_lr_0x3c8_initialized_readback_only" : "disabled") << "\\n";\n'
             '        write_hex(out, "BOOTSTRAP_STACK_TOP", candidate_bootstrap_stack_top);\n'
@@ -206,18 +218,19 @@ for source, destination in source_map:
             '        write_hex(out, "KERN_DATA_ADDRESS", result.header.kern_data_address);\n'
         )
         if report_anchor not in text:
-            raise SystemExit("MACHINE1-AD runner report anchor not found")
+            raise SystemExit("MACHINE1-AE runner report anchor not found")
         text = text.replace(report_anchor, report_insert, 1)
 
         enable_anchor = '        result.flash_unlock_autoselect_enabled = true;\n        strict_bus bus(rom.data(), parsed.header.rom_size, parsed.header.rom_base, cold_reset_pc,\n'
         if enable_anchor not in text:
-            raise SystemExit("MACHINE1-AD runner enable anchor not found")
+            raise SystemExit("MACHINE1-AE runner enable anchor not found")
         text = text.replace(
             enable_anchor,
             '        result.flash_unlock_autoselect_enabled = true;\n'
             '        result.candidate_ram_probe_enabled = true;\n'
             '        result.candidate_bootstrap_copy_enabled = true;\n'
             '        result.candidate_bootstrap_post_copy_mutation_enabled = true;\n'
+            '        result.candidate_bootstrap_record_loop_mutation_enabled = true;\n'
             '        result.candidate_bootstrap_stack_enabled = true;\n'
             '        result.candidate_bootstrap_nested_stack_enabled = true;\n'
             '        result.candidate_post_probe_workspace_enabled = true;\n'
@@ -228,7 +241,7 @@ for source, destination in source_map:
 
         capture_anchor = '        result.flash_unlock_autoselect_count = bus.observed_flash_unlock_autoselect_count();\n        result.flash_unlock_stage_at_stop = bus.flash_unlock_stage();\n'
         if capture_anchor not in text:
-            raise SystemExit("MACHINE1-AD runner capture anchor not found")
+            raise SystemExit("MACHINE1-AE runner capture anchor not found")
         text = text.replace(
             capture_anchor,
             capture_anchor
@@ -238,6 +251,7 @@ for source, destination in source_map:
             + '        result.candidate_bootstrap_copy_write_count = bus.candidate_bootstrap_copy_write_count();\n'
             + '        result.candidate_bootstrap_copy_initialized_bytes = static_cast<std::uint64_t>(bus.candidate_bootstrap_copy_initialized_bytes());\n'
             + '        result.candidate_bootstrap_post_copy_mutation_count = bus.candidate_bootstrap_post_copy_mutation_count();\n'
+            + '        result.candidate_bootstrap_record_loop_mutation_count = bus.candidate_bootstrap_record_loop_mutation_count();\n'
             + '        result.candidate_bootstrap_stack_read_count = bus.candidate_bootstrap_stack_read_count();\n'
             + '        result.candidate_bootstrap_stack_write_count = bus.candidate_bootstrap_stack_write_count();\n'
             + '        result.candidate_bootstrap_stack_initialized_bytes = static_cast<std::uint64_t>(bus.candidate_bootstrap_stack_initialized_bytes());\n'
@@ -254,11 +268,11 @@ for source, destination in source_map:
         )
 
     elif destination.name == "RH29MachineProbeView.swift":
-        text = text.replace("MACHINE1-O", "MACHINE1-AD")
-        text = text.replace("RH29_MACHINE1_O.txt", "RH29_MACHINE1_AD.txt")
+        text = text.replace("MACHINE1-O", "MACHINE1-AE")
+        text = text.replace("RH29_MACHINE1_O.txt", "RH29_MACHINE1_AE.txt")
         text = text.replace(
             "Probe giữ nguyên model MACHINE1-M và không giả lập 0x0A000000. Bản O ghi 64 lệnh A32 cuối cùng cùng R0/R1/R2/R3/R4/R8/R9/R10/SP/LR để lần ngược nguồn gốc con trỏ 0x0A000000.",
-            "AC giữ toàn bộ Y/Z/AA/AB và chỉ cho phép một ghi đè hậu-copy đã quan sát vào word đã tồn tại tại 0x0A000010: STR tại PC 0x11D4/LR 0x22C4 ghi 0xB2800021. Chỉ chấp nhận nếu 4 byte đó đã được copy trước; không mở thêm RAM. Nút Chia sẻ báo cáo vẫn nằm ngay dưới Chạy probe; không remap và không gán ngữ nghĩa cho 0x0C150004."
+            "AE giữ toàn bộ Y/Z/AA/AB/AC/AD và cho phép đúng vòng lặp 0x2228 duyệt 16 record: chỉ field +8 của record đã copy, stride 0x10, write tại PC 0x2220/LR 0x2244, và chỉ khi giá trị đúng phép biến đổi của firmware. Không mở thêm RAM; nút Chia sẻ báo cáo vẫn ngay dưới Chạy probe; không gán ngữ nghĩa remap cho 0x0C150004."
         )
     destination.write_text(text, encoding="utf-8")
 
@@ -362,7 +376,7 @@ probe_method = r'''
 - (EKA2L1MachineProbeReport *)runRH29MachineProbeWithInstructionBudget:(uint32_t)budget {
     EKA2L1MachineProbeReport *report = [[EKA2L1MachineProbeReport alloc] init];
     report.succeeded = NO;
-    report.text = @"RH29_MACHINE1_AD\nSTOP_REASON=io_error\nDETAIL=emulator is not ready\n";
+    report.text = @"RH29_MACHINE1_AE\nSTOP_REASON=io_error\nDETAIL=emulator is not ready\n";
 
     std::string storage;
     std::string firmware;
@@ -386,12 +400,12 @@ probe_method = r'''
 
     NSString *firmwareCode = [NSString stringWithUTF8String:firmware.c_str()];
     if (!firmwareCode || [firmwareCode caseInsensitiveCompare:@"RH-29"] != NSOrderedSame) {
-        report.text = @"RH29_MACHINE1_AD\nSTOP_REASON=io_error\nDETAIL=current device is not RH-29\n";
+        report.text = @"RH29_MACHINE1_AE\nSTOP_REASON=io_error\nDETAIL=current device is not RH-29\n";
         return report;
     }
 
     const std::string rom_path = eka2l1::add_path(storage, "roms/rh-29/SYM.ROM");
-    LOG_INFO(eka2l1::FRONTEND_CMDLINE, "[RH29_MACHINE1_AD] start budget={} rom={}", budget, rom_path);
+    LOG_INFO(eka2l1::FRONTEND_CMDLINE, "[RH29_MACHINE1_AE] start budget={} rom={}", budget, rom_path);
     eka2l1::machine::rh29::probe_options options{};
     options.instruction_budget = budget;
     const auto result = eka2l1::machine::rh29::run_probe(rom_path, options);
@@ -401,7 +415,7 @@ probe_method = r'''
         result.stop_reason != eka2l1::machine::rh29::probe_stop_reason::invalid_rom
         && result.stop_reason != eka2l1::machine::rh29::probe_stop_reason::io_error);
     LOG_INFO(eka2l1::FRONTEND_CMDLINE,
-        "[RH29_MACHINE1_AD] stop succeeded={} executed={}",
+        "[RH29_MACHINE1_AE] stop succeeded={} executed={}",
         report.succeeded, result.executed_instructions);
     return report;
 }
@@ -483,4 +497,4 @@ if 'firmwareCode.caseInsensitiveCompare("RH-29")' not in content:
     content = content.replace(settings_button, settings_button + probe_button, 1)
 content_path.write_text(content, encoding="utf-8")
 
-print("MACHINE1-AD diagnostic sources + iOS probe integration staged")
+print("MACHINE1-AE diagnostic sources + iOS probe integration staged")
