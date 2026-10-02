@@ -238,7 +238,7 @@ namespace eka2l1::machine::rh29 {
     static_assert(candidate_bootstrap_local_frame_word_address == candidate_bootstrap_nested_stack_top,
         "MACHINE1-AM local-frame word must start exactly at the prior nested-stack top");
 
-    // MACHINE1-AM device evidence: after storing 0x09FFF400 in the local frame,
+    // MACHINE1-AM device evidence consumed by MACHINE1-AN: after storing 0x09FFF400 in the local frame,
     // PC=0x12B4 calls helper 0x12EC with LR=0x12B8. That helper derives a
     // 0x108-byte copy length from the existing 0x0A000000 table and branches
     // into the same 32-bit copy loop at PC=0x2344. The first failed write is
