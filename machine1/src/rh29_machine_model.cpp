@@ -457,6 +457,18 @@ namespace eka2l1::machine::rh29 {
         }
 
         if (kind == access_kind::data_read
+            && width == candidate_bootstrap_relocated_stack_word_width) {
+            for (std::size_t i = 0; i < candidate_bootstrap_relocated_stack_word_count; ++i) {
+                if (address == candidate_bootstrap_relocated_stack_addresses[i]
+                    && candidate_bootstrap_relocated_stack_initialized_[i]) {
+                    std::memcpy(out, &candidate_bootstrap_relocated_stack_data_[i], width);
+                    ++candidate_bootstrap_relocated_stack_read_count_;
+                    return true;
+                }
+            }
+        }
+
+        if (kind == access_kind::data_read
             && range_inside_candidate_bootstrap_relocation(address, width, offset)) {
             bool initialized = true;
             for (std::size_t i = 0; i < width; ++i) {
@@ -722,6 +734,24 @@ namespace eka2l1::machine::rh29 {
                         ++candidate_bootstrap_local_frame_tail_initialized_words_;
                     }
                     ++candidate_bootstrap_local_frame_tail_write_count_;
+                    return true;
+                }
+            }
+        }
+
+        if (value
+            && width == candidate_bootstrap_relocated_stack_word_width
+            && pc == candidate_bootstrap_relocated_stack_pc
+            && lr == candidate_bootstrap_relocated_stack_lr) {
+            for (std::size_t i = 0; i < candidate_bootstrap_relocated_stack_word_count; ++i) {
+                if (address == candidate_bootstrap_relocated_stack_addresses[i]
+                    && write_value == candidate_bootstrap_relocated_stack_values[i]) {
+                    std::memcpy(&candidate_bootstrap_relocated_stack_data_[i], value, width);
+                    if (!candidate_bootstrap_relocated_stack_initialized_[i]) {
+                        candidate_bootstrap_relocated_stack_initialized_[i] = true;
+                        ++candidate_bootstrap_relocated_stack_initialized_words_;
+                    }
+                    ++candidate_bootstrap_relocated_stack_write_count_;
                     return true;
                 }
             }
@@ -1153,6 +1183,18 @@ namespace eka2l1::machine::rh29 {
 
     std::size_t strict_bus::candidate_bootstrap_local_frame_tail_initialized_words() const {
         return candidate_bootstrap_local_frame_tail_initialized_words_;
+    }
+
+    std::uint64_t strict_bus::candidate_bootstrap_relocated_stack_read_count() const {
+        return candidate_bootstrap_relocated_stack_read_count_;
+    }
+
+    std::uint64_t strict_bus::candidate_bootstrap_relocated_stack_write_count() const {
+        return candidate_bootstrap_relocated_stack_write_count_;
+    }
+
+    std::size_t strict_bus::candidate_bootstrap_relocated_stack_initialized_words() const {
+        return candidate_bootstrap_relocated_stack_initialized_words_;
     }
 
     std::uint64_t strict_bus::candidate_post_probe_workspace_read_count() const {
