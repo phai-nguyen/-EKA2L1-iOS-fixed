@@ -56,6 +56,21 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::uint32_t candidate_bootstrap_stack_push_lr = 0x000003C8u;
     static constexpr std::uint32_t candidate_bootstrap_stack_push_instruction = 0xE92D47F0u;
 
+    // MACHINE1-AA device evidence: after the first 32-byte push, PC=0x11AC
+    // executes SUB sp,sp,#0x14, producing SP=0x0A000FBC. The call at PC=0x11C4
+    // enters PC=0x22A0 with LR=0x11C8 and instruction 0xE92D4070
+    // (STMDB sp!, {r4-r6,lr}). Its first unresolved write is 0x0A000FAC.
+    // MACHINE1-AB admits only that exact 16-byte second push footprint.
+    static constexpr std::uint32_t candidate_bootstrap_nested_stack_top = 0x0A000FBCu;
+    static constexpr std::size_t candidate_bootstrap_nested_stack_push_size = 0x10u;
+    static constexpr std::uint32_t candidate_bootstrap_nested_stack_push_base =
+        candidate_bootstrap_nested_stack_top
+            - static_cast<std::uint32_t>(candidate_bootstrap_nested_stack_push_size);
+    static constexpr std::size_t candidate_bootstrap_nested_stack_write_width = sizeof(std::uint32_t);
+    static constexpr std::uint32_t candidate_bootstrap_nested_stack_push_pc = 0x000022A0u;
+    static constexpr std::uint32_t candidate_bootstrap_nested_stack_push_lr = 0x000011C8u;
+    static constexpr std::uint32_t candidate_bootstrap_nested_stack_push_instruction = 0xE92D4070u;
+
     // MACHINE1-R device evidence: after all eight probe iterations complete,
     // R8 advances once more to 0x0A0001E0. The caller passes R0=that address
     // and R1=0x20 to the next routine, whose first observed access is a 32-bit
@@ -232,6 +247,9 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_stack_read_count() const;
         std::uint64_t candidate_bootstrap_stack_write_count() const;
         std::size_t candidate_bootstrap_stack_initialized_bytes() const;
+        std::uint64_t candidate_bootstrap_nested_stack_read_count() const;
+        std::uint64_t candidate_bootstrap_nested_stack_write_count() const;
+        std::size_t candidate_bootstrap_nested_stack_initialized_bytes() const;
         std::uint64_t candidate_post_probe_workspace_read_count() const;
         std::uint64_t candidate_post_probe_workspace_write_count() const;
         std::uint64_t low_vector_shadow_read_count() const;
@@ -246,6 +264,8 @@ namespace eka2l1::machine::rh29 {
                                                    std::size_t &offset) const;
         bool range_inside_candidate_bootstrap_stack(std::uint32_t address, std::size_t width,
                                                     std::size_t &offset) const;
+        bool range_inside_candidate_bootstrap_nested_stack(std::uint32_t address, std::size_t width,
+                                                           std::size_t &offset) const;
         bool range_inside_candidate_post_probe_workspace(std::uint32_t address,
                                                         std::size_t width,
                                                         std::size_t &offset) const;
@@ -291,6 +311,11 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_stack_read_count_ = 0;
         std::uint64_t candidate_bootstrap_stack_write_count_ = 0;
         std::size_t candidate_bootstrap_stack_initialized_bytes_ = 0;
+        std::vector<std::uint8_t> candidate_bootstrap_nested_stack_data_{};
+        std::vector<std::uint8_t> candidate_bootstrap_nested_stack_initialized_{};
+        std::uint64_t candidate_bootstrap_nested_stack_read_count_ = 0;
+        std::uint64_t candidate_bootstrap_nested_stack_write_count_ = 0;
+        std::size_t candidate_bootstrap_nested_stack_initialized_bytes_ = 0;
         std::vector<std::uint8_t> candidate_post_probe_workspace_data_{};
         std::uint64_t candidate_post_probe_workspace_read_count_ = 0;
         std::uint64_t candidate_post_probe_workspace_write_count_ = 0;
