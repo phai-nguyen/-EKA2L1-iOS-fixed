@@ -2,12 +2,6 @@ name: Build NGAGE-MACHINE1-AO
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - ngage-machine1
-    paths-ignore:
-      - ".github/workflows/build-ngage-machine1.yml"
-      - "docs/**"
 
 permissions:
   contents: read
