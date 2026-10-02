@@ -71,6 +71,20 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::uint32_t candidate_bootstrap_nested_stack_push_lr = 0x000011C8u;
     static constexpr std::uint32_t candidate_bootstrap_nested_stack_push_instruction = 0xE92D4070u;
 
+    // MACHINE1-AB device evidence: after the nested push returns, firmware
+    // reads the already-copied word at 0x0A000010, ORs control bits, and
+    // writes 0xB2800021 back with STR r3,[r0,#8] at PC=0x11D4/LR=0x22C4.
+    // MACHINE1-AC permits only this exact in-place mutation and only after the
+    // four destination bytes have been initialized by the Z copy. No new
+    // address range is mapped.
+    static constexpr std::uint32_t candidate_bootstrap_post_copy_mutation_address =
+        candidate_bootstrap_copy_base + 0x10u;
+    static constexpr std::size_t candidate_bootstrap_post_copy_mutation_width = sizeof(std::uint32_t);
+    static constexpr std::uint32_t candidate_bootstrap_post_copy_mutation_pc = 0x000011D4u;
+    static constexpr std::uint32_t candidate_bootstrap_post_copy_mutation_lr = 0x000022C4u;
+    static constexpr std::uint32_t candidate_bootstrap_post_copy_mutation_instruction = 0xE5803008u;
+    static constexpr std::uint32_t candidate_bootstrap_post_copy_mutation_value = 0xB2800021u;
+
     // MACHINE1-R device evidence: after all eight probe iterations complete,
     // R8 advances once more to 0x0A0001E0. The caller passes R0=that address
     // and R1=0x20 to the next routine, whose first observed access is a 32-bit
@@ -244,6 +258,7 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_copy_read_count() const;
         std::uint64_t candidate_bootstrap_copy_write_count() const;
         std::size_t candidate_bootstrap_copy_initialized_bytes() const;
+        std::uint64_t candidate_bootstrap_post_copy_mutation_count() const;
         std::uint64_t candidate_bootstrap_stack_read_count() const;
         std::uint64_t candidate_bootstrap_stack_write_count() const;
         std::size_t candidate_bootstrap_stack_initialized_bytes() const;
@@ -306,6 +321,7 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_copy_read_count_ = 0;
         std::uint64_t candidate_bootstrap_copy_write_count_ = 0;
         std::size_t candidate_bootstrap_copy_initialized_bytes_ = 0;
+        std::uint64_t candidate_bootstrap_post_copy_mutation_count_ = 0;
         std::vector<std::uint8_t> candidate_bootstrap_stack_data_{};
         std::vector<std::uint8_t> candidate_bootstrap_stack_initialized_{};
         std::uint64_t candidate_bootstrap_stack_read_count_ = 0;
