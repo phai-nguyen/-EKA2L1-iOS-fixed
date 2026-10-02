@@ -672,7 +672,7 @@ static void test_ab_observed_post_copy_mutation_is_exact_and_requires_initialize
     assert(wrong_pc.first_unresolved().has_value());
 }
 
-static void test_ad_observed_record_loop_mutation_is_exact_and_initialized_only() {
+static void test_af_observed_record_loop_mutation_is_exact_and_initialized_only() {
     static_assert(candidate_bootstrap_record_table_base == 0x0A000008u);
     static_assert(candidate_bootstrap_record_count == 16u);
     static_assert(candidate_bootstrap_record_stride == 0x10u);
@@ -728,18 +728,41 @@ static void test_ad_observed_record_loop_mutation_is_exact_and_initialized_only(
                              candidate_bootstrap_record_loop_mutation_lr));
     assert(wrong_slot.first_unresolved().has_value());
 
-    strict_bus wrong_old(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
-                         candidate_sdram_base, 0x100);
+    strict_bus low3(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                    candidate_sdram_base, 0x100);
     const std::uint32_t old_low3 = 0x31000023u;
-    assert(wrong_old.write(record1_control, &old_low3, sizeof(old_low3),
-                           candidate_bootstrap_copy_pc, candidate_bootstrap_copy_lr));
-    const std::uint32_t fake =
+    assert(low3.write(record1_control, &old_low3, sizeof(old_low3),
+                      candidate_bootstrap_copy_pc, candidate_bootstrap_copy_lr));
+    const std::uint32_t expected_low3 =
         (old_low3 & ~candidate_bootstrap_record_loop_clear_mask)
         | candidate_bootstrap_record_loop_or_mask;
-    assert(!wrong_old.write(record1_control, &fake, sizeof(fake),
-                            candidate_bootstrap_record_loop_mutation_pc,
-                            candidate_bootstrap_record_loop_mutation_lr));
-    assert(wrong_old.first_unresolved().has_value());
+    assert(expected_low3 == 0xB1000023u);
+    assert(low3.write(record1_control, &expected_low3, sizeof(expected_low3),
+                      candidate_bootstrap_record_loop_mutation_pc,
+                      candidate_bootstrap_record_loop_mutation_lr));
+
+    strict_bus low2(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                    candidate_sdram_base, 0x100);
+    const std::uint32_t old_low2 = 0x32000022u;
+    assert(low2.write(record1_control, &old_low2, sizeof(old_low2),
+                      candidate_bootstrap_copy_pc, candidate_bootstrap_copy_lr));
+    const std::uint32_t expected_low2 =
+        (old_low2 & ~candidate_bootstrap_record_loop_clear_mask)
+        | candidate_bootstrap_record_loop_or_mask;
+    assert(expected_low2 == 0xB2000022u);
+    assert(low2.write(record1_control, &expected_low2, sizeof(expected_low2),
+                      candidate_bootstrap_record_loop_mutation_pc,
+                      candidate_bootstrap_record_loop_mutation_lr));
+
+    strict_bus wrong_transform(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                               candidate_sdram_base, 0x100);
+    assert(wrong_transform.write(record1_control, &old_low3, sizeof(old_low3),
+                                 candidate_bootstrap_copy_pc, candidate_bootstrap_copy_lr));
+    const std::uint32_t bad_transform = expected_low3 ^ 0x00000100u;
+    assert(!wrong_transform.write(record1_control, &bad_transform, sizeof(bad_transform),
+                                  candidate_bootstrap_record_loop_mutation_pc,
+                                  candidate_bootstrap_record_loop_mutation_lr));
+    assert(wrong_transform.first_unresolved().has_value());
 }
 
 static void test_z_observed_first_stack_push_is_exact_gated_and_initialized_only() {
@@ -1004,7 +1027,7 @@ int main() {
     test_eight_step_candidate_probe_loop_is_exact_and_sparse();
     test_y_observed_bootstrap_copy_is_exact_gated_and_initialized_only();
     test_ab_observed_post_copy_mutation_is_exact_and_requires_initialized_copy();
-    test_ad_observed_record_loop_mutation_is_exact_and_initialized_only();
+    test_af_observed_record_loop_mutation_is_exact_and_initialized_only();
     test_z_observed_first_stack_push_is_exact_gated_and_initialized_only();
     test_aa_observed_second_stack_push_is_exact_gated_and_initialized_only();
     test_gap_before_post_probe_workspace_remains_unmapped();
