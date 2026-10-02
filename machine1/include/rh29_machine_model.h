@@ -182,6 +182,22 @@ namespace eka2l1::machine::rh29 {
     static_assert(candidate_bootstrap_seventh_stack_top == candidate_bootstrap_deep_stack_base,
         "MACHINE1-AJ region stack must stop exactly below the AI deep stack");
 
+    // MACHINE1-AJ device evidence: after the exact 0x1328 stack push succeeds,
+    // the low5=2 handler loads record base=0x0A000000 and size=0x01000000,
+    // computes r4=0x0A001100, then executes LDR r12,[r4] at PC=0x1368.
+    // Public Symbian bootstrap source corroborates this general pattern as a
+    // RAM-bank address-configuration probe that saves an original word before
+    // destructive alias tests. The power-on value of RAM is not observable in
+    // our report, so MACHINE1-AK supplies a clearly synthetic zero seed ONLY
+    // for this first exact read. No surrounding RAM range and no write path is
+    // opened yet; the next device transaction must provide the next evidence.
+    static constexpr std::uint32_t candidate_ram_bank_probe_anchor_address = 0x0A001100u;
+    static constexpr std::size_t candidate_ram_bank_probe_anchor_width = sizeof(std::uint32_t);
+    static constexpr std::uint32_t candidate_ram_bank_probe_anchor_read_pc = 0x00001368u;
+    static constexpr std::uint32_t candidate_ram_bank_probe_anchor_read_lr = 0x00001348u;
+    static constexpr std::uint32_t candidate_ram_bank_probe_anchor_read_instruction = 0xE594C000u;
+    static constexpr std::uint32_t candidate_ram_bank_probe_anchor_seed = 0x00000000u;
+
     // MACHINE1-AB device evidence: after the nested push returns, firmware
     // reads the already-copied word at 0x0A000010, ORs control bits, and
     // writes 0xB2800021 back with STR r3,[r0,#8] at PC=0x11D4/LR=0x22C4.
@@ -399,6 +415,7 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_nested_stack_read_count() const;
         std::uint64_t candidate_bootstrap_nested_stack_write_count() const;
         std::size_t candidate_bootstrap_nested_stack_initialized_bytes() const;
+        std::uint64_t candidate_ram_bank_probe_anchor_read_count() const;
         std::uint64_t candidate_post_probe_workspace_read_count() const;
         std::uint64_t candidate_post_probe_workspace_write_count() const;
         std::uint64_t low_vector_shadow_read_count() const;
@@ -482,6 +499,7 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_nested_stack_read_count_ = 0;
         std::uint64_t candidate_bootstrap_nested_stack_write_count_ = 0;
         std::size_t candidate_bootstrap_nested_stack_initialized_bytes_ = 0;
+        std::uint64_t candidate_ram_bank_probe_anchor_read_count_ = 0;
         std::vector<std::uint8_t> candidate_post_probe_workspace_data_{};
         std::uint64_t candidate_post_probe_workspace_read_count_ = 0;
         std::uint64_t candidate_post_probe_workspace_write_count_ = 0;
