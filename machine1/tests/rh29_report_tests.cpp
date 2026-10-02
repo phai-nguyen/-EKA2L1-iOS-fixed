@@ -51,6 +51,10 @@ static probe_result sample_result() {
     result.flash_unlock_autoselect_enabled = true;
     result.flash_unlock_autoselect_count = 1;
     result.flash_unlock_stage_at_stop = 0;
+    result.candidate_ram_bank_probe_anchor_read_count = 1;
+    result.ram_bank_handler_dump_words_valid = 2;
+    result.ram_bank_handler_dump_words[0] = 0xE92D41F0u;
+    result.ram_bank_handler_dump_words[1] = 0xE1A08000u;
     result.a32_trace_count = 2;
     result.a32_trace[0] = a32_trace_entry{
         0x00002660u, 0xE5901000u, 0x200000D1u,
@@ -147,6 +151,24 @@ static void test_report_contains_probe_identity_and_rom_header() {
     require_contains(text, "FLASH_UNLOCK_STAGE_AT_STOP=0");
     require_contains(text, "KERN_DATA_ADDRESS=0x80001000");
     require_contains(text, "KERN_LIMIT=0x80002000");
+}
+
+static void test_report_contains_ak_ram_probe_evidence() {
+    const auto text = format_report(sample_result());
+    require_contains(text, "RAM_BANK_PROBE_ANCHOR_POLICY=AJ_device_exact_first_read_pc_0x1368_lr_0x1348_addr_0x0a001100_synthetic_zero_seed_read_only_no_range_map");
+    require_contains(text, "RAM_BANK_PROBE_ANCHOR_ADDRESS=0x0A001100");
+    require_contains(text, "RAM_BANK_PROBE_ANCHOR_WIDTH_BITS=32");
+    require_contains(text, "RAM_BANK_PROBE_ANCHOR_GATE_PC=0x00001368");
+    require_contains(text, "RAM_BANK_PROBE_ANCHOR_GATE_LR=0x00001348");
+    require_contains(text, "RAM_BANK_PROBE_ANCHOR_OBSERVED_INSTRUCTION=0xE594C000");
+    require_contains(text, "RAM_BANK_PROBE_ANCHOR_SEED=0x00000000");
+    require_contains(text, "RAM_BANK_PROBE_ANCHOR_READ_COUNT=1");
+    require_contains(text, "RAM_BANK_HANDLER_DUMP_POLICY=raw_rom_words_0x00001328_0x000013bc_no_semantic_label");
+    require_contains(text, "RAM_BANK_HANDLER_DUMP_WORDS_VALID=2");
+    require_contains(text, "RAM_BANK_HANDLER_DUMP_00_ADDRESS=0x00001328");
+    require_contains(text, "RAM_BANK_HANDLER_DUMP_00_VALUE=0xE92D41F0");
+    require_contains(text, "RAM_BANK_HANDLER_DUMP_01_ADDRESS=0x0000132C");
+    require_contains(text, "RAM_BANK_HANDLER_DUMP_01_VALUE=0xE1A08000");
 }
 
 static void test_report_contains_budget_stop_and_registers() {
@@ -289,6 +311,7 @@ static void test_arm_condition_passed_matches_a32_flags() {
 
 int main() {
     test_report_contains_probe_identity_and_rom_header();
+    test_report_contains_ak_ram_probe_evidence();
     test_report_contains_budget_stop_and_registers();
     test_report_contains_unresolved_access();
     test_report_contains_cpu_exception();
