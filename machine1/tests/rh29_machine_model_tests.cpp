@@ -1104,6 +1104,65 @@ static void test_ai_observed_seventh_stack_push_adds_exactly_six_new_words() {
     assert(below.first_unresolved().has_value());
 }
 
+static void test_aj_observed_ram_bank_probe_anchor_is_exact_read_only_seed() {
+    static_assert(candidate_ram_bank_probe_anchor_address == 0x0A001100u);
+    static_assert(candidate_ram_bank_probe_anchor_width == 4u);
+    static_assert(candidate_ram_bank_probe_anchor_read_pc == 0x00001368u);
+    static_assert(candidate_ram_bank_probe_anchor_read_lr == 0x00001348u);
+    static_assert(candidate_ram_bank_probe_anchor_read_instruction == 0xE594C000u);
+    static_assert(candidate_ram_bank_probe_anchor_seed == 0u);
+
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+
+    std::uint32_t out = 0xFFFFFFFFu;
+    assert(bus.read(access_kind::data_read,
+                    candidate_ram_bank_probe_anchor_address,
+                    &out, sizeof(out),
+                    candidate_ram_bank_probe_anchor_read_pc,
+                    candidate_ram_bank_probe_anchor_read_lr));
+    assert(out == candidate_ram_bank_probe_anchor_seed);
+    assert(bus.candidate_ram_bank_probe_anchor_read_count() == 1u);
+
+    strict_bus wrong_pc(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                        candidate_sdram_base, 0x100);
+    out = 0;
+    assert(!wrong_pc.read(access_kind::data_read,
+                          candidate_ram_bank_probe_anchor_address,
+                          &out, sizeof(out),
+                          candidate_ram_bank_probe_anchor_read_pc + 4u,
+                          candidate_ram_bank_probe_anchor_read_lr));
+    assert(wrong_pc.first_unresolved().has_value());
+
+    strict_bus wrong_lr(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                        candidate_sdram_base, 0x100);
+    assert(!wrong_lr.read(access_kind::data_read,
+                          candidate_ram_bank_probe_anchor_address,
+                          &out, sizeof(out),
+                          candidate_ram_bank_probe_anchor_read_pc,
+                          candidate_ram_bank_probe_anchor_read_lr + 4u));
+    assert(wrong_lr.first_unresolved().has_value());
+
+    strict_bus neighbor(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                        candidate_sdram_base, 0x100);
+    assert(!neighbor.read(access_kind::data_read,
+                          candidate_ram_bank_probe_anchor_address + 4u,
+                          &out, sizeof(out),
+                          candidate_ram_bank_probe_anchor_read_pc,
+                          candidate_ram_bank_probe_anchor_read_lr));
+    assert(neighbor.first_unresolved().has_value());
+
+    strict_bus write_closed(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                            candidate_sdram_base, 0x100);
+    const std::uint32_t value = 0x12345678u;
+    assert(!write_closed.write(candidate_ram_bank_probe_anchor_address,
+                               &value, sizeof(value),
+                               candidate_ram_bank_probe_anchor_read_pc,
+                               candidate_ram_bank_probe_anchor_read_lr));
+    assert(write_closed.first_unresolved().has_value());
+}
+
 static void test_gap_before_post_probe_workspace_remains_unmapped() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc, candidate_sdram_base, 0x100);
@@ -1277,6 +1336,7 @@ int main() {
     test_ag_observed_fifth_stack_push_adds_exactly_one_new_word();
     test_ah_observed_sixth_stack_push_adds_exactly_two_new_words();
     test_ai_observed_seventh_stack_push_adds_exactly_six_new_words();
+    test_aj_observed_ram_bank_probe_anchor_is_exact_read_only_seed();
     test_gap_before_post_probe_workspace_remains_unmapped();
     test_post_probe_workspace_is_zero_seeded_mutable_and_bounded();
     test_low_vector_shadow_is_rom_seeded_mutable_and_exactly_36_bytes();
