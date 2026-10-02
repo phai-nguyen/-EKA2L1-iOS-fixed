@@ -1401,6 +1401,87 @@ static void test_am_observed_bootstrap_relocation_is_source_verified_and_bounded
     assert(neighbor.first_unresolved().has_value());
 }
 
+static void test_an_observed_local_frame_tail_is_four_exact_tuples_only() {
+    static_assert(candidate_bootstrap_local_frame_tail_word_count == 4u);
+    static_assert(candidate_bootstrap_local_frame_tail_word_width == 4u);
+    static_assert(candidate_bootstrap_local_frame_tail_lr == 0x000012B8u);
+    static_assert(candidate_bootstrap_local_frame_tail_addresses[0] == 0x0A000FC0u);
+    static_assert(candidate_bootstrap_local_frame_tail_addresses[3] == 0x0A000FCCu);
+    static_assert(candidate_bootstrap_local_frame_tail_pcs[0] == 0x000012B8u);
+    static_assert(candidate_bootstrap_local_frame_tail_pcs[3] == 0x000012C4u);
+    static_assert(candidate_bootstrap_local_frame_tail_instructions[0] == 0xE58DA004u);
+    static_assert(candidate_bootstrap_local_frame_tail_instructions[3] == 0xE58D7010u);
+    static_assert(candidate_bootstrap_local_frame_tail_values[0] == 0x00000080u);
+    static_assert(candidate_bootstrap_local_frame_tail_values[3] == 0x01170000u);
+
+    auto rom = valid_rom();
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+
+    std::uint32_t out = 0;
+    assert(!bus.read(access_kind::data_read,
+                     candidate_bootstrap_local_frame_tail_addresses[0],
+                     &out, sizeof(out), 0x000012C8u,
+                     candidate_bootstrap_local_frame_tail_lr));
+    assert(bus.first_unresolved().has_value());
+
+    strict_bus exact(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                     candidate_sdram_base, 0x100);
+    for (std::size_t i = 0; i < candidate_bootstrap_local_frame_tail_word_count; ++i) {
+        const std::uint32_t value = candidate_bootstrap_local_frame_tail_values[i];
+        assert(exact.write(candidate_bootstrap_local_frame_tail_addresses[i],
+                           &value, sizeof(value),
+                           candidate_bootstrap_local_frame_tail_pcs[i],
+                           candidate_bootstrap_local_frame_tail_lr));
+    }
+    assert(exact.candidate_bootstrap_local_frame_tail_write_count() == 4u);
+    assert(exact.candidate_bootstrap_local_frame_tail_initialized_words() == 4u);
+
+    for (std::size_t i = 0; i < candidate_bootstrap_local_frame_tail_word_count; ++i) {
+        out = 0xFFFFFFFFu;
+        assert(exact.read(access_kind::data_read,
+                          candidate_bootstrap_local_frame_tail_addresses[i],
+                          &out, sizeof(out), 0x000003FCu,
+                          candidate_bootstrap_local_frame_tail_lr));
+        assert(out == candidate_bootstrap_local_frame_tail_values[i]);
+    }
+    assert(exact.candidate_bootstrap_local_frame_tail_read_count() == 4u);
+
+    strict_bus wrong_pc(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                        candidate_sdram_base, 0x100);
+    const std::uint32_t first = candidate_bootstrap_local_frame_tail_values[0];
+    assert(!wrong_pc.write(candidate_bootstrap_local_frame_tail_addresses[0],
+                           &first, sizeof(first),
+                           candidate_bootstrap_local_frame_tail_pcs[0] + 4u,
+                           candidate_bootstrap_local_frame_tail_lr));
+    assert(wrong_pc.first_unresolved().has_value());
+
+    strict_bus wrong_lr(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                        candidate_sdram_base, 0x100);
+    assert(!wrong_lr.write(candidate_bootstrap_local_frame_tail_addresses[0],
+                           &first, sizeof(first),
+                           candidate_bootstrap_local_frame_tail_pcs[0],
+                           candidate_bootstrap_local_frame_tail_lr + 4u));
+    assert(wrong_lr.first_unresolved().has_value());
+
+    strict_bus wrong_value(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                           candidate_sdram_base, 0x100);
+    const std::uint32_t bad = 0xDEADBEEFu;
+    assert(!wrong_value.write(candidate_bootstrap_local_frame_tail_addresses[0],
+                              &bad, sizeof(bad),
+                              candidate_bootstrap_local_frame_tail_pcs[0],
+                              candidate_bootstrap_local_frame_tail_lr));
+    assert(wrong_value.first_unresolved().has_value());
+
+    strict_bus neighbor(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                        candidate_sdram_base, 0x100);
+    assert(!neighbor.write(candidate_bootstrap_local_frame_tail_addresses[3] + 4u,
+                           &first, sizeof(first),
+                           candidate_bootstrap_local_frame_tail_pcs[0],
+                           candidate_bootstrap_local_frame_tail_lr));
+    assert(neighbor.first_unresolved().has_value());
+}
+
 static void test_gap_before_post_probe_workspace_remains_unmapped() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc, candidate_sdram_base, 0x100);
@@ -1578,6 +1659,7 @@ int main() {
     test_ak_raw_handler_sparse_address_line_probe_is_exact_and_restores();
     test_al_observed_local_frame_word_is_exact_and_does_not_widen();
     test_am_observed_bootstrap_relocation_is_source_verified_and_bounded();
+    test_an_observed_local_frame_tail_is_four_exact_tuples_only();
     test_gap_before_post_probe_workspace_remains_unmapped();
     test_post_probe_workspace_is_zero_seeded_mutable_and_bounded();
     test_low_vector_shadow_is_rom_seeded_mutable_and_exactly_36_bytes();
