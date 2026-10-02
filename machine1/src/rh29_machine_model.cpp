@@ -78,6 +78,8 @@ namespace eka2l1::machine::rh29 {
         , candidate_ram_probe_data_(candidate_ram_probe_size * candidate_ram_probe_loop_windows, 0)
         , candidate_bootstrap_copy_data_(candidate_bootstrap_copy_size, 0)
         , candidate_bootstrap_copy_initialized_(candidate_bootstrap_copy_size, 0)
+        , candidate_bootstrap_relocation_data_(candidate_bootstrap_relocation_size, 0)
+        , candidate_bootstrap_relocation_initialized_(candidate_bootstrap_relocation_size, 0)
         , candidate_bootstrap_stack_data_(candidate_bootstrap_stack_push_size, 0)
         , candidate_bootstrap_stack_initialized_(candidate_bootstrap_stack_push_size, 0)
         , candidate_bootstrap_nested_stack_data_(candidate_bootstrap_nested_stack_push_size, 0)
@@ -176,6 +178,23 @@ namespace eka2l1::machine::rh29 {
             - candidate_bootstrap_copy_base;
         const std::uint64_t end64 = off64 + static_cast<std::uint64_t>(width);
         if (end64 < off64 || end64 > candidate_bootstrap_copy_data_.size()) {
+            return false;
+        }
+        offset = static_cast<std::size_t>(off64);
+        return true;
+    }
+
+    bool strict_bus::range_inside_candidate_bootstrap_relocation(
+        const std::uint32_t address,
+        const std::size_t width,
+        std::size_t &offset) const {
+        if (width == 0 || address < candidate_bootstrap_relocation_base) {
+            return false;
+        }
+        const std::uint64_t off64 = static_cast<std::uint64_t>(address)
+            - candidate_bootstrap_relocation_base;
+        const std::uint64_t end64 = off64 + static_cast<std::uint64_t>(width);
+        if (end64 < off64 || end64 > candidate_bootstrap_relocation_data_.size()) {
             return false;
         }
         offset = static_cast<std::size_t>(off64);
@@ -426,6 +445,22 @@ namespace eka2l1::machine::rh29 {
         }
 
         if (kind == access_kind::data_read
+            && range_inside_candidate_bootstrap_relocation(address, width, offset)) {
+            bool initialized = true;
+            for (std::size_t i = 0; i < width; ++i) {
+                if (!candidate_bootstrap_relocation_initialized_[offset + i]) {
+                    initialized = false;
+                    break;
+                }
+            }
+            if (initialized) {
+                std::memcpy(out, candidate_bootstrap_relocation_data_.data() + offset, width);
+                ++candidate_bootstrap_relocation_read_count_;
+                return true;
+            }
+        }
+
+        if (kind == access_kind::data_read
             && address == candidate_bootstrap_local_frame_word_address
             && width == candidate_bootstrap_local_frame_word_width
             && candidate_bootstrap_local_frame_word_initialized_) {
@@ -660,6 +695,36 @@ namespace eka2l1::machine::rh29 {
             candidate_bootstrap_local_frame_word_initialized_ = true;
             ++candidate_bootstrap_local_frame_word_write_count_;
             return true;
+        }
+
+        if (value
+            && width == candidate_bootstrap_relocation_write_width
+            && pc == candidate_bootstrap_relocation_pc
+            && lr == candidate_bootstrap_relocation_lr
+            && (address & (candidate_bootstrap_relocation_write_width - 1u)) == 0
+            && range_inside_candidate_bootstrap_relocation(address, width, offset)) {
+            bool source_initialized = true;
+            for (std::size_t i = 0; i < width; ++i) {
+                if (!candidate_bootstrap_copy_initialized_[offset + i]) {
+                    source_initialized = false;
+                    break;
+                }
+            }
+            std::uint32_t expected = 0;
+            if (source_initialized) {
+                std::memcpy(&expected, candidate_bootstrap_copy_data_.data() + offset, sizeof(expected));
+            }
+            if (source_initialized && write_value == expected) {
+                std::memcpy(candidate_bootstrap_relocation_data_.data() + offset, value, width);
+                for (std::size_t i = 0; i < width; ++i) {
+                    if (!candidate_bootstrap_relocation_initialized_[offset + i]) {
+                        candidate_bootstrap_relocation_initialized_[offset + i] = 1;
+                        ++candidate_bootstrap_relocation_initialized_bytes_;
+                    }
+                }
+                ++candidate_bootstrap_relocation_write_count_;
+                return true;
+            }
         }
 
         const bool exact_nested_stack_push =
@@ -1034,6 +1099,18 @@ namespace eka2l1::machine::rh29 {
 
     std::uint64_t strict_bus::candidate_bootstrap_local_frame_word_write_count() const {
         return candidate_bootstrap_local_frame_word_write_count_;
+    }
+
+    std::uint64_t strict_bus::candidate_bootstrap_relocation_read_count() const {
+        return candidate_bootstrap_relocation_read_count_;
+    }
+
+    std::uint64_t strict_bus::candidate_bootstrap_relocation_write_count() const {
+        return candidate_bootstrap_relocation_write_count_;
+    }
+
+    std::size_t strict_bus::candidate_bootstrap_relocation_initialized_bytes() const {
+        return candidate_bootstrap_relocation_initialized_bytes_;
     }
 
     std::uint64_t strict_bus::candidate_post_probe_workspace_read_count() const {
