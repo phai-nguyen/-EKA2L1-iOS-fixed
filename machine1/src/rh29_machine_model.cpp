@@ -556,8 +556,10 @@ namespace eka2l1::machine::rh29 {
                 const std::uint32_t expected =
                     (old_value & ~candidate_bootstrap_record_loop_clear_mask)
                     | candidate_bootstrap_record_loop_or_mask;
+                const std::uint32_t low5 = old_value & 0x1Fu;
+                const bool observed_low5 = low5 == 1u || low5 == 2u || low5 == 3u;
                 if ((old_value & 0x80000000u) == 0
-                    && (old_value & 0x1Fu) == candidate_bootstrap_record_loop_low5_required
+                    && observed_low5
                     && observed == expected) {
                     std::memcpy(candidate_bootstrap_copy_data_.data() + offset, value, width);
                     ++candidate_bootstrap_record_loop_mutation_count_;
