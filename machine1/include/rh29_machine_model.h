@@ -104,13 +104,12 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::uint32_t candidate_bootstrap_post_copy_mutation_instruction = 0xE5803008u;
     static constexpr std::uint32_t candidate_bootstrap_post_copy_mutation_value = 0xB2800021u;
 
-    // MACHINE1-AD device evidence: 0x2228 walks the copied 16-record table.
-    // After record 0, PC=0x2244 advances the record pointer by 0x10 and
-    // PC=0x2248 decrements the count 16->15. For record 1, helper 0x21F4
-    // reads field +8 (0x32800021), PC=0x2210 clears bits 0x60, and
-    // PC=0x2218 ORs 0x80000020, producing 0xB2800021. PC=0x2220 then stores
-    // it back to field +8 at 0x0A000020. MACHINE1-AE generalizes only this
-    // exact loop transform across already-copied record-control slots.
+    // MACHINE1-AE device evidence: helper 0x21F4..0x2220 reaches control
+    // 0x31000023 (low5=3), computes 0xB1000023 and stores at PC=0x2220.
+    // The copied firmware table contains only low5 values 1, 2 and 3.
+    // MACHINE1-AF extends the exact transform gate to that observed set only;
+    // all address/initialization/PC/LR/value guards remain fail-closed and no
+    // memory range is widened.
     static constexpr std::uint32_t candidate_bootstrap_record_table_base =
         candidate_bootstrap_copy_base + 0x08u;
     static constexpr std::size_t candidate_bootstrap_record_count = 16u;
@@ -119,14 +118,13 @@ namespace eka2l1::machine::rh29 {
     static constexpr std::uint32_t candidate_bootstrap_record_loop_mutation_pc = 0x00002220u;
     static constexpr std::uint32_t candidate_bootstrap_record_loop_mutation_lr = 0x00002244u;
     static constexpr std::uint32_t candidate_bootstrap_record_loop_mutation_instruction = 0xE5803008u;
-    static constexpr std::uint32_t candidate_bootstrap_record_loop_low5_required = 0x01u;
     static constexpr std::uint32_t candidate_bootstrap_record_loop_clear_mask = 0x00000060u;
     static constexpr std::uint32_t candidate_bootstrap_record_loop_or_mask = 0x80000020u;
     static_assert(candidate_bootstrap_record_control_offset < candidate_bootstrap_record_stride
         && candidate_bootstrap_record_table_base
             + static_cast<std::uint32_t>(candidate_bootstrap_record_stride * candidate_bootstrap_record_count)
             <= candidate_bootstrap_copy_base + candidate_bootstrap_copy_size,
-        "MACHINE1-AE record-control loop must stay inside the copied 0x108-byte table");
+        "MACHINE1-AF record-control loop must stay inside the copied 0x108-byte table");
 
     // MACHINE1-R device evidence: after all eight probe iterations complete,
     // R8 advances once more to 0x0A0001E0. The caller passes R0=that address
