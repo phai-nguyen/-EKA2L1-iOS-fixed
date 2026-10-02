@@ -965,6 +965,78 @@ static void test_ag_observed_fifth_stack_push_adds_exactly_one_new_word() {
     assert(below.first_unresolved().has_value());
 }
 
+static void test_ah_observed_sixth_stack_push_adds_exactly_two_new_words() {
+    static_assert(candidate_bootstrap_sixth_stack_top == 0x0A000FA8u);
+    static_assert(candidate_bootstrap_sixth_stack_push_base == 0x0A000FA0u);
+    static_assert(candidate_bootstrap_sixth_stack_push_size == 0x08u);
+    static_assert(candidate_bootstrap_sixth_stack_push_pc == 0x00001438u);
+    static_assert(candidate_bootstrap_sixth_stack_push_lr == 0x00001BE0u);
+    static_assert(candidate_bootstrap_sixth_stack_push_instruction == 0xE92D4010u);
+    static_assert(candidate_bootstrap_deep_stack_base == 0x0A000FA0u);
+    static_assert(candidate_bootstrap_deep_stack_size == 8u);
+
+    auto rom = valid_rom();
+
+    strict_bus before(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                      candidate_sdram_base, 0x100);
+    std::uint32_t out = 0;
+    assert(!before.read(access_kind::data_read,
+                        candidate_bootstrap_deep_stack_base,
+                        &out, sizeof(out), 0x0000143Cu,
+                        candidate_bootstrap_sixth_stack_push_lr));
+    assert(before.first_unresolved().has_value());
+
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+    const std::uint32_t r4_value = 0x00000010u;
+    const std::uint32_t lr_value = candidate_bootstrap_sixth_stack_push_lr;
+    assert(bus.write(candidate_bootstrap_deep_stack_base,
+                     &r4_value, sizeof(r4_value),
+                     candidate_bootstrap_sixth_stack_push_pc,
+                     candidate_bootstrap_sixth_stack_push_lr));
+    assert(bus.write(candidate_bootstrap_deep_stack_base + 4u,
+                     &lr_value, sizeof(lr_value),
+                     candidate_bootstrap_sixth_stack_push_pc,
+                     candidate_bootstrap_sixth_stack_push_lr));
+
+    out = 0;
+    assert(bus.read(access_kind::data_read,
+                    candidate_bootstrap_deep_stack_base,
+                    &out, sizeof(out), 0x0000143Cu,
+                    candidate_bootstrap_sixth_stack_push_lr));
+    assert(out == r4_value);
+    out = 0;
+    assert(bus.read(access_kind::data_read,
+                    candidate_bootstrap_deep_stack_base + 4u,
+                    &out, sizeof(out), 0x00001460u,
+                    candidate_bootstrap_sixth_stack_push_lr));
+    assert(out == lr_value);
+
+    strict_bus old_ah(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                      candidate_sdram_base, 0x100);
+    assert(!old_ah.write(candidate_bootstrap_deep_stack_base,
+                         &r4_value, sizeof(r4_value),
+                         candidate_bootstrap_fifth_stack_push_pc,
+                         candidate_bootstrap_fifth_stack_push_lr));
+    assert(old_ah.first_unresolved().has_value());
+
+    strict_bus wrong_lr(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                        candidate_sdram_base, 0x100);
+    assert(!wrong_lr.write(candidate_bootstrap_deep_stack_base,
+                           &r4_value, sizeof(r4_value),
+                           candidate_bootstrap_sixth_stack_push_pc,
+                           candidate_bootstrap_sixth_stack_push_lr + 4u));
+    assert(wrong_lr.first_unresolved().has_value());
+
+    strict_bus below(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                     candidate_sdram_base, 0x100);
+    assert(!below.write(candidate_bootstrap_deep_stack_base - 4u,
+                        &r4_value, sizeof(r4_value),
+                        candidate_bootstrap_sixth_stack_push_pc,
+                        candidate_bootstrap_sixth_stack_push_lr));
+    assert(below.first_unresolved().has_value());
+}
+
 static void test_gap_before_post_probe_workspace_remains_unmapped() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc, candidate_sdram_base, 0x100);
@@ -1136,6 +1208,7 @@ int main() {
     test_aa_observed_second_stack_push_is_exact_gated_and_initialized_only();
     test_af_observed_fourth_stack_push_reuses_exact_12byte_window();
     test_ag_observed_fifth_stack_push_adds_exactly_one_new_word();
+    test_ah_observed_sixth_stack_push_adds_exactly_two_new_words();
     test_gap_before_post_probe_workspace_remains_unmapped();
     test_post_probe_workspace_is_zero_seeded_mutable_and_bounded();
     test_low_vector_shadow_is_rom_seeded_mutable_and_exactly_36_bytes();
