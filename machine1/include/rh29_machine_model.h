@@ -238,6 +238,23 @@ namespace eka2l1::machine::rh29 {
     static_assert(candidate_bootstrap_local_frame_word_address == candidate_bootstrap_nested_stack_top,
         "MACHINE1-AM local-frame word must start exactly at the prior nested-stack top");
 
+    // MACHINE1-AM device evidence: after storing 0x09FFF400 in the local frame,
+    // PC=0x12B4 calls helper 0x12EC with LR=0x12B8. That helper derives a
+    // 0x108-byte copy length from the existing 0x0A000000 table and branches
+    // into the same 32-bit copy loop at PC=0x2344. The first failed write is
+    // value 0x10 to 0x09FFF400. MACHINE1-AN admits only the exact 0x108-byte
+    // relocation target, exact loop PC/LR, and only values matching the already
+    // initialized source table word-for-word. No surrounding RAM is mapped.
+    static constexpr std::uint32_t candidate_bootstrap_relocation_source = candidate_bootstrap_copy_base;
+    static constexpr std::uint32_t candidate_bootstrap_relocation_base = 0x09FFF400u;
+    static constexpr std::size_t candidate_bootstrap_relocation_size = candidate_bootstrap_copy_size;
+    static constexpr std::size_t candidate_bootstrap_relocation_write_width = sizeof(std::uint32_t);
+    static constexpr std::uint32_t candidate_bootstrap_relocation_pc = 0x00002344u;
+    static constexpr std::uint32_t candidate_bootstrap_relocation_lr = 0x000012B8u;
+    static constexpr std::uint32_t candidate_bootstrap_relocation_instruction = 0xE4803004u;
+    static_assert(candidate_bootstrap_relocation_base + candidate_bootstrap_relocation_size == 0x09FFF508u,
+        "MACHINE1-AN relocation window must stay exactly 0x108 bytes");
+
     // MACHINE1-AB device evidence: after the nested push returns, firmware
     // reads the already-copied word at 0x0A000010, ORs control bits, and
     // writes 0xB2800021 back with STR r3,[r0,#8] at PC=0x11D4/LR=0x22C4.
@@ -463,6 +480,9 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_ram_bank_sparse_probe_restore_write_count() const;
         std::uint64_t candidate_bootstrap_local_frame_word_read_count() const;
         std::uint64_t candidate_bootstrap_local_frame_word_write_count() const;
+        std::uint64_t candidate_bootstrap_relocation_read_count() const;
+        std::uint64_t candidate_bootstrap_relocation_write_count() const;
+        std::size_t candidate_bootstrap_relocation_initialized_bytes() const;
         std::uint64_t candidate_post_probe_workspace_read_count() const;
         std::uint64_t candidate_post_probe_workspace_write_count() const;
         std::uint64_t low_vector_shadow_read_count() const;
@@ -475,6 +495,8 @@ namespace eka2l1::machine::rh29 {
                                               std::size_t &offset) const;
         bool range_inside_candidate_bootstrap_copy(std::uint32_t address, std::size_t width,
                                                    std::size_t &offset) const;
+        bool range_inside_candidate_bootstrap_relocation(std::uint32_t address, std::size_t width,
+                                                         std::size_t &offset) const;
         bool range_inside_candidate_bootstrap_stack(std::uint32_t address, std::size_t width,
                                                     std::size_t &offset) const;
         bool range_inside_candidate_bootstrap_nested_stack(std::uint32_t address, std::size_t width,
@@ -560,6 +582,11 @@ namespace eka2l1::machine::rh29 {
         bool candidate_bootstrap_local_frame_word_initialized_ = false;
         std::uint64_t candidate_bootstrap_local_frame_word_read_count_ = 0;
         std::uint64_t candidate_bootstrap_local_frame_word_write_count_ = 0;
+        std::vector<std::uint8_t> candidate_bootstrap_relocation_data_{};
+        std::vector<std::uint8_t> candidate_bootstrap_relocation_initialized_{};
+        std::uint64_t candidate_bootstrap_relocation_read_count_ = 0;
+        std::uint64_t candidate_bootstrap_relocation_write_count_ = 0;
+        std::size_t candidate_bootstrap_relocation_initialized_bytes_ = 0;
         std::vector<std::uint8_t> candidate_post_probe_workspace_data_{};
         std::uint64_t candidate_post_probe_workspace_read_count_ = 0;
         std::uint64_t candidate_post_probe_workspace_write_count_ = 0;
