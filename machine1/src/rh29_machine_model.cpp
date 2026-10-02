@@ -521,6 +521,28 @@ namespace eka2l1::machine::rh29 {
         }
 
         if (value
+            && width == candidate_bootstrap_post_copy_mutation_width
+            && address == candidate_bootstrap_post_copy_mutation_address
+            && pc == candidate_bootstrap_post_copy_mutation_pc
+            && lr == candidate_bootstrap_post_copy_mutation_lr
+            && range_inside_candidate_bootstrap_copy(address, width, offset)) {
+            bool initialized = true;
+            for (std::size_t i = 0; i < width; ++i) {
+                if (!candidate_bootstrap_copy_initialized_[offset + i]) {
+                    initialized = false;
+                    break;
+                }
+            }
+            std::uint32_t observed = 0;
+            std::memcpy(&observed, value, sizeof(observed));
+            if (initialized && observed == candidate_bootstrap_post_copy_mutation_value) {
+                std::memcpy(candidate_bootstrap_copy_data_.data() + offset, value, width);
+                ++candidate_bootstrap_post_copy_mutation_count_;
+                return true;
+            }
+        }
+
+        if (value
             && width == candidate_bootstrap_copy_write_width
             && pc == candidate_bootstrap_copy_pc
             && lr == candidate_bootstrap_copy_lr
@@ -639,6 +661,10 @@ namespace eka2l1::machine::rh29 {
 
     std::size_t strict_bus::candidate_bootstrap_copy_initialized_bytes() const {
         return candidate_bootstrap_copy_initialized_bytes_;
+    }
+
+    std::uint64_t strict_bus::candidate_bootstrap_post_copy_mutation_count() const {
+        return candidate_bootstrap_post_copy_mutation_count_;
     }
 
     std::uint64_t strict_bus::candidate_bootstrap_stack_read_count() const {
