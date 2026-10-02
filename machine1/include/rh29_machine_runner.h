@@ -196,6 +196,8 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_relocated_stack_read_count = 0;
         std::uint64_t candidate_bootstrap_relocated_stack_write_count = 0;
         std::uint64_t candidate_bootstrap_relocated_stack_initialized_words = 0;
+        std::uint64_t candidate_bootstrap_relocated_local_word_read_count = 0;
+        std::uint64_t candidate_bootstrap_relocated_local_word_write_count = 0;
         bool candidate_post_probe_workspace_enabled = false;
         std::uint64_t candidate_post_probe_workspace_read_count = 0;
         std::uint64_t candidate_post_probe_workspace_write_count = 0;
