@@ -267,6 +267,12 @@ jobs:
           grep -q 'candidate_bootstrap_callee_copy6_pc = 0x00002344u' source/src/emu/ios/Bridge/RH29MachineModel.h
           grep -q 'candidate_bootstrap_callee_copy6_lr = 0x000015FCu' source/src/emu/ios/Bridge/RH29MachineModel.h
           grep -q 'candidate_bootstrap_callee_copy6_instruction = 0xE4803004u' source/src/emu/ios/Bridge/RH29MachineModel.h
+          grep -q 'candidate_bootstrap_callee_copy7_source = 0x09FFF468u' source/src/emu/ios/Bridge/RH29MachineModel.h
+          grep -q 'candidate_bootstrap_callee_copy7_base = 0x09FFF570u' source/src/emu/ios/Bridge/RH29MachineModel.h
+          grep -q 'candidate_bootstrap_callee_copy7_size = 0x10u' source/src/emu/ios/Bridge/RH29MachineModel.h
+          grep -q 'candidate_bootstrap_callee_copy7_pc = 0x00002344u' source/src/emu/ios/Bridge/RH29MachineModel.h
+          grep -q 'candidate_bootstrap_callee_copy7_lr = 0x000015FCu' source/src/emu/ios/Bridge/RH29MachineModel.h
+          grep -q 'candidate_bootstrap_callee_copy7_instruction = 0xE4803004u' source/src/emu/ios/Bridge/RH29MachineModel.h
           grep -q 'ram_bank_handler_dump_begin = 0x000012A0u' source/src/emu/ios/Bridge/RH29MachineRunner.h
           grep -q 'ram_bank_handler_dump_end = 0x00001400u' source/src/emu/ios/Bridge/RH29MachineRunner.h
           grep -q 'RAM_BANK_SPARSE_PROBE_POLICY=AK_raw_handler_10_power2_words_synthetic_independent_zero_seed_exact_callsites_no_range_map' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
@@ -305,6 +311,9 @@ jobs:
           grep -q 'BOOTSTRAP_CALLEE_COPY6_POLICY=AY_device_exact_sixth_16byte_copy_pc_0x2344_lr_0x15fc_src_0x09fff458_dst_0x09fff560_source_verified_from_initialized_relocation_no_range_widen' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q 'BOOTSTRAP_CALLEE_COPY6_WRITE_COUNT' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q 'BOOTSTRAP_CALLEE_COPY6_INITIALIZED_BYTES' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
+          grep -q 'BOOTSTRAP_CALLEE_COPY7_POLICY=AZ_device_exact_seventh_16byte_copy_pc_0x2344_lr_0x15fc_src_0x09fff468_dst_0x09fff570_source_verified_from_initialized_relocation_no_range_widen' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
+          grep -q 'BOOTSTRAP_CALLEE_COPY7_WRITE_COUNT' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
+          grep -q 'BOOTSTRAP_CALLEE_COPY7_INITIALIZED_BYTES' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q 'MACHINE1_W_DIAG_POLICY=no_memory_response_change_no_remap_assumption' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q 'LOW_PAGE_TRACE_POLICY=low_4k_all_guest_bus_callbacks_no_response_change' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q 'CP15_TRACE_POLICY=all_condition_passed_p15_seen_before_barrier' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
