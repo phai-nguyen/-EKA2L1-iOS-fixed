@@ -497,7 +497,8 @@ namespace eka2l1::machine::rh29 {
         "MACHINE1-AW third copy source must stay inside the initialized relocation");
 
     // MACHINE1-AW device evidence consumed by MACHINE1-AX: the third exact
-    // 16-byte copy completes 4/4 writes and execution reaches instruction 3185.
+    // 16-byte copy completes 4/4 writes and execution reaches instruction 3185
+    // before the next unresolved transaction.
     // The 0x1580 loop advances to index 3 and calls the same helper with
     // R0=0x09FFF540, R1=0x09FFF438, R2=0x10. The first unresolved write is
     // 0x00300000 -> 0x09FFF540 at PC=0x2344/LR=0x15FC. MACHINE1-AX admits
