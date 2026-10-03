@@ -339,6 +339,15 @@ namespace eka2l1::machine::rh29 {
         write_hex(out, "BOOTSTRAP_RELOCATED_ROM_BASE_WORD_OBSERVED_VALUE", candidate_bootstrap_relocated_rom_base_word_value);
         out << "BOOTSTRAP_RELOCATED_ROM_BASE_WORD_READ_COUNT=" << result.candidate_bootstrap_relocated_rom_base_word_read_count << "\n";
         out << "BOOTSTRAP_RELOCATED_ROM_BASE_WORD_WRITE_COUNT=" << result.candidate_bootstrap_relocated_rom_base_word_write_count << "\n";
+        out << "BOOTSTRAP_RELOCATED_HELPER_WORD_POLICY=AR_device_exact_f3c_bl_helper_0x2af8_return_0x40000000_then_f40_store_sp_plus_0x14_addr_0x09fff39c_pc_lr_0x0f40_initialized_readback_only_no_frame_widen\n";
+        write_hex(out, "BOOTSTRAP_RELOCATED_HELPER_WORD_ADDRESS", candidate_bootstrap_relocated_helper_word_address);
+        out << "BOOTSTRAP_RELOCATED_HELPER_WORD_WIDTH_BITS=" << (candidate_bootstrap_relocated_helper_word_width * 8u) << "\n";
+        write_hex(out, "BOOTSTRAP_RELOCATED_HELPER_WORD_GATE_PC", candidate_bootstrap_relocated_helper_word_pc);
+        write_hex(out, "BOOTSTRAP_RELOCATED_HELPER_WORD_GATE_LR", candidate_bootstrap_relocated_helper_word_lr);
+        write_hex(out, "BOOTSTRAP_RELOCATED_HELPER_WORD_OBSERVED_INSTRUCTION", candidate_bootstrap_relocated_helper_word_instruction);
+        write_hex(out, "BOOTSTRAP_RELOCATED_HELPER_WORD_OBSERVED_VALUE", candidate_bootstrap_relocated_helper_word_value);
+        out << "BOOTSTRAP_RELOCATED_HELPER_WORD_READ_COUNT=" << result.candidate_bootstrap_relocated_helper_word_read_count << "\n";
+        out << "BOOTSTRAP_RELOCATED_HELPER_WORD_WRITE_COUNT=" << result.candidate_bootstrap_relocated_helper_word_write_count << "\n";
         out << "RAM_BANK_HANDLER_DUMP_POLICY=raw_rom_words_0x000012a0_0x000013fc_context_no_semantic_label\n";
         out << "RAM_BANK_HANDLER_DUMP_WORDS_VALID=" << result.ram_bank_handler_dump_words_valid << "\n";
         for (std::size_t i = 0; i < result.ram_bank_handler_dump_words_valid
@@ -849,6 +858,10 @@ namespace eka2l1::machine::rh29 {
             bus.candidate_bootstrap_relocated_rom_base_word_read_count();
         result.candidate_bootstrap_relocated_rom_base_word_write_count =
             bus.candidate_bootstrap_relocated_rom_base_word_write_count();
+        result.candidate_bootstrap_relocated_helper_word_read_count =
+            bus.candidate_bootstrap_relocated_helper_word_read_count();
+        result.candidate_bootstrap_relocated_helper_word_write_count =
+            bus.candidate_bootstrap_relocated_helper_word_write_count();
 
         if (result.unresolved) {
             result.stop_reason = probe_stop_reason::unresolved_access;
