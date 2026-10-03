@@ -385,6 +385,40 @@ namespace eka2l1::machine::rh29 {
                       == candidate_bootstrap_relocated_rom_base_word_address - 0x04u,
         "MACHINE1-AS helper word must stay at the exact AR-observed sp+0x14 address");
 
+    // MACHINE1-AS device evidence consumed by MACHINE1-AT: the exact F40
+    // helper-result store completes. F44 moves the relocated table base
+    // 0x09FFF400 into r0, F48 calls 0x1580, and the callee enters with
+    // SP=0x09FFF388, LR=0xF4C. Instruction 0xE92D40F0 is
+    // STMDB sp!,{r4-r7,lr}; its exact 20-byte footprint is
+    // 0x09FFF374..0x09FFF387. The first word 0x09FFF374=0x01170000 is directly
+    // unresolved on device. The remaining four tuples are deterministic from
+    // that same AS register snapshot plus the architectural register list.
+    // MACHINE1-AT admits only these five exact tuples and initialized-only
+    // readback; no wider stack/local-frame region is mapped.
+    static constexpr std::size_t candidate_bootstrap_callee_stack_word_count = 5u;
+    static constexpr std::size_t candidate_bootstrap_callee_stack_word_width = sizeof(std::uint32_t);
+    static constexpr std::uint32_t candidate_bootstrap_callee_stack_top = 0x09FFF388u;
+    static constexpr std::uint32_t candidate_bootstrap_callee_stack_base = 0x09FFF374u;
+    static constexpr std::uint32_t candidate_bootstrap_callee_stack_pc = 0x00001580u;
+    static constexpr std::uint32_t candidate_bootstrap_callee_stack_lr = 0x00000F4Cu;
+    static constexpr std::uint32_t candidate_bootstrap_callee_stack_instruction = 0xE92D40F0u;
+    static constexpr std::array<std::uint32_t, candidate_bootstrap_callee_stack_word_count>
+        candidate_bootstrap_callee_stack_addresses{
+            0x09FFF374u, 0x09FFF378u, 0x09FFF37Cu, 0x09FFF380u, 0x09FFF384u
+        };
+    static constexpr std::array<std::uint32_t, candidate_bootstrap_callee_stack_word_count>
+        candidate_bootstrap_callee_stack_values{
+            0x01170000u, 0x09FFF400u, 0x00000000u, 0x01170000u, 0x00000F4Cu
+        };
+    static_assert(candidate_bootstrap_callee_stack_addresses.front()
+                      == candidate_bootstrap_callee_stack_base
+                  && candidate_bootstrap_callee_stack_addresses.back() + 4u
+                      == candidate_bootstrap_callee_stack_top
+                  && candidate_bootstrap_callee_stack_top
+                         - candidate_bootstrap_callee_stack_base
+                      == 0x14u,
+        "MACHINE1-AT callee stack must remain exactly five 32-bit words");
+
     // MACHINE1-AB device evidence: after the nested push returns, firmware
     // reads the already-copied word at 0x0A000010, ORs control bits, and
     // writes 0xB2800021 back with STR r3,[r0,#8] at PC=0x11D4/LR=0x22C4.
@@ -625,6 +659,9 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_relocated_rom_base_word_write_count() const;
         std::uint64_t candidate_bootstrap_relocated_helper_word_read_count() const;
         std::uint64_t candidate_bootstrap_relocated_helper_word_write_count() const;
+        std::uint64_t candidate_bootstrap_callee_stack_read_count() const;
+        std::uint64_t candidate_bootstrap_callee_stack_write_count() const;
+        std::size_t candidate_bootstrap_callee_stack_initialized_words() const;
         std::uint64_t candidate_post_probe_workspace_read_count() const;
         std::uint64_t candidate_post_probe_workspace_write_count() const;
         std::uint64_t low_vector_shadow_read_count() const;
@@ -755,6 +792,13 @@ namespace eka2l1::machine::rh29 {
         bool candidate_bootstrap_relocated_helper_word_initialized_ = false;
         std::uint64_t candidate_bootstrap_relocated_helper_word_read_count_ = 0;
         std::uint64_t candidate_bootstrap_relocated_helper_word_write_count_ = 0;
+        std::array<std::uint32_t, candidate_bootstrap_callee_stack_word_count>
+            candidate_bootstrap_callee_stack_data_{};
+        std::array<bool, candidate_bootstrap_callee_stack_word_count>
+            candidate_bootstrap_callee_stack_initialized_{};
+        std::uint64_t candidate_bootstrap_callee_stack_read_count_ = 0;
+        std::uint64_t candidate_bootstrap_callee_stack_write_count_ = 0;
+        std::size_t candidate_bootstrap_callee_stack_initialized_words_ = 0;
         std::vector<std::uint8_t> candidate_post_probe_workspace_data_{};
         std::uint64_t candidate_post_probe_workspace_read_count_ = 0;
         std::uint64_t candidate_post_probe_workspace_write_count_ = 0;
