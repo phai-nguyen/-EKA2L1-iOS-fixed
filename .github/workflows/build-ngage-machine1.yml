@@ -1,13 +1,7 @@
-name: Build NGAGE-MACHINE1-BA
+name: Build NGAGE-MACHINE1-BB
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - ngage-machine1
-    paths-ignore:
-      - ".github/workflows/build-ngage-machine1.yml"
-      - "docs/**"
 
 permissions:
   contents: read
@@ -55,11 +49,11 @@ jobs:
           {
             echo "controller_head=$(git rev-parse HEAD)"
             echo "branch=ngage-machine1"
-            echo "milestone=MACHINE1-BA"
+            echo "milestone=MACHINE1-BB"
             echo "target=Nokia N-Gage QD RH-29"
             echo "rom=RH-29 V04.10 SYM.ROM"
             echo "rom_status=DEVICE PASS (HLE import/boot/apps + FIFA 05 playable)"
-          } | tee ../MACHINE1-BASELINE.txt
+          } | tee ../MACHINE1-BBSELINE.txt
 
       - name: Run MACHINE1 controller tests
         working-directory: control
@@ -88,7 +82,7 @@ jobs:
       - name: Apply Vietnamese localization
         run: python3 control/scripts/apply_vietnamese_ios.py source
 
-      - name: Apply NGAGE MACHINE1-BA
+      - name: Apply NGAGE MACHINE1-BB
         run: python3 control/scripts/apply_ngage_machine1.py source
 
       - name: Static contract
@@ -102,8 +96,8 @@ jobs:
           grep -q 'installDeviceWithVplPath' source/src/emu/ios/Bridge/IosEmulator.h
           grep -q '"vi"' source/src/emu/ios/Resources/Localizable.xcstrings
 
-          # MACHINE1-BA must be present only as an opt-in RH-29 research path.
-          grep -q 'RH29_MACHINE1_BA' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
+          # MACHINE1-BB must be present only as an opt-in RH-29 research path.
+          grep -q 'RH29_MACHINE1_BB' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q 'runRH29MachineProbeWithInstructionBudget' source/src/emu/ios/Bridge/IosEmulator.h
           grep -q 'caseInsensitiveCompare:@"RH-29"' source/src/emu/ios/Bridge/IosEmulator.mm
           grep -q 'roms/rh-29/SYM.ROM' source/src/emu/ios/Bridge/IosEmulator.mm
@@ -327,7 +321,7 @@ jobs:
           grep -q 'RAM_PROBE_READ_COUNT' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q 'RAM_PROBE_WRITE_COUNT' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q '(p + "R8")' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
-          grep -q 'RH29_MACHINE1_BA.txt' source/src/emu/ios/App/RH29MachineProbeView.swift
+          grep -q 'RH29_MACHINE1_BB.txt' source/src/emu/ios/App/RH29MachineProbeView.swift
           grep -q 'Reg_nonfiq_r8_r12' source/src/emu/cpu/include/cpu/dyncom/armstate.h
           grep -q 'Reg_nonfiq_r8_r12.begin(), Reg_nonfiq_r8_r12.end()' source/src/emu/cpu/src/dyncom/armstate.cpp
           grep -q 'Reg.begin() + 13, Reg_nonfiq_r8_r12.begin()' source/src/emu/cpu/src/dyncom/armstate.cpp
@@ -335,7 +329,7 @@ jobs:
           grep -q '@State private var instructionBudget: UInt32 = 10_000' source/src/emu/ios/App/RH29MachineProbeView.swift
 
           git -C source diff --check
-          echo "HYBRIDHOME3 + VPL + Vietnamese + MACHINE1-BA static contract PASS"
+          echo "HYBRIDHOME3 + VPL + Vietnamese + MACHINE1-BB static contract PASS"
 
       - name: Install and configure ccache
         run: |
@@ -409,7 +403,7 @@ jobs:
           path: source/src/external/ffmpeg/ios/device
           key: hybridhome-upstream1-ffmpeg-ios-device-v1
 
-      - name: Build upstream iOS + MACHINE1-BA
+      - name: Build upstream iOS + MACHINE1-BB
         working-directory: source
         env:
           EKA2L1_IOS_DEPLOYMENT_TARGET: "16.0"
@@ -448,12 +442,12 @@ jobs:
           cp -R "${app}" out/Payload/
           (
             cd out
-            zip -qry EKA2L1-NGAGE-MACHINE1-BA-unsigned.ipa Payload
+            zip -qry EKA2L1-NGAGE-MACHINE1-BB-unsigned.ipa Payload
           )
 
-      - name: Upload NGAGE MACHINE1-BA IPA
+      - name: Upload NGAGE MACHINE1-BB IPA
         uses: actions/upload-artifact@v7
         with:
-          name: EKA2L1-NGAGE-MACHINE1-BA-IPA
-          path: out/EKA2L1-NGAGE-MACHINE1-BA-unsigned.ipa
+          name: EKA2L1-NGAGE-MACHINE1-BB-IPA
+          path: out/EKA2L1-NGAGE-MACHINE1-BB-unsigned.ipa
           if-no-files-found: error
