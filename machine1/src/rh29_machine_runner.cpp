@@ -410,6 +410,17 @@ namespace eka2l1::machine::rh29 {
         out << "BOOTSTRAP_CALLEE_COPY4_READ_COUNT=" << result.candidate_bootstrap_callee_copy4_read_count << "\n";
         out << "BOOTSTRAP_CALLEE_COPY4_WRITE_COUNT=" << result.candidate_bootstrap_callee_copy4_write_count << "\n";
         out << "BOOTSTRAP_CALLEE_COPY4_INITIALIZED_BYTES=" << result.candidate_bootstrap_callee_copy4_initialized_bytes << "\n";
+        out << "BOOTSTRAP_CALLEE_COPY5_POLICY=AX_device_exact_fifth_16byte_copy_pc_0x2344_lr_0x15fc_src_0x09fff448_dst_0x09fff550_source_verified_from_initialized_relocation_no_range_widen\n";
+        write_hex(out, "BOOTSTRAP_CALLEE_COPY5_SOURCE", candidate_bootstrap_callee_copy5_source);
+        write_hex(out, "BOOTSTRAP_CALLEE_COPY5_BASE", candidate_bootstrap_callee_copy5_base);
+        out << "BOOTSTRAP_CALLEE_COPY5_SIZE=" << candidate_bootstrap_callee_copy5_size << "\n";
+        out << "BOOTSTRAP_CALLEE_COPY5_WIDTH_BITS=" << (candidate_bootstrap_callee_copy5_write_width * 8u) << "\n";
+        write_hex(out, "BOOTSTRAP_CALLEE_COPY5_GATE_PC", candidate_bootstrap_callee_copy5_pc);
+        write_hex(out, "BOOTSTRAP_CALLEE_COPY5_GATE_LR", candidate_bootstrap_callee_copy5_lr);
+        write_hex(out, "BOOTSTRAP_CALLEE_COPY5_OBSERVED_INSTRUCTION", candidate_bootstrap_callee_copy5_instruction);
+        out << "BOOTSTRAP_CALLEE_COPY5_READ_COUNT=" << result.candidate_bootstrap_callee_copy5_read_count << "\n";
+        out << "BOOTSTRAP_CALLEE_COPY5_WRITE_COUNT=" << result.candidate_bootstrap_callee_copy5_write_count << "\n";
+        out << "BOOTSTRAP_CALLEE_COPY5_INITIALIZED_BYTES=" << result.candidate_bootstrap_callee_copy5_initialized_bytes << "\n";
         out << "RAM_BANK_HANDLER_DUMP_POLICY=raw_rom_words_0x000012a0_0x000013fc_context_no_semantic_label\n";
         out << "RAM_BANK_HANDLER_DUMP_WORDS_VALID=" << result.ram_bank_handler_dump_words_valid << "\n";
         for (std::size_t i = 0; i < result.ram_bank_handler_dump_words_valid
@@ -954,6 +965,12 @@ namespace eka2l1::machine::rh29 {
             bus.candidate_bootstrap_callee_copy4_write_count();
         result.candidate_bootstrap_callee_copy4_initialized_bytes =
             bus.candidate_bootstrap_callee_copy4_initialized_bytes();
+        result.candidate_bootstrap_callee_copy5_read_count =
+            bus.candidate_bootstrap_callee_copy5_read_count();
+        result.candidate_bootstrap_callee_copy5_write_count =
+            bus.candidate_bootstrap_callee_copy5_write_count();
+        result.candidate_bootstrap_callee_copy5_initialized_bytes =
+            bus.candidate_bootstrap_callee_copy5_initialized_bytes();
 
         if (result.unresolved) {
             result.stop_reason = probe_stop_reason::unresolved_access;
