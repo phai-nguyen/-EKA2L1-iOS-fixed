@@ -487,6 +487,15 @@ namespace eka2l1::machine::rh29 {
         }
 
         if (kind == access_kind::data_read
+            && address == candidate_bootstrap_relocated_helper_word_address
+            && width == candidate_bootstrap_relocated_helper_word_width
+            && candidate_bootstrap_relocated_helper_word_initialized_) {
+            std::memcpy(out, &candidate_bootstrap_relocated_helper_word_data_, width);
+            ++candidate_bootstrap_relocated_helper_word_read_count_;
+            return true;
+        }
+
+        if (kind == access_kind::data_read
             && range_inside_candidate_bootstrap_relocation(address, width, offset)) {
             bool initialized = true;
             for (std::size_t i = 0; i < width; ++i) {
@@ -778,6 +787,18 @@ namespace eka2l1::machine::rh29 {
             std::memcpy(&candidate_bootstrap_relocated_rom_base_word_data_, value, width);
             candidate_bootstrap_relocated_rom_base_word_initialized_ = true;
             ++candidate_bootstrap_relocated_rom_base_word_write_count_;
+            return true;
+        }
+
+        if (value
+            && address == candidate_bootstrap_relocated_helper_word_address
+            && width == candidate_bootstrap_relocated_helper_word_width
+            && pc == candidate_bootstrap_relocated_helper_word_pc
+            && lr == candidate_bootstrap_relocated_helper_word_lr
+            && write_value == candidate_bootstrap_relocated_helper_word_value) {
+            std::memcpy(&candidate_bootstrap_relocated_helper_word_data_, value, width);
+            candidate_bootstrap_relocated_helper_word_initialized_ = true;
+            ++candidate_bootstrap_relocated_helper_word_write_count_;
             return true;
         }
 
@@ -1253,6 +1274,14 @@ namespace eka2l1::machine::rh29 {
 
     std::uint64_t strict_bus::candidate_bootstrap_relocated_rom_base_word_write_count() const {
         return candidate_bootstrap_relocated_rom_base_word_write_count_;
+    }
+
+    std::uint64_t strict_bus::candidate_bootstrap_relocated_helper_word_read_count() const {
+        return candidate_bootstrap_relocated_helper_word_read_count_;
+    }
+
+    std::uint64_t strict_bus::candidate_bootstrap_relocated_helper_word_write_count() const {
+        return candidate_bootstrap_relocated_helper_word_write_count_;
     }
 
     std::uint64_t strict_bus::candidate_post_probe_workspace_read_count() const {
