@@ -348,6 +348,24 @@ namespace eka2l1::machine::rh29 {
         write_hex(out, "BOOTSTRAP_RELOCATED_HELPER_WORD_OBSERVED_VALUE", candidate_bootstrap_relocated_helper_word_value);
         out << "BOOTSTRAP_RELOCATED_HELPER_WORD_READ_COUNT=" << result.candidate_bootstrap_relocated_helper_word_read_count << "\n";
         out << "BOOTSTRAP_RELOCATED_HELPER_WORD_WRITE_COUNT=" << result.candidate_bootstrap_relocated_helper_word_write_count << "\n";
+        out << "BOOTSTRAP_CALLEE_STACK_POLICY=AS_device_exact_stmdb_sp_20bytes_pc_0x1580_lr_0x0f4c_values_from_register_snapshot_initialized_readback_only_no_range_widen\n";
+        write_hex(out, "BOOTSTRAP_CALLEE_STACK_TOP", candidate_bootstrap_callee_stack_top);
+        write_hex(out, "BOOTSTRAP_CALLEE_STACK_BASE", candidate_bootstrap_callee_stack_base);
+        out << "BOOTSTRAP_CALLEE_STACK_WORD_COUNT=" << candidate_bootstrap_callee_stack_word_count << "\n";
+        out << "BOOTSTRAP_CALLEE_STACK_WIDTH_BITS=" << (candidate_bootstrap_callee_stack_word_width * 8u) << "\n";
+        write_hex(out, "BOOTSTRAP_CALLEE_STACK_GATE_PC", candidate_bootstrap_callee_stack_pc);
+        write_hex(out, "BOOTSTRAP_CALLEE_STACK_GATE_LR", candidate_bootstrap_callee_stack_lr);
+        write_hex(out, "BOOTSTRAP_CALLEE_STACK_OBSERVED_INSTRUCTION", candidate_bootstrap_callee_stack_instruction);
+        for (std::size_t i = 0; i < candidate_bootstrap_callee_stack_word_count; ++i) {
+            std::ostringstream p;
+            p << "BOOTSTRAP_CALLEE_STACK_" << std::setfill('0') << std::setw(2) << i << "_";
+            const auto prefix = p.str();
+            write_hex(out, (prefix + "ADDRESS").c_str(), candidate_bootstrap_callee_stack_addresses[i]);
+            write_hex(out, (prefix + "VALUE").c_str(), candidate_bootstrap_callee_stack_values[i]);
+        }
+        out << "BOOTSTRAP_CALLEE_STACK_READ_COUNT=" << result.candidate_bootstrap_callee_stack_read_count << "\n";
+        out << "BOOTSTRAP_CALLEE_STACK_WRITE_COUNT=" << result.candidate_bootstrap_callee_stack_write_count << "\n";
+        out << "BOOTSTRAP_CALLEE_STACK_INITIALIZED_WORDS=" << result.candidate_bootstrap_callee_stack_initialized_words << "\n";
         out << "RAM_BANK_HANDLER_DUMP_POLICY=raw_rom_words_0x000012a0_0x000013fc_context_no_semantic_label\n";
         out << "RAM_BANK_HANDLER_DUMP_WORDS_VALID=" << result.ram_bank_handler_dump_words_valid << "\n";
         for (std::size_t i = 0; i < result.ram_bank_handler_dump_words_valid
@@ -862,6 +880,12 @@ namespace eka2l1::machine::rh29 {
             bus.candidate_bootstrap_relocated_helper_word_read_count();
         result.candidate_bootstrap_relocated_helper_word_write_count =
             bus.candidate_bootstrap_relocated_helper_word_write_count();
+        result.candidate_bootstrap_callee_stack_read_count =
+            bus.candidate_bootstrap_callee_stack_read_count();
+        result.candidate_bootstrap_callee_stack_write_count =
+            bus.candidate_bootstrap_callee_stack_write_count();
+        result.candidate_bootstrap_callee_stack_initialized_words =
+            bus.candidate_bootstrap_callee_stack_initialized_words();
 
         if (result.unresolved) {
             result.stop_reason = probe_stop_reason::unresolved_access;
