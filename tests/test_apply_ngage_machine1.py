@@ -252,6 +252,12 @@ namespace eka2l1::arm {
         self.assertIn("candidate_bootstrap_callee_stack_pc = 0x00001580u", model)
         self.assertIn("candidate_bootstrap_callee_stack_lr = 0x00000F4Cu", model)
         self.assertIn("candidate_bootstrap_callee_stack_instruction = 0xE92D40F0u", model)
+        self.assertIn("candidate_bootstrap_callee_copy_source = 0x09FFF408u", model)
+        self.assertIn("candidate_bootstrap_callee_copy_base = 0x09FFF510u", model)
+        self.assertIn("candidate_bootstrap_callee_copy_size = 0x10u", model)
+        self.assertIn("candidate_bootstrap_callee_copy_pc = 0x00002344u", model)
+        self.assertIn("candidate_bootstrap_callee_copy_lr = 0x000015FCu", model)
+        self.assertIn("candidate_bootstrap_callee_copy_instruction = 0xE4803004u", model)
         self.assertIn("candidate_bootstrap_post_copy_mutation_address", model)
         self.assertIn("candidate_bootstrap_post_copy_mutation_pc = 0x000011D4u", model)
         self.assertIn("candidate_bootstrap_post_copy_mutation_lr = 0x000022C4u", model)
@@ -315,6 +321,9 @@ namespace eka2l1::arm {
         self.assertIn("BOOTSTRAP_CALLEE_STACK_POLICY=AS_device_exact_stmdb_sp_20bytes_pc_0x1580_lr_0x0f4c_values_from_register_snapshot_initialized_readback_only_no_range_widen", runner)
         self.assertIn("BOOTSTRAP_CALLEE_STACK_WRITE_COUNT", runner)
         self.assertIn("BOOTSTRAP_CALLEE_STACK_INITIALIZED_WORDS", runner)
+        self.assertIn("BOOTSTRAP_CALLEE_COPY_POLICY=AT_device_exact_16byte_copy_pc_0x2344_lr_0x15fc_src_0x09fff408_dst_0x09fff510_source_verified_from_initialized_relocation_no_range_widen", runner)
+        self.assertIn("BOOTSTRAP_CALLEE_COPY_WRITE_COUNT", runner)
+        self.assertIn("BOOTSTRAP_CALLEE_COPY_INITIALIZED_BYTES", runner)
         self.assertIn("candidate_ram_bank_probe_anchor_read_count", runner)
         self.assertIn("RAM_PROBE_READ_COUNT", runner)
         self.assertIn("BOOTSTRAP_COPY_POLICY", runner)
@@ -334,7 +343,7 @@ namespace eka2l1::arm {
         self.assertIn("BOOTSTRAP_RECORD_LOOP_MUTATION_POLICY", runner)
         self.assertIn("AD_device_16record_stride_0x10_field_plus8_pc_0x2220_lr_0x2244_exact_transform_initialized_only", runner)
         self.assertIn("BOOTSTRAP_RECORD_LOOP_MUTATION_ACCEPTED_COUNT", runner)
-        self.assertIn("RH29_MACHINE1_AT", runner)
+        self.assertIn("RH29_MACHINE1_AU", runner)
         self.assertIn('write_hex(out, (p + "R11").c_str(), entry.r11)', runner)
 
     def test_adds_cmake_sources_exactly_once_and_is_idempotent(self):
@@ -360,7 +369,7 @@ namespace eka2l1::arm {
         self.assertIn("NS_SWIFT_NAME(runRH29MachineProbe(instructionBudget:))", header)
         self.assertIn('caseInsensitiveCompare:@"RH-29"', impl)
         self.assertIn('roms/rh-29/SYM.ROM', impl)
-        self.assertIn("[RH29_MACHINE1_AT]", impl)
+        self.assertIn("[RH29_MACHINE1_AU]", impl)
         self.assertNotIn("reset(false", impl)
         self.assertNotIn("set_device(", impl)
 
@@ -385,7 +394,7 @@ namespace eka2l1::arm {
         self.assertEqual(result.returncode, 0, result.stdout)
         view = (root / "src/emu/ios/App/RH29MachineProbeView.swift").read_text()
         self.assertIn("Task.detached(priority: .userInitiated)", view)
-        self.assertIn("RH29_MACHINE1_AT.txt", view)
+        self.assertIn("RH29_MACHINE1_AU.txt", view)
         self.assertIn("ShareLink", view)
         self.assertLess(view.index('Label("Chạy probe"'), view.index("ShareLink"))
         self.assertLess(view.index("ShareLink"), view.index("if !reportText.isEmpty"))
@@ -393,7 +402,7 @@ namespace eka2l1::arm {
         self.assertIn(".textSelection(.enabled)", view)
         self.assertIn("[1_000, 10_000, 100_000, 1_000_000]", view)
         self.assertIn("@State private var instructionBudget: UInt32 = 10_000", view)
-        self.assertIn("MACHINE1-AT", view)
+        self.assertIn("MACHINE1-AU", view)
         self.assertNotIn("RH29_MACHINE1_R.txt", view)
 
     def test_adds_probe_only_svc_dyncom_constructor_without_changing_default_mode(self):
