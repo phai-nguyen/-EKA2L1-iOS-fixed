@@ -368,7 +368,8 @@ namespace eka2l1::machine::rh29 {
         "MACHINE1-AR ROM-base word must stay at the exact AQ-observed sp+0x18 address");
 
     // MACHINE1-AR device evidence consumed by MACHINE1-AS: after the exact
-    // F34 ROM-base store, F38 moves r8 to r0 and F3C calls helper 0x2AF8.
+    // F34 ROM-base store, execution reaches instruction 3026; F38 moves r8 to
+    // r0 and F3C calls helper 0x2AF8.
     // The helper executes MOV r0,#0x40000000 then returns through LR=0xF40.
     // F40 executes 0xE58D0014 (STR r0,[sp,#0x14]) with SP=0x09FFF388,
     // attempting the exact write 0x40000000 -> 0x09FFF39C. MACHINE1-AS
