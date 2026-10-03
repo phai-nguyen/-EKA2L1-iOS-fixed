@@ -366,6 +366,17 @@ namespace eka2l1::machine::rh29 {
         out << "BOOTSTRAP_CALLEE_STACK_READ_COUNT=" << result.candidate_bootstrap_callee_stack_read_count << "\n";
         out << "BOOTSTRAP_CALLEE_STACK_WRITE_COUNT=" << result.candidate_bootstrap_callee_stack_write_count << "\n";
         out << "BOOTSTRAP_CALLEE_STACK_INITIALIZED_WORDS=" << result.candidate_bootstrap_callee_stack_initialized_words << "\n";
+        out << "BOOTSTRAP_CALLEE_COPY_POLICY=AT_device_exact_16byte_copy_pc_0x2344_lr_0x15fc_src_0x09fff408_dst_0x09fff510_source_verified_from_initialized_relocation_no_range_widen\n";
+        write_hex(out, "BOOTSTRAP_CALLEE_COPY_SOURCE", candidate_bootstrap_callee_copy_source);
+        write_hex(out, "BOOTSTRAP_CALLEE_COPY_BASE", candidate_bootstrap_callee_copy_base);
+        out << "BOOTSTRAP_CALLEE_COPY_SIZE=" << candidate_bootstrap_callee_copy_size << "\n";
+        out << "BOOTSTRAP_CALLEE_COPY_WIDTH_BITS=" << (candidate_bootstrap_callee_copy_write_width * 8u) << "\n";
+        write_hex(out, "BOOTSTRAP_CALLEE_COPY_GATE_PC", candidate_bootstrap_callee_copy_pc);
+        write_hex(out, "BOOTSTRAP_CALLEE_COPY_GATE_LR", candidate_bootstrap_callee_copy_lr);
+        write_hex(out, "BOOTSTRAP_CALLEE_COPY_OBSERVED_INSTRUCTION", candidate_bootstrap_callee_copy_instruction);
+        out << "BOOTSTRAP_CALLEE_COPY_READ_COUNT=" << result.candidate_bootstrap_callee_copy_read_count << "\n";
+        out << "BOOTSTRAP_CALLEE_COPY_WRITE_COUNT=" << result.candidate_bootstrap_callee_copy_write_count << "\n";
+        out << "BOOTSTRAP_CALLEE_COPY_INITIALIZED_BYTES=" << result.candidate_bootstrap_callee_copy_initialized_bytes << "\n";
         out << "RAM_BANK_HANDLER_DUMP_POLICY=raw_rom_words_0x000012a0_0x000013fc_context_no_semantic_label\n";
         out << "RAM_BANK_HANDLER_DUMP_WORDS_VALID=" << result.ram_bank_handler_dump_words_valid << "\n";
         for (std::size_t i = 0; i < result.ram_bank_handler_dump_words_valid
@@ -886,6 +897,12 @@ namespace eka2l1::machine::rh29 {
             bus.candidate_bootstrap_callee_stack_write_count();
         result.candidate_bootstrap_callee_stack_initialized_words =
             bus.candidate_bootstrap_callee_stack_initialized_words();
+        result.candidate_bootstrap_callee_copy_read_count =
+            bus.candidate_bootstrap_callee_copy_read_count();
+        result.candidate_bootstrap_callee_copy_write_count =
+            bus.candidate_bootstrap_callee_copy_write_count();
+        result.candidate_bootstrap_callee_copy_initialized_bytes =
+            bus.candidate_bootstrap_callee_copy_initialized_bytes();
 
         if (result.unresolved) {
             result.stop_reason = probe_stop_reason::unresolved_access;
