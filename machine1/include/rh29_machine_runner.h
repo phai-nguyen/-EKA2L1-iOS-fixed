@@ -211,6 +211,9 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_callee_copy2_read_count = 0;
         std::uint64_t candidate_bootstrap_callee_copy2_write_count = 0;
         std::uint64_t candidate_bootstrap_callee_copy2_initialized_bytes = 0;
+        std::uint64_t candidate_bootstrap_callee_copy3_read_count = 0;
+        std::uint64_t candidate_bootstrap_callee_copy3_write_count = 0;
+        std::uint64_t candidate_bootstrap_callee_copy3_initialized_bytes = 0;
         bool candidate_post_probe_workspace_enabled = false;
         std::uint64_t candidate_post_probe_workspace_read_count = 0;
         std::uint64_t candidate_post_probe_workspace_write_count = 0;
