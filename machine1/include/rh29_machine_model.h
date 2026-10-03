@@ -473,7 +473,8 @@ namespace eka2l1::machine::rh29 {
 
     // MACHINE1-AV device evidence consumed by MACHINE1-AW: the second exact
     // 16-byte copy also completes 4/4 writes and execution reaches instruction
-    // 3143. The 0x1580 loop advances to index 2 and calls the same helper with
+    // 3143 before the next unresolved transaction. The 0x1580 loop advances to
+    // index 2 and calls the same helper with
     // R0=0x09FFF530, R1=0x09FFF428, R2=0x10. The first unresolved write is
     // 0x00100000 -> 0x09FFF530 at PC=0x2344/LR=0x15FC. MACHINE1-AW admits
     // only this third exact 16-byte source-verified copy. It does not infer the
