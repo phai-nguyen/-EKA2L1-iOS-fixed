@@ -421,7 +421,8 @@ namespace eka2l1::machine::rh29 {
         "MACHINE1-AT callee stack must remain exactly five 32-bit words");
 
     // MACHINE1-AT device evidence consumed by MACHINE1-AU: the exact five-word
-    // 0x1580 stack push completes, and the routine walks the relocated 0x108-byte
+    // 0x1580 stack push completes and execution reaches instruction 3059.
+    // The routine walks the relocated 0x108-byte
     // table. At PC=0x15F8 it calls the existing 32-bit copy helper at 0x2334
     // with R0=0x09FFF510 (destination), R1=0x09FFF408 (source), R2=0x10.
     // The helper rounds that length to four words and writes through PC=0x2344
