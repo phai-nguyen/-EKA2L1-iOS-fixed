@@ -80,6 +80,9 @@ static probe_result sample_result() {
     result.candidate_bootstrap_callee_copy_read_count = 4;
     result.candidate_bootstrap_callee_copy_write_count = 4;
     result.candidate_bootstrap_callee_copy_initialized_bytes = 16;
+    result.candidate_bootstrap_callee_copy2_read_count = 4;
+    result.candidate_bootstrap_callee_copy2_write_count = 4;
+    result.candidate_bootstrap_callee_copy2_initialized_bytes = 16;
     result.ram_bank_handler_dump_words_valid = 2;
     result.ram_bank_handler_dump_words[0] = 0xE2440B03u;
     result.ram_bank_handler_dump_words[1] = 0xE58D0000u;
@@ -304,6 +307,17 @@ static void test_report_contains_au_exact_callee_stack_and_source_verified_copy_
     require_contains(text, "BOOTSTRAP_CALLEE_COPY_READ_COUNT=4");
     require_contains(text, "BOOTSTRAP_CALLEE_COPY_WRITE_COUNT=4");
     require_contains(text, "BOOTSTRAP_CALLEE_COPY_INITIALIZED_BYTES=16");
+    require_contains(text, "BOOTSTRAP_CALLEE_COPY2_POLICY=AU_device_exact_second_16byte_copy_pc_0x2344_lr_0x15fc_src_0x09fff418_dst_0x09fff520_source_verified_from_initialized_relocation_no_range_widen");
+    require_contains(text, "BOOTSTRAP_CALLEE_COPY2_SOURCE=0x09FFF418");
+    require_contains(text, "BOOTSTRAP_CALLEE_COPY2_BASE=0x09FFF520");
+    require_contains(text, "BOOTSTRAP_CALLEE_COPY2_SIZE=16");
+    require_contains(text, "BOOTSTRAP_CALLEE_COPY2_WIDTH_BITS=32");
+    require_contains(text, "BOOTSTRAP_CALLEE_COPY2_GATE_PC=0x00002344");
+    require_contains(text, "BOOTSTRAP_CALLEE_COPY2_GATE_LR=0x000015FC");
+    require_contains(text, "BOOTSTRAP_CALLEE_COPY2_OBSERVED_INSTRUCTION=0xE4803004");
+    require_contains(text, "BOOTSTRAP_CALLEE_COPY2_READ_COUNT=4");
+    require_contains(text, "BOOTSTRAP_CALLEE_COPY2_WRITE_COUNT=4");
+    require_contains(text, "BOOTSTRAP_CALLEE_COPY2_INITIALIZED_BYTES=16");
     require_contains(text, "RAM_BANK_HANDLER_DUMP_POLICY=raw_rom_words_0x000012a0_0x000013fc_context_no_semantic_label");
     require_contains(text, "RAM_BANK_HANDLER_DUMP_WORDS_VALID=2");
     require_contains(text, "RAM_BANK_HANDLER_DUMP_00_ADDRESS=0x000012A0");
