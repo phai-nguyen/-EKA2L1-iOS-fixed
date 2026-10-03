@@ -205,3 +205,165 @@ existing 16-byte nested-stack backing. It does not widen the mapped address rang
 AC stopped after 1820 executed instructions. The CP15 evidence remains unchanged:
 `MCR p15,0,r0,c1,c0,0` at `0x2DC8` with value `0x1272`. No new evidence identifies
 `0x0C150004` as a remap register.
+
+
+## 10. Correct-era EKA1/Symbian 6.1 validation
+
+Research against the preserved Series 60 6.1 SDK (`ngagesdk/sdk`) gives a
+contemporaneous `TRomHeader`, rather than relying on the later EKA2 layout.
+
+`Epoc32/Include/e32rom.h` defines a 0x100-byte header whose relevant offsets are:
+
+| Offset | EKA1/Symbian 6.1 field |
+|---:|---|
+| `+0x80` | `iVersion` |
+| `+0x84` | `iTime` |
+| `+0x8C` | `iRomBase` |
+| `+0x90` | `iRomSize` |
+| `+0x94` | `iRomRootDirectoryList` |
+| `+0x98` | `iKernDataAddress` |
+| `+0x9C` | `iKernStackAddress` |
+| `+0xA0` | `iPrimaryFile` |
+| `+0xA4` | `iSecondaryFile` |
+
+MACHINE1-AP records a device read of physical low-ROM address `0x00000090`
+at PC `0x1200`, returning `0x01170000`. With the correct-era header this
+is no longer an anonymous word: it is `TRomHeader::iRomSize`.
+
+The AO local-frame tail subsequently preserves the same `0x01170000` value at
+`0x0A000FCC`. In the F18 routine, `LDR r4,[r0,#0x10]` with
+`r0=0x0A000FBC` therefore recovers the ROM-size value.
+
+This semantic upgrade is source-backed and does not add any new bus mapping.
+
+## 11. EKA1 logical ROM base 0x50000000 is independently corroborated
+
+The same Series 60 6.1 SDK contains `Shared/EPOC32/Tools/hpsym.pl`.
+That tool sets:
+
+```
+my $rombase = 0x50000000;
+```
+
+and documents the argument as the logical-address offset from the physical ROM
+address, with `0x50000000` as the default and zero for single-process builds.
+
+This matches all of the following independent observations:
+
+- RH-29 bootstrap currently executes the ROM at low physical addresses while
+  CP15 C1 still shows the MMU disabled.
+- `TRomHeader::iRomBase` parsed from this RH-29 image is `0x50000000`.
+- historical N-Gage reverse engineering places the post-MMU ROM image at
+  `0x50000000–0x57FFFFFF`.
+- modern EKA2L1's preserved EKA1 constants also use
+  `rom_eka1 = 0x50000000`.
+
+Therefore `0x50000000` should be treated as the intended EKA1 logical ROM
+mapping, not as evidence that early reset execution physically starts there.
+
+## 12. Historical EKA1 virtual layout cross-check
+
+Two independent preservation paths reproduce the old N-Gage/EKA1 layout:
+
+1. the historical THC-derived N-Gage map preserved by Engemu; and
+2. EKA2L1's explicit EKA1 constants.
+
+They agree on key regions:
+
+- page directory: `0x41000000`
+- page-table info: `0x41080000`
+- page tables: `0x42000000–0x423FFFFF`
+- ROM: starts at `0x50000000`.
+
+EKA2L1 commit `17c005e982921010f40cdb15b51f433d22cb65ee`
+("kernel: Support page table injection for EKA1") further documents its EKA1
+page-directory emulation:
+
+- low descriptor value 1 = page table;
+- low descriptor value 2 = section;
+- page-table-info low six bits carry attributes.
+
+This is useful architectural corroboration for why RH-29's low control values
+1/2/3 are interesting. It is **not** proof that RH-29 field +8 is itself a raw
+ARM first-level descriptor: the high bits do not behave as a simple physical
+descriptor base, and the firmware mutates the field before later use.
+
+## 13. Stronger classification of RH-29 low5 control classes
+
+Later MACHINE1 device execution plus independent RH-29 UFS flashing logs now
+allow a more precise, but still conservative, classification.
+
+### low5 = 2
+
+Record 14 is:
+
+`0x0A000000, 0x01000000, 0x32000022, 0`
+
+and this path reaches handler `0x1328`, whose executed instructions perform
+the power-of-two sparse address-line RAM test. This is strong device evidence
+that low5=2 selects a **RAM-bank detection path/class**.
+
+### low5 = 1
+
+The low5=1 records cover most of the low physical flash windows. Independent
+RH-29 UFS logs identify:
+
+- `Fl0: 0x00000000–0x00FFFFFF` — AMD 29BDS128J;
+- `Fl1: 0x02000000–0x027FFFFF` — AMD 29BDS064J.
+
+This gives strong correlation between low5=1 and a
+**flash/ROM-like boot handling class**, but it is not a one-to-one physical
+media label: the upper `0x02400000–0x027FFFFF` portion of the second flash
+device also appears in low5=3 records.
+
+### low5 = 3
+
+These entries include `0x0C000000`, `0x0D000000`, `0x08000000`,
+`0x0C120000`, and the overlapping `0x02400000–0x027FFFFF` region.
+The safest current working description is **special/fixed/hardware mapping
+path/class**. Calling it simply "MMIO" would be too strong.
+
+The full high-bit packing of `0x32800021`, `0x31000023`,
+`0x33400023`, `0x30000023`, `0x32000022`, and `0x30200023`
+remains unresolved.
+
+## 14. F18 path and the next evidence boundary
+
+MACHINE1-AP reaches the F18 routine with:
+
+- `SP=0x09FFF3FC` before `0xF18`;
+- `0xF18: E92D47F0` exact eight-word push;
+- `0xF1C: E24DD054` -> `SP=0x09FFF388`;
+- `0xF20: E8901120` loads the existing local-frame words;
+- `0xF24: E58DC024` attempts the first new write
+  `0x09FFF3AC = 0`.
+
+MACHINE1-AQ therefore admits only that exact F24 store. It does **not** map
+the whole 0x54-byte stack reservation.
+
+If AQ passes F24, the already visible ROM instructions predict the following
+sequence, but these remain predictions until device execution confirms them:
+
+- `F28` reads `0x0A000FC8` -> expected zero;
+- `F2C` reads `0x0A000FCC` -> `0x01170000` (now identified as ROM size);
+- `F30` reads physical ROM `0x8C` -> expected
+  `TRomHeader::iRomBase = 0x50000000`;
+- `F34` would then store that value at `SP+0x18 = 0x09FFF3A0`;
+- `F3C` branches to `0x2AF8`.
+
+No F34 stack word or 0x2AF8 behavior is admitted before the AQ device report.
+
+## 15. Current safety/evidence boundary
+
+The research now strongly predicts that F18 is assembling ROM/MMU bootstrap
+metadata immediately before the call at `0x2AF8`. However, the exact role of
+`0x2AF8` is deliberately unnamed until its executed body or bus accesses are
+captured.
+
+In particular:
+
+- do not pre-map `0x41000000`, `0x42000000`, `0x50000000`, or
+  `0x60000000` merely because the eventual EKA1 virtual layout is known;
+- do not turn the 16-record physical table into permissive memory ranges;
+- do not identify `0x0C150004` as a remap register;
+- continue one exact device-observed access at a time.
