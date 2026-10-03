@@ -1,13 +1,7 @@
-name: Build NGAGE-MACHINE1-AR
+name: Build NGAGE-MACHINE1-AS
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - ngage-machine1
-    paths-ignore:
-      - ".github/workflows/build-ngage-machine1.yml"
-      - "docs/**"
 
 permissions:
   contents: read
@@ -55,7 +49,7 @@ jobs:
           {
             echo "controller_head=$(git rev-parse HEAD)"
             echo "branch=ngage-machine1"
-            echo "milestone=MACHINE1-AR"
+            echo "milestone=MACHINE1-AS"
             echo "target=Nokia N-Gage QD RH-29"
             echo "rom=RH-29 V04.10 SYM.ROM"
             echo "rom_status=DEVICE PASS (HLE import/boot/apps + FIFA 05 playable)"
@@ -88,7 +82,7 @@ jobs:
       - name: Apply Vietnamese localization
         run: python3 control/scripts/apply_vietnamese_ios.py source
 
-      - name: Apply NGAGE MACHINE1-AR
+      - name: Apply NGAGE MACHINE1-AS
         run: python3 control/scripts/apply_ngage_machine1.py source
 
       - name: Static contract
@@ -102,8 +96,8 @@ jobs:
           grep -q 'installDeviceWithVplPath' source/src/emu/ios/Bridge/IosEmulator.h
           grep -q '"vi"' source/src/emu/ios/Resources/Localizable.xcstrings
 
-          # MACHINE1-AR must be present only as an opt-in RH-29 research path.
-          grep -q 'RH29_MACHINE1_AR' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
+          # MACHINE1-AS must be present only as an opt-in RH-29 research path.
+          grep -q 'RH29_MACHINE1_AS' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q 'runRH29MachineProbeWithInstructionBudget' source/src/emu/ios/Bridge/IosEmulator.h
           grep -q 'caseInsensitiveCompare:@"RH-29"' source/src/emu/ios/Bridge/IosEmulator.mm
           grep -q 'roms/rh-29/SYM.ROM' source/src/emu/ios/Bridge/IosEmulator.mm
@@ -226,6 +220,11 @@ jobs:
           grep -q 'candidate_bootstrap_relocated_rom_base_word_pc = 0x00000F34u' source/src/emu/ios/Bridge/RH29MachineModel.h
           grep -q 'candidate_bootstrap_relocated_rom_base_word_instruction = 0xE58DC018u' source/src/emu/ios/Bridge/RH29MachineModel.h
           grep -q 'candidate_bootstrap_relocated_rom_base_word_value = 0x50000000u' source/src/emu/ios/Bridge/RH29MachineModel.h
+          grep -q 'candidate_bootstrap_relocated_helper_word_address = 0x09FFF39Cu' source/src/emu/ios/Bridge/RH29MachineModel.h
+          grep -q 'candidate_bootstrap_relocated_helper_word_pc = 0x00000F40u' source/src/emu/ios/Bridge/RH29MachineModel.h
+          grep -q 'candidate_bootstrap_relocated_helper_word_lr = 0x00000F40u' source/src/emu/ios/Bridge/RH29MachineModel.h
+          grep -q 'candidate_bootstrap_relocated_helper_word_instruction = 0xE58D0014u' source/src/emu/ios/Bridge/RH29MachineModel.h
+          grep -q 'candidate_bootstrap_relocated_helper_word_value = 0x40000000u' source/src/emu/ios/Bridge/RH29MachineModel.h
           grep -q 'ram_bank_handler_dump_begin = 0x000012A0u' source/src/emu/ios/Bridge/RH29MachineRunner.h
           grep -q 'ram_bank_handler_dump_end = 0x00001400u' source/src/emu/ios/Bridge/RH29MachineRunner.h
           grep -q 'RAM_BANK_SPARSE_PROBE_POLICY=AK_raw_handler_10_power2_words_synthetic_independent_zero_seed_exact_callsites_no_range_map' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
@@ -241,6 +240,8 @@ jobs:
           grep -q 'BOOTSTRAP_RELOCATED_LOCAL_WORD_WRITE_COUNT' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q 'BOOTSTRAP_RELOCATED_ROM_BASE_WORD_POLICY=AQ_device_exact_f30_read_rom_header_irombase_then_f34_store_sp_plus_0x18_addr_0x09fff3a0_pc_0x0f34_lr_0x0f18_value_0x50000000_initialized_readback_only_no_frame_widen' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q 'BOOTSTRAP_RELOCATED_ROM_BASE_WORD_WRITE_COUNT' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
+          grep -q 'BOOTSTRAP_RELOCATED_HELPER_WORD_POLICY=AR_device_exact_f3c_bl_helper_0x2af8_return_0x40000000_then_f40_store_sp_plus_0x14_addr_0x09fff39c_pc_lr_0x0f40_initialized_readback_only_no_frame_widen' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
+          grep -q 'BOOTSTRAP_RELOCATED_HELPER_WORD_WRITE_COUNT' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q 'MACHINE1_W_DIAG_POLICY=no_memory_response_change_no_remap_assumption' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q 'LOW_PAGE_TRACE_POLICY=low_4k_all_guest_bus_callbacks_no_response_change' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q 'CP15_TRACE_POLICY=all_condition_passed_p15_seen_before_barrier' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
@@ -248,7 +249,7 @@ jobs:
           grep -q 'RAM_PROBE_READ_COUNT' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q 'RAM_PROBE_WRITE_COUNT' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
           grep -q '(p + "R8")' source/src/emu/ios/Bridge/RH29MachineRunner.cpp
-          grep -q 'RH29_MACHINE1_AR.txt' source/src/emu/ios/App/RH29MachineProbeView.swift
+          grep -q 'RH29_MACHINE1_AS.txt' source/src/emu/ios/App/RH29MachineProbeView.swift
           grep -q 'Reg_nonfiq_r8_r12' source/src/emu/cpu/include/cpu/dyncom/armstate.h
           grep -q 'Reg_nonfiq_r8_r12.begin(), Reg_nonfiq_r8_r12.end()' source/src/emu/cpu/src/dyncom/armstate.cpp
           grep -q 'Reg.begin() + 13, Reg_nonfiq_r8_r12.begin()' source/src/emu/cpu/src/dyncom/armstate.cpp
@@ -256,7 +257,7 @@ jobs:
           grep -q '@State private var instructionBudget: UInt32 = 10_000' source/src/emu/ios/App/RH29MachineProbeView.swift
 
           git -C source diff --check
-          echo "HYBRIDHOME3 + VPL + Vietnamese + MACHINE1-AR static contract PASS"
+          echo "HYBRIDHOME3 + VPL + Vietnamese + MACHINE1-AS static contract PASS"
 
       - name: Install and configure ccache
         run: |
@@ -330,7 +331,7 @@ jobs:
           path: source/src/external/ffmpeg/ios/device
           key: hybridhome-upstream1-ffmpeg-ios-device-v1
 
-      - name: Build upstream iOS + MACHINE1-AR
+      - name: Build upstream iOS + MACHINE1-AS
         working-directory: source
         env:
           EKA2L1_IOS_DEPLOYMENT_TARGET: "16.0"
@@ -369,12 +370,12 @@ jobs:
           cp -R "${app}" out/Payload/
           (
             cd out
-            zip -qry EKA2L1-NGAGE-MACHINE1-AR-unsigned.ipa Payload
+            zip -qry EKA2L1-NGAGE-MACHINE1-AS-unsigned.ipa Payload
           )
 
-      - name: Upload NGAGE MACHINE1-AR IPA
+      - name: Upload NGAGE MACHINE1-AS IPA
         uses: actions/upload-artifact@v7
         with:
-          name: EKA2L1-NGAGE-MACHINE1-AR-IPA
-          path: out/EKA2L1-NGAGE-MACHINE1-AR-unsigned.ipa
+          name: EKA2L1-NGAGE-MACHINE1-AS-IPA
+          path: out/EKA2L1-NGAGE-MACHINE1-AS-unsigned.ipa
           if-no-files-found: error
