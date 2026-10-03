@@ -74,6 +74,9 @@ static probe_result sample_result() {
     result.candidate_bootstrap_relocated_rom_base_word_write_count = 1;
     result.candidate_bootstrap_relocated_helper_word_read_count = 1;
     result.candidate_bootstrap_relocated_helper_word_write_count = 1;
+    result.candidate_bootstrap_callee_stack_read_count = 5;
+    result.candidate_bootstrap_callee_stack_write_count = 5;
+    result.candidate_bootstrap_callee_stack_initialized_words = 5;
     result.ram_bank_handler_dump_words_valid = 2;
     result.ram_bank_handler_dump_words[0] = 0xE2440B03u;
     result.ram_bank_handler_dump_words[1] = 0xE58D0000u;
@@ -175,7 +178,7 @@ static void test_report_contains_probe_identity_and_rom_header() {
     require_contains(text, "KERN_LIMIT=0x80002000");
 }
 
-static void test_report_contains_as_ram_probe_relocation_stack_rom_base_and_helper_word_evidence() {
+static void test_report_contains_at_ram_probe_relocation_and_exact_callee_stack_evidence() {
     const auto text = format_report(sample_result());
     require_contains(text, "RAM_BANK_PROBE_ANCHOR_POLICY=AJ_device_exact_first_read_pc_0x1368_lr_0x1348_addr_0x0a001100_synthetic_zero_seed_read_only_no_range_map");
     require_contains(text, "RAM_BANK_PROBE_ANCHOR_ADDRESS=0x0A001100");
@@ -272,6 +275,21 @@ static void test_report_contains_as_ram_probe_relocation_stack_rom_base_and_help
     require_contains(text, "BOOTSTRAP_RELOCATED_HELPER_WORD_OBSERVED_VALUE=0x40000000");
     require_contains(text, "BOOTSTRAP_RELOCATED_HELPER_WORD_READ_COUNT=1");
     require_contains(text, "BOOTSTRAP_RELOCATED_HELPER_WORD_WRITE_COUNT=1");
+    require_contains(text, "BOOTSTRAP_CALLEE_STACK_POLICY=AS_device_exact_stmdb_sp_20bytes_pc_0x1580_lr_0x0f4c_values_from_register_snapshot_initialized_readback_only_no_range_widen");
+    require_contains(text, "BOOTSTRAP_CALLEE_STACK_TOP=0x09FFF388");
+    require_contains(text, "BOOTSTRAP_CALLEE_STACK_BASE=0x09FFF374");
+    require_contains(text, "BOOTSTRAP_CALLEE_STACK_WORD_COUNT=5");
+    require_contains(text, "BOOTSTRAP_CALLEE_STACK_WIDTH_BITS=32");
+    require_contains(text, "BOOTSTRAP_CALLEE_STACK_GATE_PC=0x00001580");
+    require_contains(text, "BOOTSTRAP_CALLEE_STACK_GATE_LR=0x00000F4C");
+    require_contains(text, "BOOTSTRAP_CALLEE_STACK_OBSERVED_INSTRUCTION=0xE92D40F0");
+    require_contains(text, "BOOTSTRAP_CALLEE_STACK_00_ADDRESS=0x09FFF374");
+    require_contains(text, "BOOTSTRAP_CALLEE_STACK_00_VALUE=0x01170000");
+    require_contains(text, "BOOTSTRAP_CALLEE_STACK_04_ADDRESS=0x09FFF384");
+    require_contains(text, "BOOTSTRAP_CALLEE_STACK_04_VALUE=0x00000F4C");
+    require_contains(text, "BOOTSTRAP_CALLEE_STACK_READ_COUNT=5");
+    require_contains(text, "BOOTSTRAP_CALLEE_STACK_WRITE_COUNT=5");
+    require_contains(text, "BOOTSTRAP_CALLEE_STACK_INITIALIZED_WORDS=5");
     require_contains(text, "RAM_BANK_HANDLER_DUMP_POLICY=raw_rom_words_0x000012a0_0x000013fc_context_no_semantic_label");
     require_contains(text, "RAM_BANK_HANDLER_DUMP_WORDS_VALID=2");
     require_contains(text, "RAM_BANK_HANDLER_DUMP_00_ADDRESS=0x000012A0");
@@ -420,7 +438,7 @@ static void test_arm_condition_passed_matches_a32_flags() {
 
 int main() {
     test_report_contains_probe_identity_and_rom_header();
-    test_report_contains_as_ram_probe_relocation_stack_rom_base_and_helper_word_evidence();
+    test_report_contains_at_ram_probe_relocation_and_exact_callee_stack_evidence();
     test_report_contains_budget_stop_and_registers();
     test_report_contains_unresolved_access();
     test_report_contains_cpu_exception();
