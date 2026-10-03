@@ -1895,6 +1895,140 @@ static void test_as_observed_callee_stack_push_is_five_exact_tuples_only() {
     assert(upper_neighbor.first_unresolved().has_value());
 }
 
+static void test_at_observed_callee_copy_is_source_verified_and_exactly_16_bytes() {
+    static_assert(candidate_bootstrap_callee_copy_source == 0x09FFF408u);
+    static_assert(candidate_bootstrap_callee_copy_base == 0x09FFF510u);
+    static_assert(candidate_bootstrap_callee_copy_size == 0x10u);
+    static_assert(candidate_bootstrap_callee_copy_write_width == 4u);
+    static_assert(candidate_bootstrap_callee_copy_pc == 0x00002344u);
+    static_assert(candidate_bootstrap_callee_copy_lr == 0x000015FCu);
+    static_assert(candidate_bootstrap_callee_copy_instruction == 0xE4803004u);
+
+    constexpr std::array<std::uint32_t, 4> values{
+        0x00000000u, 0x0000A000u, 0xB2800021u, 0x00000000u
+    };
+    auto rom = valid_rom();
+
+    strict_bus before_source(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                             candidate_sdram_base, 0x100);
+    const std::uint32_t zero = values[0];
+    assert(!before_source.write(candidate_bootstrap_callee_copy_base,
+                                &zero, sizeof(zero),
+                                candidate_bootstrap_callee_copy_pc,
+                                candidate_bootstrap_callee_copy_lr));
+    assert(before_source.first_unresolved().has_value());
+
+    strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                   candidate_sdram_base, 0x100);
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        const std::uint32_t source_copy_address =
+            candidate_bootstrap_copy_base + 0x08u + static_cast<std::uint32_t>(i * 4u);
+        assert(bus.write(source_copy_address, &values[i], sizeof(values[i]),
+                         candidate_bootstrap_copy_pc, candidate_bootstrap_copy_lr));
+        const std::uint32_t relocation_address =
+            candidate_bootstrap_callee_copy_source + static_cast<std::uint32_t>(i * 4u);
+        assert(bus.write(relocation_address, &values[i], sizeof(values[i]),
+                         candidate_bootstrap_relocation_pc, candidate_bootstrap_relocation_lr));
+    }
+
+    std::uint32_t out = 0;
+    assert(!bus.read(access_kind::data_read,
+                     candidate_bootstrap_callee_copy_base,
+                     &out, sizeof(out), 0x000015FCu,
+                     candidate_bootstrap_callee_copy_lr));
+    assert(bus.first_unresolved().has_value());
+
+    strict_bus exact(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                     candidate_sdram_base, 0x100);
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        const std::uint32_t source_copy_address =
+            candidate_bootstrap_copy_base + 0x08u + static_cast<std::uint32_t>(i * 4u);
+        assert(exact.write(source_copy_address, &values[i], sizeof(values[i]),
+                           candidate_bootstrap_copy_pc, candidate_bootstrap_copy_lr));
+        const std::uint32_t relocation_address =
+            candidate_bootstrap_callee_copy_source + static_cast<std::uint32_t>(i * 4u);
+        assert(exact.write(relocation_address, &values[i], sizeof(values[i]),
+                           candidate_bootstrap_relocation_pc, candidate_bootstrap_relocation_lr));
+        const std::uint32_t destination_address =
+            candidate_bootstrap_callee_copy_base + static_cast<std::uint32_t>(i * 4u);
+        assert(exact.write(destination_address, &values[i], sizeof(values[i]),
+                           candidate_bootstrap_callee_copy_pc, candidate_bootstrap_callee_copy_lr));
+    }
+    assert(exact.candidate_bootstrap_callee_copy_write_count() == 4u);
+    assert(exact.candidate_bootstrap_callee_copy_initialized_bytes() == 16u);
+
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        out = 0xFFFFFFFFu;
+        const std::uint32_t destination_address =
+            candidate_bootstrap_callee_copy_base + static_cast<std::uint32_t>(i * 4u);
+        assert(exact.read(access_kind::data_read, destination_address,
+                          &out, sizeof(out), 0x000015FCu,
+                          candidate_bootstrap_callee_copy_lr));
+        assert(out == values[i]);
+    }
+    assert(exact.candidate_bootstrap_callee_copy_read_count() == 4u);
+
+    auto seed_source = [&](strict_bus &target) {
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const std::uint32_t source_copy_address =
+                candidate_bootstrap_copy_base + 0x08u + static_cast<std::uint32_t>(i * 4u);
+            assert(target.write(source_copy_address, &values[i], sizeof(values[i]),
+                                candidate_bootstrap_copy_pc, candidate_bootstrap_copy_lr));
+            const std::uint32_t relocation_address =
+                candidate_bootstrap_callee_copy_source + static_cast<std::uint32_t>(i * 4u);
+            assert(target.write(relocation_address, &values[i], sizeof(values[i]),
+                                candidate_bootstrap_relocation_pc, candidate_bootstrap_relocation_lr));
+        }
+    };
+
+    strict_bus wrong_pc(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                        candidate_sdram_base, 0x100);
+    seed_source(wrong_pc);
+    assert(!wrong_pc.write(candidate_bootstrap_callee_copy_base,
+                           &values[0], sizeof(values[0]),
+                           candidate_bootstrap_callee_copy_pc + 4u,
+                           candidate_bootstrap_callee_copy_lr));
+    assert(wrong_pc.first_unresolved().has_value());
+
+    strict_bus wrong_lr(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                        candidate_sdram_base, 0x100);
+    seed_source(wrong_lr);
+    assert(!wrong_lr.write(candidate_bootstrap_callee_copy_base,
+                           &values[0], sizeof(values[0]),
+                           candidate_bootstrap_callee_copy_pc,
+                           candidate_bootstrap_callee_copy_lr + 4u));
+    assert(wrong_lr.first_unresolved().has_value());
+
+    strict_bus wrong_value(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                           candidate_sdram_base, 0x100);
+    seed_source(wrong_value);
+    const std::uint32_t bad = 0xDEADBEEFu;
+    assert(!wrong_value.write(candidate_bootstrap_callee_copy_base,
+                              &bad, sizeof(bad),
+                              candidate_bootstrap_callee_copy_pc,
+                              candidate_bootstrap_callee_copy_lr));
+    assert(wrong_value.first_unresolved().has_value());
+
+    strict_bus lower_neighbor(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                              candidate_sdram_base, 0x100);
+    seed_source(lower_neighbor);
+    assert(!lower_neighbor.write(candidate_bootstrap_callee_copy_base - 4u,
+                                 &values[0], sizeof(values[0]),
+                                 candidate_bootstrap_callee_copy_pc,
+                                 candidate_bootstrap_callee_copy_lr));
+    assert(lower_neighbor.first_unresolved().has_value());
+
+    strict_bus upper_neighbor(rom.data(), rom.size(), 0x50000000, cold_reset_pc,
+                              candidate_sdram_base, 0x100);
+    seed_source(upper_neighbor);
+    assert(!upper_neighbor.write(candidate_bootstrap_callee_copy_base
+                                     + static_cast<std::uint32_t>(candidate_bootstrap_callee_copy_size),
+                                 &values[0], sizeof(values[0]),
+                                 candidate_bootstrap_callee_copy_pc,
+                                 candidate_bootstrap_callee_copy_lr));
+    assert(upper_neighbor.first_unresolved().has_value());
+}
+
 static void test_gap_before_post_probe_workspace_remains_unmapped() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc, candidate_sdram_base, 0x100);
@@ -2078,6 +2212,7 @@ int main() {
     test_aq_observed_relocated_rom_base_word_is_exact_only();
     test_ar_observed_relocated_helper_word_is_exact_only();
     test_as_observed_callee_stack_push_is_five_exact_tuples_only();
+    test_at_observed_callee_copy_is_source_verified_and_exactly_16_bytes();
     test_gap_before_post_probe_workspace_remains_unmapped();
     test_post_probe_workspace_is_zero_seeded_mutable_and_bounded();
     test_low_vector_shadow_is_rom_seeded_mutable_and_exactly_36_bytes();
