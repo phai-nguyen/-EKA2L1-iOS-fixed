@@ -348,7 +348,8 @@ namespace eka2l1::machine::rh29 {
         "MACHINE1-AQ local word must stay at the exact AP-observed sp+0x24 address");
 
     // MACHINE1-AQ device evidence consumed by MACHINE1-AR: after the exact
-    // sp+0x24 zero store, F28/F2C consume the initialized local-frame tail.
+    // sp+0x24 zero store, execution reaches instruction 3021; F28/F2C consume
+    // the initialized local-frame tail.
     // F30 executes LDR r12,[r8,#0x0C] with r8=0x80 and performs an observed
     // physical read at 0x0000008C returning 0x50000000. Correct-era EKA1
     // TRomHeader places iRomBase at +0x8C. F34 then executes
