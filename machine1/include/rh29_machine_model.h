@@ -446,7 +446,8 @@ namespace eka2l1::machine::rh29 {
         "MACHINE1-AU copy must remain exactly four 32-bit words");
 
     // MACHINE1-AU device evidence consumed by MACHINE1-AV: the first exact
-    // 16-byte copy completes 4/4 writes. The 0x1580 routine increments its
+    // 16-byte copy completes 4/4 writes and execution reaches instruction 3101.
+    // The 0x1580 routine increments its
     // record index and calls the same helper again from PC=0x15F8 with
     // R0=0x09FFF520, R1=0x09FFF418 and R2=0x10. The first unresolved write is
     // 0x0000A000 -> 0x09FFF520 at PC=0x2344/LR=0x15FC. MACHINE1-AV admits
