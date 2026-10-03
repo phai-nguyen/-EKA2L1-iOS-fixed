@@ -547,7 +547,7 @@ namespace eka2l1::machine::rh29 {
 
     // MACHINE1-AY device evidence consumed by MACHINE1-AZ: the fifth exact
     // 16-byte copy completes 4/4 writes and execution reaches instruction 3269
-    // before the next unresolved transaction. The 0x1580 loop advances to
+    // before the next unresolved transaction observed on-device. The 0x1580 loop advances to
     // index 5 and calls the same helper with R0=0x09FFF560, R1=0x09FFF458,
     // R2=0x10. The first unresolved write is 0x00400000 -> 0x09FFF560 at
     // PC=0x2344/LR=0x15FC. MACHINE1-AZ admits only this sixth exact 16-byte
