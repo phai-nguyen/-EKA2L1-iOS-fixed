@@ -445,6 +445,31 @@ namespace eka2l1::machine::rh29 {
     static_assert(candidate_bootstrap_callee_copy_size == 4u * sizeof(std::uint32_t),
         "MACHINE1-AU copy must remain exactly four 32-bit words");
 
+    // MACHINE1-AU device evidence consumed by MACHINE1-AV: the first exact
+    // 16-byte copy completes 4/4 writes. The 0x1580 routine increments its
+    // record index and calls the same helper again from PC=0x15F8 with
+    // R0=0x09FFF520, R1=0x09FFF418 and R2=0x10. The first unresolved write is
+    // 0x0000A000 -> 0x09FFF520 at PC=0x2344/LR=0x15FC. MACHINE1-AV admits
+    // only this second exact 16-byte source-verified copy. It does not infer
+    // the remaining records, merge the two destinations into a generic range,
+    // or assign MMU/page-table semantics to either record.
+    static constexpr std::uint32_t candidate_bootstrap_callee_copy2_source = 0x09FFF418u;
+    static constexpr std::uint32_t candidate_bootstrap_callee_copy2_base = 0x09FFF520u;
+    static constexpr std::size_t candidate_bootstrap_callee_copy2_size = 0x10u;
+    static constexpr std::size_t candidate_bootstrap_callee_copy2_write_width = sizeof(std::uint32_t);
+    static constexpr std::uint32_t candidate_bootstrap_callee_copy2_pc = 0x00002344u;
+    static constexpr std::uint32_t candidate_bootstrap_callee_copy2_lr = 0x000015FCu;
+    static constexpr std::uint32_t candidate_bootstrap_callee_copy2_instruction = 0xE4803004u;
+    static_assert(candidate_bootstrap_callee_copy2_source
+                      == candidate_bootstrap_callee_copy_source + 0x10u
+                  && candidate_bootstrap_callee_copy2_base
+                      == candidate_bootstrap_callee_copy_base + 0x10u,
+        "MACHINE1-AV second copy must remain the exact next 16-byte record only");
+    static_assert(candidate_bootstrap_callee_copy2_source >= candidate_bootstrap_relocation_base
+                  && candidate_bootstrap_callee_copy2_source + candidate_bootstrap_callee_copy2_size
+                         <= candidate_bootstrap_relocation_base + candidate_bootstrap_relocation_size,
+        "MACHINE1-AV second copy source must stay inside the initialized relocation");
+
     // MACHINE1-AB device evidence: after the nested push returns, firmware
     // reads the already-copied word at 0x0A000010, ORs control bits, and
     // writes 0xB2800021 back with STR r3,[r0,#8] at PC=0x11D4/LR=0x22C4.
@@ -691,6 +716,9 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_callee_copy_read_count() const;
         std::uint64_t candidate_bootstrap_callee_copy_write_count() const;
         std::size_t candidate_bootstrap_callee_copy_initialized_bytes() const;
+        std::uint64_t candidate_bootstrap_callee_copy2_read_count() const;
+        std::uint64_t candidate_bootstrap_callee_copy2_write_count() const;
+        std::size_t candidate_bootstrap_callee_copy2_initialized_bytes() const;
         std::uint64_t candidate_post_probe_workspace_read_count() const;
         std::uint64_t candidate_post_probe_workspace_write_count() const;
         std::uint64_t low_vector_shadow_read_count() const;
@@ -707,6 +735,8 @@ namespace eka2l1::machine::rh29 {
                                                          std::size_t &offset) const;
         bool range_inside_candidate_bootstrap_callee_copy(std::uint32_t address, std::size_t width,
                                                            std::size_t &offset) const;
+        bool range_inside_candidate_bootstrap_callee_copy2(std::uint32_t address, std::size_t width,
+                                                            std::size_t &offset) const;
         bool range_inside_candidate_bootstrap_stack(std::uint32_t address, std::size_t width,
                                                     std::size_t &offset) const;
         bool range_inside_candidate_bootstrap_nested_stack(std::uint32_t address, std::size_t width,
@@ -837,6 +867,13 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_callee_copy_read_count_ = 0;
         std::uint64_t candidate_bootstrap_callee_copy_write_count_ = 0;
         std::size_t candidate_bootstrap_callee_copy_initialized_bytes_ = 0;
+        std::array<std::uint8_t, candidate_bootstrap_callee_copy2_size>
+            candidate_bootstrap_callee_copy2_data_{};
+        std::array<bool, candidate_bootstrap_callee_copy2_size>
+            candidate_bootstrap_callee_copy2_initialized_{};
+        std::uint64_t candidate_bootstrap_callee_copy2_read_count_ = 0;
+        std::uint64_t candidate_bootstrap_callee_copy2_write_count_ = 0;
+        std::size_t candidate_bootstrap_callee_copy2_initialized_bytes_ = 0;
         std::vector<std::uint8_t> candidate_post_probe_workspace_data_{};
         std::uint64_t candidate_post_probe_workspace_read_count_ = 0;
         std::uint64_t candidate_post_probe_workspace_write_count_ = 0;
