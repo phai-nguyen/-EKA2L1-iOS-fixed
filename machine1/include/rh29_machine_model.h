@@ -386,7 +386,8 @@ namespace eka2l1::machine::rh29 {
         "MACHINE1-AS helper word must stay at the exact AR-observed sp+0x14 address");
 
     // MACHINE1-AS device evidence consumed by MACHINE1-AT: the exact F40
-    // helper-result store completes. F44 moves the relocated table base
+    // helper-result store completes and execution reaches instruction 3029.
+    // F44 moves the relocated table base
     // 0x09FFF400 into r0, F48 calls 0x1580, and the callee enters with
     // SP=0x09FFF388, LR=0xF4C. Instruction 0xE92D40F0 is
     // STMDB sp!,{r4-r7,lr}; its exact 20-byte footprint is
