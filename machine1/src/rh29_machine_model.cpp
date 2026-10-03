@@ -218,6 +218,23 @@ namespace eka2l1::machine::rh29 {
         return true;
     }
 
+    bool strict_bus::range_inside_candidate_bootstrap_callee_copy2(
+        const std::uint32_t address,
+        const std::size_t width,
+        std::size_t &offset) const {
+        if (width == 0 || address < candidate_bootstrap_callee_copy2_base) {
+            return false;
+        }
+        const std::uint64_t off64 = static_cast<std::uint64_t>(address)
+            - candidate_bootstrap_callee_copy2_base;
+        const std::uint64_t end64 = off64 + static_cast<std::uint64_t>(width);
+        if (end64 < off64 || end64 > candidate_bootstrap_callee_copy2_data_.size()) {
+            return false;
+        }
+        offset = static_cast<std::size_t>(off64);
+        return true;
+    }
+
     bool strict_bus::range_inside_candidate_bootstrap_stack(
         const std::uint32_t address,
         const std::size_t width,
@@ -536,6 +553,22 @@ namespace eka2l1::machine::rh29 {
             if (initialized) {
                 std::memcpy(out, candidate_bootstrap_callee_copy_data_.data() + offset, width);
                 ++candidate_bootstrap_callee_copy_read_count_;
+                return true;
+            }
+        }
+
+        if (kind == access_kind::data_read
+            && range_inside_candidate_bootstrap_callee_copy2(address, width, offset)) {
+            bool initialized = true;
+            for (std::size_t i = 0; i < width; ++i) {
+                if (!candidate_bootstrap_callee_copy2_initialized_[offset + i]) {
+                    initialized = false;
+                    break;
+                }
+            }
+            if (initialized) {
+                std::memcpy(out, candidate_bootstrap_callee_copy2_data_.data() + offset, width);
+                ++candidate_bootstrap_callee_copy2_read_count_;
                 return true;
             }
         }
@@ -897,6 +930,42 @@ namespace eka2l1::machine::rh29 {
                     }
                 }
                 ++candidate_bootstrap_callee_copy_write_count_;
+                return true;
+            }
+        }
+
+        if (value
+            && width == candidate_bootstrap_callee_copy2_write_width
+            && pc == candidate_bootstrap_callee_copy2_pc
+            && lr == candidate_bootstrap_callee_copy2_lr
+            && (address & (candidate_bootstrap_callee_copy2_write_width - 1u)) == 0
+            && range_inside_candidate_bootstrap_callee_copy2(address, width, offset)) {
+            const std::size_t source_base_offset =
+                static_cast<std::size_t>(candidate_bootstrap_callee_copy2_source
+                    - candidate_bootstrap_relocation_base);
+            const std::size_t source_offset = source_base_offset + offset;
+            bool source_initialized = true;
+            for (std::size_t i = 0; i < width; ++i) {
+                if (!candidate_bootstrap_relocation_initialized_[source_offset + i]) {
+                    source_initialized = false;
+                    break;
+                }
+            }
+            std::uint32_t expected = 0;
+            if (source_initialized) {
+                std::memcpy(&expected,
+                            candidate_bootstrap_relocation_data_.data() + source_offset,
+                            sizeof(expected));
+            }
+            if (source_initialized && write_value == expected) {
+                std::memcpy(candidate_bootstrap_callee_copy2_data_.data() + offset, value, width);
+                for (std::size_t i = 0; i < width; ++i) {
+                    if (!candidate_bootstrap_callee_copy2_initialized_[offset + i]) {
+                        candidate_bootstrap_callee_copy2_initialized_[offset + i] = true;
+                        ++candidate_bootstrap_callee_copy2_initialized_bytes_;
+                    }
+                }
+                ++candidate_bootstrap_callee_copy2_write_count_;
                 return true;
             }
         }
@@ -1405,6 +1474,18 @@ namespace eka2l1::machine::rh29 {
 
     std::size_t strict_bus::candidate_bootstrap_callee_copy_initialized_bytes() const {
         return candidate_bootstrap_callee_copy_initialized_bytes_;
+    }
+
+    std::uint64_t strict_bus::candidate_bootstrap_callee_copy2_read_count() const {
+        return candidate_bootstrap_callee_copy2_read_count_;
+    }
+
+    std::uint64_t strict_bus::candidate_bootstrap_callee_copy2_write_count() const {
+        return candidate_bootstrap_callee_copy2_write_count_;
+    }
+
+    std::size_t strict_bus::candidate_bootstrap_callee_copy2_initialized_bytes() const {
+        return candidate_bootstrap_callee_copy2_initialized_bytes_;
     }
 
     std::uint64_t strict_bus::candidate_post_probe_workspace_read_count() const {
