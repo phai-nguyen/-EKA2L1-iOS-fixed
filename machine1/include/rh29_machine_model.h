@@ -367,6 +367,23 @@ namespace eka2l1::machine::rh29 {
                       == candidate_bootstrap_relocated_local_word_address - 0x0Cu,
         "MACHINE1-AR ROM-base word must stay at the exact AQ-observed sp+0x18 address");
 
+    // MACHINE1-AR device evidence consumed by MACHINE1-AS: after the exact
+    // F34 ROM-base store, F38 moves r8 to r0 and F3C calls helper 0x2AF8.
+    // The helper executes MOV r0,#0x40000000 then returns through LR=0xF40.
+    // F40 executes 0xE58D0014 (STR r0,[sp,#0x14]) with SP=0x09FFF388,
+    // attempting the exact write 0x40000000 -> 0x09FFF39C. MACHINE1-AS
+    // admits only this observed word and initialized-only readback. No MMU,
+    // page-table, or wider local-frame meaning is assigned without evidence.
+    static constexpr std::uint32_t candidate_bootstrap_relocated_helper_word_address = 0x09FFF39Cu;
+    static constexpr std::size_t candidate_bootstrap_relocated_helper_word_width = sizeof(std::uint32_t);
+    static constexpr std::uint32_t candidate_bootstrap_relocated_helper_word_pc = 0x00000F40u;
+    static constexpr std::uint32_t candidate_bootstrap_relocated_helper_word_lr = 0x00000F40u;
+    static constexpr std::uint32_t candidate_bootstrap_relocated_helper_word_instruction = 0xE58D0014u;
+    static constexpr std::uint32_t candidate_bootstrap_relocated_helper_word_value = 0x40000000u;
+    static_assert(candidate_bootstrap_relocated_helper_word_address
+                      == candidate_bootstrap_relocated_rom_base_word_address - 0x04u,
+        "MACHINE1-AS helper word must stay at the exact AR-observed sp+0x14 address");
+
     // MACHINE1-AB device evidence: after the nested push returns, firmware
     // reads the already-copied word at 0x0A000010, ORs control bits, and
     // writes 0xB2800021 back with STR r3,[r0,#8] at PC=0x11D4/LR=0x22C4.
@@ -605,6 +622,8 @@ namespace eka2l1::machine::rh29 {
         std::uint64_t candidate_bootstrap_relocated_local_word_write_count() const;
         std::uint64_t candidate_bootstrap_relocated_rom_base_word_read_count() const;
         std::uint64_t candidate_bootstrap_relocated_rom_base_word_write_count() const;
+        std::uint64_t candidate_bootstrap_relocated_helper_word_read_count() const;
+        std::uint64_t candidate_bootstrap_relocated_helper_word_write_count() const;
         std::uint64_t candidate_post_probe_workspace_read_count() const;
         std::uint64_t candidate_post_probe_workspace_write_count() const;
         std::uint64_t low_vector_shadow_read_count() const;
@@ -731,6 +750,10 @@ namespace eka2l1::machine::rh29 {
         bool candidate_bootstrap_relocated_rom_base_word_initialized_ = false;
         std::uint64_t candidate_bootstrap_relocated_rom_base_word_read_count_ = 0;
         std::uint64_t candidate_bootstrap_relocated_rom_base_word_write_count_ = 0;
+        std::uint32_t candidate_bootstrap_relocated_helper_word_data_ = 0;
+        bool candidate_bootstrap_relocated_helper_word_initialized_ = false;
+        std::uint64_t candidate_bootstrap_relocated_helper_word_read_count_ = 0;
+        std::uint64_t candidate_bootstrap_relocated_helper_word_write_count_ = 0;
         std::vector<std::uint8_t> candidate_post_probe_workspace_data_{};
         std::uint64_t candidate_post_probe_workspace_read_count_ = 0;
         std::uint64_t candidate_post_probe_workspace_write_count_ = 0;
