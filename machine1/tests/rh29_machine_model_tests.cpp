@@ -2885,6 +2885,33 @@ static void test_bb_observed_ninth_callee_copy_is_source_verified_and_exactly_16
     assert(upper_neighbor.first_unresolved().has_value());
 }
 
+static void test_bc_observed_tenth_callee_copy_is_source_verified_and_exactly_16_bytes() {
+    static_assert(candidate_bootstrap_callee_copy10_source == 0x09FFF498u);
+    static_assert(candidate_bootstrap_callee_copy10_base == 0x09FFF5A0u);
+    static_assert(candidate_bootstrap_callee_copy10_size == 0x10u);
+    static_assert(candidate_bootstrap_callee_copy10_write_width == 4u);
+    static_assert(candidate_bootstrap_callee_copy10_pc == 0x00002344u);
+    static_assert(candidate_bootstrap_callee_copy10_lr == 0x000015FCu);
+    static_assert(candidate_bootstrap_callee_copy10_instruction == 0xE4803004u);
+    // Only word 0 is directly observed by BC. Remaining values are test sentinels:
+    // acceptance must be derived from initialized relocation bytes, never guesses.
+    constexpr std::array<std::uint32_t,4> values{0x0C000000u,0x13579BDFu,0x2468ACE0u,0u};
+    auto rom=valid_rom();
+    strict_bus before(rom.data(),rom.size(),0x50000000,cold_reset_pc,candidate_sdram_base,0x100);
+    assert(!before.write(candidate_bootstrap_callee_copy10_base,&values[0],4,candidate_bootstrap_callee_copy10_pc,candidate_bootstrap_callee_copy10_lr));
+    auto seed=[&](strict_bus &b){for(std::size_t i=0;i<4;i++){std::uint32_t a=candidate_bootstrap_copy_base+0x98u+static_cast<std::uint32_t>(i*4u);assert(b.write(a,&values[i],4,candidate_bootstrap_copy_pc,candidate_bootstrap_copy_lr));a=candidate_bootstrap_callee_copy10_source+static_cast<std::uint32_t>(i*4u);assert(b.write(a,&values[i],4,candidate_bootstrap_relocation_pc,candidate_bootstrap_relocation_lr));}};
+    strict_bus exact(rom.data(),rom.size(),0x50000000,cold_reset_pc,candidate_sdram_base,0x100);seed(exact);
+    for(std::size_t i=0;i<4;i++)assert(exact.write(candidate_bootstrap_callee_copy10_base+static_cast<std::uint32_t>(i*4u),&values[i],4,candidate_bootstrap_callee_copy10_pc,candidate_bootstrap_callee_copy10_lr));
+    assert(exact.candidate_bootstrap_callee_copy10_write_count()==4u);assert(exact.candidate_bootstrap_callee_copy10_initialized_bytes()==16u);
+    for(std::size_t i=0;i<4;i++){std::uint32_t out=0;assert(exact.read(access_kind::data_read,candidate_bootstrap_callee_copy10_base+static_cast<std::uint32_t>(i*4u),&out,4,0x15FCu,candidate_bootstrap_callee_copy10_lr));assert(out==values[i]);}
+    assert(exact.candidate_bootstrap_callee_copy10_read_count()==4u);
+    strict_bus wp(rom.data(),rom.size(),0x50000000,cold_reset_pc,candidate_sdram_base,0x100);seed(wp);assert(!wp.write(candidate_bootstrap_callee_copy10_base,&values[0],4,candidate_bootstrap_callee_copy10_pc+4u,candidate_bootstrap_callee_copy10_lr));
+    strict_bus wl(rom.data(),rom.size(),0x50000000,cold_reset_pc,candidate_sdram_base,0x100);seed(wl);assert(!wl.write(candidate_bootstrap_callee_copy10_base,&values[0],4,candidate_bootstrap_callee_copy10_pc,candidate_bootstrap_callee_copy10_lr+4u));
+    strict_bus wv(rom.data(),rom.size(),0x50000000,cold_reset_pc,candidate_sdram_base,0x100);seed(wv);std::uint32_t bad=values[0]^4u;assert(!wv.write(candidate_bootstrap_callee_copy10_base,&bad,4,candidate_bootstrap_callee_copy10_pc,candidate_bootstrap_callee_copy10_lr));
+    strict_bus lo(rom.data(),rom.size(),0x50000000,cold_reset_pc,candidate_sdram_base,0x100);seed(lo);assert(!lo.write(candidate_bootstrap_callee_copy10_base-4u,&values[0],4,candidate_bootstrap_callee_copy10_pc,candidate_bootstrap_callee_copy10_lr));
+    strict_bus hi(rom.data(),rom.size(),0x50000000,cold_reset_pc,candidate_sdram_base,0x100);seed(hi);assert(!hi.write(candidate_bootstrap_callee_copy10_base+0x10u,&values[0],4,candidate_bootstrap_callee_copy10_pc,candidate_bootstrap_callee_copy10_lr));
+}
+
 static void test_gap_before_post_probe_workspace_remains_unmapped() {
     auto rom = valid_rom();
     strict_bus bus(rom.data(), rom.size(), 0x50000000, cold_reset_pc, candidate_sdram_base, 0x100);
@@ -3077,6 +3104,7 @@ int main() {
     test_az_observed_seventh_callee_copy_is_source_verified_and_exactly_16_bytes();
     test_ba_observed_eighth_callee_copy_is_source_verified_and_exactly_16_bytes();
     test_bb_observed_ninth_callee_copy_is_source_verified_and_exactly_16_bytes();
+    test_bc_observed_tenth_callee_copy_is_source_verified_and_exactly_16_bytes();
     test_gap_before_post_probe_workspace_remains_unmapped();
     test_post_probe_workspace_is_zero_seeded_mutable_and_bounded();
     test_low_vector_shadow_is_rom_seeded_mutable_and_exactly_36_bytes();
