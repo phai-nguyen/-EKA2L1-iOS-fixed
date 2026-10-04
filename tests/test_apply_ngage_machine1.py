@@ -406,7 +406,16 @@ namespace eka2l1::arm {
         self.assertIn("BOOTSTRAP_RECORD_LOOP_MUTATION_POLICY", runner)
         self.assertIn("AD_device_16record_stride_0x10_field_plus8_pc_0x2220_lr_0x2244_exact_transform_initialized_only", runner)
         self.assertIn("BOOTSTRAP_RECORD_LOOP_MUTATION_ACCEPTED_COUNT", runner)
-        self.assertIn("RH29_MACHINE1_BC", runner)
+        self.assertIn("candidate_bootstrap_callee_copy10_source = 0x09FFF498u", model)
+        self.assertIn("candidate_bootstrap_callee_copy10_base = 0x09FFF5A0u", model)
+        self.assertIn("candidate_bootstrap_callee_copy10_size = 0x10u", model)
+        self.assertIn("candidate_bootstrap_callee_copy10_pc = 0x00002344u", model)
+        self.assertIn("candidate_bootstrap_callee_copy10_lr = 0x000015FCu", model)
+        self.assertIn("candidate_bootstrap_callee_copy10_instruction = 0xE4803004u", model)
+        self.assertIn("BOOTSTRAP_CALLEE_COPY10_POLICY=BC_device_exact_tenth_16byte_copy_pc_0x2344_lr_0x15fc_src_0x09fff498_dst_0x09fff5a0_source_verified_from_initialized_relocation_no_range_widen", runner)
+        self.assertIn("BOOTSTRAP_CALLEE_COPY10_WRITE_COUNT", runner)
+        self.assertIn("BOOTSTRAP_CALLEE_COPY10_INITIALIZED_BYTES", runner)
+        self.assertIn("RH29_MACHINE1_BD", runner)
         self.assertIn('write_hex(out, (p + "R11").c_str(), entry.r11)', runner)
 
     def test_adds_cmake_sources_exactly_once_and_is_idempotent(self):
@@ -432,7 +441,7 @@ namespace eka2l1::arm {
         self.assertIn("NS_SWIFT_NAME(runRH29MachineProbe(instructionBudget:))", header)
         self.assertIn('caseInsensitiveCompare:@"RH-29"', impl)
         self.assertIn('roms/rh-29/SYM.ROM', impl)
-        self.assertIn("[RH29_MACHINE1_BC]", impl)
+        self.assertIn("[RH29_MACHINE1_BD]", impl)
         self.assertNotIn("reset(false", impl)
         self.assertNotIn("set_device(", impl)
 
@@ -457,7 +466,7 @@ namespace eka2l1::arm {
         self.assertEqual(result.returncode, 0, result.stdout)
         view = (root / "src/emu/ios/App/RH29MachineProbeView.swift").read_text()
         self.assertIn("Task.detached(priority: .userInitiated)", view)
-        self.assertIn("RH29_MACHINE1_BC.txt", view)
+        self.assertIn("RH29_MACHINE1_BD.txt", view)
         self.assertIn("ShareLink", view)
         self.assertLess(view.index('Label("Chạy probe"'), view.index("ShareLink"))
         self.assertLess(view.index("ShareLink"), view.index("if !reportText.isEmpty"))
@@ -465,7 +474,7 @@ namespace eka2l1::arm {
         self.assertIn(".textSelection(.enabled)", view)
         self.assertIn("[1_000, 10_000, 100_000, 1_000_000]", view)
         self.assertIn("@State private var instructionBudget: UInt32 = 10_000", view)
-        self.assertIn("MACHINE1-BC", view)
+        self.assertIn("MACHINE1-BD", view)
         self.assertNotIn("RH29_MACHINE1_R.txt", view)
 
     def test_adds_probe_only_svc_dyncom_constructor_without_changing_default_mode(self):
