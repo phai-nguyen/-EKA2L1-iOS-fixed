@@ -406,7 +406,7 @@ namespace eka2l1::arm {
         self.assertIn("BOOTSTRAP_RECORD_LOOP_MUTATION_POLICY", runner)
         self.assertIn("AD_device_16record_stride_0x10_field_plus8_pc_0x2220_lr_0x2244_exact_transform_initialized_only", runner)
         self.assertIn("BOOTSTRAP_RECORD_LOOP_MUTATION_ACCEPTED_COUNT", runner)
-        self.assertIn("RH29_MACHINE1_BB", runner)
+        self.assertIn("RH29_MACHINE1_BC", runner)
         self.assertIn('write_hex(out, (p + "R11").c_str(), entry.r11)', runner)
 
     def test_adds_cmake_sources_exactly_once_and_is_idempotent(self):
@@ -432,7 +432,7 @@ namespace eka2l1::arm {
         self.assertIn("NS_SWIFT_NAME(runRH29MachineProbe(instructionBudget:))", header)
         self.assertIn('caseInsensitiveCompare:@"RH-29"', impl)
         self.assertIn('roms/rh-29/SYM.ROM', impl)
-        self.assertIn("[RH29_MACHINE1_BB]", impl)
+        self.assertIn("[RH29_MACHINE1_BC]", impl)
         self.assertNotIn("reset(false", impl)
         self.assertNotIn("set_device(", impl)
 
@@ -457,7 +457,7 @@ namespace eka2l1::arm {
         self.assertEqual(result.returncode, 0, result.stdout)
         view = (root / "src/emu/ios/App/RH29MachineProbeView.swift").read_text()
         self.assertIn("Task.detached(priority: .userInitiated)", view)
-        self.assertIn("RH29_MACHINE1_BB.txt", view)
+        self.assertIn("RH29_MACHINE1_BC.txt", view)
         self.assertIn("ShareLink", view)
         self.assertLess(view.index('Label("Chạy probe"'), view.index("ShareLink"))
         self.assertLess(view.index("ShareLink"), view.index("if !reportText.isEmpty"))
@@ -465,7 +465,7 @@ namespace eka2l1::arm {
         self.assertIn(".textSelection(.enabled)", view)
         self.assertIn("[1_000, 10_000, 100_000, 1_000_000]", view)
         self.assertIn("@State private var instructionBudget: UInt32 = 10_000", view)
-        self.assertIn("MACHINE1-BB", view)
+        self.assertIn("MACHINE1-BC", view)
         self.assertNotIn("RH29_MACHINE1_R.txt", view)
 
     def test_adds_probe_only_svc_dyncom_constructor_without_changing_default_mode(self):
