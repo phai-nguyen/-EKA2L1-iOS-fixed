@@ -641,7 +641,7 @@ namespace eka2l1::machine::rh29 {
                          <= candidate_bootstrap_relocation_base + candidate_bootstrap_relocation_size,
         "MACHINE1-BC ninth copy source must stay inside the initialized relocation");
 
-    // MACHINE1-BC device evidence consumed by MACHINE1-BD: ninth exact copy
+    // MACHINE1-BD final build: BC device evidence consumed here; ninth exact copy
     // completed 4/4 writes; instruction 3437 then failed at the next record.
     // First unresolved write: 0x0C000000 -> 0x09FFF5A0, PC=0x2344/LR=0x15FC.
     // Admit only this tenth source-verified 16-byte record; no range widening.
