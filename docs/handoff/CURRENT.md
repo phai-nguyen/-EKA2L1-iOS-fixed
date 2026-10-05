@@ -1,68 +1,50 @@
-# CURRENT HANDOFF
+# MACHINE1-BE — continuation from BD device evidence
 
-Canonical handoff:
-`docs/handoff/NEWCHAT-NGAGE-QD-MACHINE1-AQ-EKA1-RESEARCH-2026-10-03.md`
+Branch: `ngage-machine1`. Baseline BD: `15f531cf20194b3feb3a06244f1e33eeb4a36616`.
+The old AQ handoff is historical, not the current checkpoint.
 
-Active repo/branch:
-- repo: `phai-nguyen/-EKA2L1-iOS-fixed`
-- branch: `ngage-machine1`
-- target: Nokia N-Gage QD RH-29 V04.10
+## Device evidence
 
-Latest device evidence:
-- report: `RH29_MACHINE1_AP.txt`
-- budget 10000
-- executed: 3017
-- stop: `unresolved_access`
-- AP exact 8-word relocated push at `0xF18 E92D47F0` passed.
-- after `0xF1C SUB sp,sp,#0x54`, SP = `0x09FFF388`.
-- next exact blocker:
-  - data_write width32
-  - address `0x09FFF3AC`
-  - PC `0x00000F24`
-  - LR `0x00000F18`
-  - instruction `0xE58DC024`
-  - value `0`
-  - cause unmapped.
-- CP15 unchanged: `0x2DC8 / EE010F10 / 0x1272`, MMU-off policy.
+Full input: [RH29_MACHINE1_BD.txt](../evidence/RH29_MACHINE1_BD.txt).
+SHA-256: `1602fcebfd4c4146ba3cae17034734828c76bafab5af54e3ea56d170be1fffa5`.
+BD copy10 completed 4 writes / 16 initialized bytes. Executed instructions: 3479.
+Stop: `unresolved_access`, data_write32 `0x0D000000 -> 0x09FFF5B0`,
+PC `0x2344`, LR `0x15FC`, instruction `0xE4803004`.
 
-MACHINE1-AQ:
-- code head before research doc: `f9eee740f26e38291c588b8d73bb74d5496df910`
-- exact-only gate for `0x09FFF3AC = 0` at PC `0xF24`, LR `0xF18`
-- initialized-only readback
-- no 0x54-byte frame widening.
-- report identity: `RH29_MACHINE1_AQ`
-- expected report file: `RH29_MACHINE1_AQ.txt`.
+## Proven instruction chain
 
-Build:
-- run #132, ID `37019841827`: **SUCCESS**
-- artifact `EKA2L1-NGAGE-MACHINE1-AQ-IPA`
-- artifact ID `11233745298`
-- SHA-256 `ba96ea84fc67423eb900b8e764a081036c81dd9a954f65244eed0f6ce3770ab9`
-- run: `https://github.com/phai-nguyen/-EKA2L1-iOS-fixed/actions/runs/37019841827`
+A32 entries 43–48: `MOV r3,r4,LSL #4; ADD r3,r3,#8; ADD r0,r7,r3;
+MOV r3,r5,LSL #4; ADD r3,r3,#8; ADD r1,r6,r3`.
+Observed index r4/r5=10; final snapshot r6=`0x09FFF400`, r7=`0x09FFF508`.
+Thus offset=`0xA8`, destination r0=`0x09FFF5B0`, source r1=`0x09FFF4A8`.
+Entries 57–58 set r2=`0x10` and BL the copy helper at `0x2334`.
+Entries 59–61 round byte size up and divide by four, producing r2=4 words.
+Entry 62: `E4913004`, `LDR r3,[r1],#4`, reads `0x0D000000` and advances
+r1 to `0x09FFF4AC`. Entry 63: `E4803004`, `STR r3,[r0],#4`, attempts
+the exact unresolved store. Post-stop r0=`0x09FFF5B4` reflects writeback;
+it is not the address of the failed transaction.
 
-Latest research:
-- commit `23c5b741efd23da731c45b98ab52db23faa0a2d4`
-- file `docs/research/RH29-BOOTSTRAP-REGION-TABLE-2026-10-02.md`
-- correct-era Series 60 6.1 `TRomHeader`:
-  - `+0x8C = iRomBase`
-  - `+0x90 = iRomSize`
-- AP device read at physical `0x90` returns `0x01170000`, now source-backed as ROM size.
-- expected F30 read from physical `0x8C` is `0x50000000`, but this remains to be device-confirmed in AQ.
-- 0x50000000 is EKA1 logical ROM base; do not pre-map it.
-- known historical EKA1 virtual layout (page directory 0x41000000, page tables 0x42000000, ROM 0x50000000, RAM 0x60000000) is corroboration only, not permission to add mappings.
+This is a record copy into bootstrap working memory. `0x0D000000` is copied
+data, not the hardware address being accessed. No page-table or hardware
+register meaning is assigned to the copied control word.
 
-Next:
-1. Device-test AQ build #132 with budget 10000.
-2. Share `RH29_MACHINE1_AQ.txt`.
-3. Follow only the next exact unresolved access.
-4. Do not implement predicted F34 store before device evidence.
-5. Do not broad-map RAM, stack, page tables, ROM VA, or EKA1 RAM VA.
-6. Keep `0x0C150004` semantics unknown.
+## BE admission and evidence boundaries
 
-Permanent:
-- preserve Y FIQ R8–R12 banking fix;
-- preserve Z exact 0x108 copy;
-- preserve exact AA..AQ gates;
-- low-vector shadow stays 36 bytes;
-- sparse RAM probe remains exact-only;
-- distinguish device evidence from deterministic derivation and external research.
+BE adds only the eleventh 16-byte copy: initialized relocation source
+`0x09FFF4A8..0x09FFF4B7` to destination `0x09FFF5B0..0x09FFF5BF`.
+Writes require width32, alignment, PC `0x2344`, LR `0x15FC`, and exact value
+match against initialized source. Readback requires initialized destination.
+The first value is directly observed by BD. The 16-byte call size and four-word
+copy loop are device-observed instruction semantics. Remaining word values
+are obtained from initialized source, never hardcoded predictions.
+
+Preserve every prior gate AA..BD, Y FIQ banking, Z exact 0x108 copy,
+36-byte low-vector shadow and exact sparse RAM probes. No broad RAM, stack,
+page-table, logical ROM or EKA1 RAM VA mappings. `0x0C150004` meaning stays unknown.
+
+## Next device test
+
+Install MACHINE1-BE IPA, select RH-29 V04.10, run budget 10000, export the full
+`RH29_MACHINE1_BE.txt`. Confirm `BOOTSTRAP_CALLEE_COPY11_WRITE_COUNT=4` and
+`BOOTSTRAP_CALLEE_COPY11_INITIALIZED_BYTES=16`, then investigate the new exact
+unresolved transaction. Do not admit copy12 before that device evidence.

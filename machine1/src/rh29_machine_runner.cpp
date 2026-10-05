@@ -476,6 +476,17 @@ namespace eka2l1::machine::rh29 {
         out << "BOOTSTRAP_CALLEE_COPY10_READ_COUNT=" << result.candidate_bootstrap_callee_copy10_read_count << "\n";
         out << "BOOTSTRAP_CALLEE_COPY10_WRITE_COUNT=" << result.candidate_bootstrap_callee_copy10_write_count << "\n";
         out << "BOOTSTRAP_CALLEE_COPY10_INITIALIZED_BYTES=" << result.candidate_bootstrap_callee_copy10_initialized_bytes << "\n";
+        out << "BOOTSTRAP_CALLEE_COPY11_POLICY=BD_device_exact_eleventh_16byte_copy_pc_0x2344_lr_0x15fc_src_0x09fff4a8_dst_0x09fff5b0_source_verified_from_initialized_relocation_no_range_widen\n";
+        write_hex(out, "BOOTSTRAP_CALLEE_COPY11_SOURCE", candidate_bootstrap_callee_copy11_source);
+        write_hex(out, "BOOTSTRAP_CALLEE_COPY11_BASE", candidate_bootstrap_callee_copy11_base);
+        out << "BOOTSTRAP_CALLEE_COPY11_SIZE=" << candidate_bootstrap_callee_copy11_size << "\n";
+        out << "BOOTSTRAP_CALLEE_COPY11_WIDTH_BITS=" << (candidate_bootstrap_callee_copy11_write_width * 8u) << "\n";
+        write_hex(out, "BOOTSTRAP_CALLEE_COPY11_GATE_PC", candidate_bootstrap_callee_copy11_pc);
+        write_hex(out, "BOOTSTRAP_CALLEE_COPY11_GATE_LR", candidate_bootstrap_callee_copy11_lr);
+        write_hex(out, "BOOTSTRAP_CALLEE_COPY11_OBSERVED_INSTRUCTION", candidate_bootstrap_callee_copy11_instruction);
+        out << "BOOTSTRAP_CALLEE_COPY11_READ_COUNT=" << result.candidate_bootstrap_callee_copy11_read_count << "\n";
+        out << "BOOTSTRAP_CALLEE_COPY11_WRITE_COUNT=" << result.candidate_bootstrap_callee_copy11_write_count << "\n";
+        out << "BOOTSTRAP_CALLEE_COPY11_INITIALIZED_BYTES=" << result.candidate_bootstrap_callee_copy11_initialized_bytes << "\n";
         out << "RAM_BANK_HANDLER_DUMP_POLICY=raw_rom_words_0x000012a0_0x000013fc_context_no_semantic_label\n";
         out << "RAM_BANK_HANDLER_DUMP_WORDS_VALID=" << result.ram_bank_handler_dump_words_valid << "\n";
         for (std::size_t i = 0; i < result.ram_bank_handler_dump_words_valid
@@ -1052,6 +1063,9 @@ namespace eka2l1::machine::rh29 {
         result.candidate_bootstrap_callee_copy10_read_count = bus.candidate_bootstrap_callee_copy10_read_count();
         result.candidate_bootstrap_callee_copy10_write_count = bus.candidate_bootstrap_callee_copy10_write_count();
         result.candidate_bootstrap_callee_copy10_initialized_bytes = bus.candidate_bootstrap_callee_copy10_initialized_bytes();
+        result.candidate_bootstrap_callee_copy11_read_count = bus.candidate_bootstrap_callee_copy11_read_count();
+        result.candidate_bootstrap_callee_copy11_write_count = bus.candidate_bootstrap_callee_copy11_write_count();
+        result.candidate_bootstrap_callee_copy11_initialized_bytes = bus.candidate_bootstrap_callee_copy11_initialized_bytes();
 
         if (result.unresolved) {
             result.stop_reason = probe_stop_reason::unresolved_access;
